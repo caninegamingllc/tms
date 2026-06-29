@@ -1,0 +1,313 @@
+generator client {
+  provider = "prisma-client-js"
+}
+
+datasource db {
+  provider = "sqlite"
+  url      = env("DATABASE_URL")
+}
+
+model Branch {
+  id        String     @id @default(cuid())
+  name      String
+  city      String?
+  state     String?
+  users     User[]
+  customers Customer[]
+  carriers  Carrier[]
+  loads     Load[]
+  createdAt DateTime   @default(now())
+  updatedAt DateTime   @updatedAt
+}
+
+model User {
+  id                    String         @id @default(cuid())
+  name                  String
+  email                 String         @unique
+  role                  String         @default("BROKER")
+  status                String         @default("ACTIVE")
+  passwordHash          String?
+  mustChangePassword    Boolean        @default(false)
+  lastLoginAt           DateTime?
+  lockedAt              DateTime?
+  disabledAt            DateTime?
+  passwordResetAt       DateTime?
+  branchId              String?
+  branch                Branch?        @relation(fields: [branchId], references: [id])
+  notes                 LoadNote[]
+  activities            LoadActivity[]
+  sessions              Session[]
+  auditLogs             AuditLog[]      @relation("AuditActor")
+  targetAuditLogs       AuditLog[]      @relation("AuditTargetUser")
+  createdAt             DateTime       @default(now())
+  updatedAt             DateTime       @updatedAt
+}
+
+model Session {
+  id           String   @id @default(cuid())
+  tokenHash    String   @unique
+  userId       String
+  user         User     @relation(fields: [userId], references: [id], onDelete: Cascade)
+  expiresAt    DateTime
+  lastSeenAt   DateTime @default(now())
+  createdAt    DateTime @default(now())
+}
+
+model AuditLog {
+  id           String   @id @default(cuid())
+  actorUserId  String?
+  actorUser    User?    @relation("AuditActor", fields: [actorUserId], references: [id])
+  targetUserId String?
+  targetUser   User?    @relation("AuditTargetUser", fields: [targetUserId], references: [id])
+  action       String
+  entityType   String
+  entityId     String?
+  details      String?
+  ipAddress    String?
+  createdAt    DateTime @default(now())
+}
+
+model Customer {
+  id           String            @id @default(cuid())
+  name         String
+  status       String            @default("Active")
+  creditLimit  Int               @default(0)
+  paymentTerms String            @default("Net 30")
+  industry     String?
+  phone        String?
+  email        String?
+  address      String?
+  city         String?
+  state        String?
+  branchId     String?
+  branch       Branch?           @relation(fields: [branchId], references: [id])
+  contacts     CustomerContact[]
+  loads        Load[]
+  documents    LoadDocument[]
+  invoices     Invoice[]
+  createdAt    DateTime          @default(now())
+  updatedAt    DateTime          @updatedAt
+}
+
+model CustomerContact {
+  id         String   @id @default(cuid())
+  customerId String
+  customer   Customer @relation(fields: [customerId], references: [id], onDelete: Cascade)
+  name       String
+  title      String?
+  email      String?
+  phone      String?
+  isPrimary  Boolean  @default(false)
+}
+
+model Carrier {
+  id                  String                      @id @default(cuid())
+  name                String
+  status              String                      @default("Active")
+  mcNumber            String?
+  dotNumber           String?
+  phone               String?
+  email               String?
+  equipmentTypes      String?
+  safetyRating        String?
+  insuranceExpiresAt  DateTime?
+  complianceStatus    String                      @default("Needs Review")
+  branchId            String?
+  branch              Branch?                     @relation(fields: [branchId], references: [id])
+  contacts            CarrierContact[]
+  complianceDocuments CarrierComplianceDocument[]
+  assignments         DispatchAssignment[]
+  documents           LoadDocument[]
+  carrierBills        CarrierBill[]
+  createdAt           DateTime                    @default(now())
+  updatedAt           DateTime                    @updatedAt
+}
+
+model CarrierContact {
+  id        String  @id @default(cuid())
+  carrierId String
+  carrier   Carrier @relation(fields: [carrierId], references: [id], onDelete: Cascade)
+  name      String
+  title     String?
+  email     String?
+  phone     String?
+  isPrimary Boolean @default(false)
+}
+
+model CarrierComplianceDocument {
+  id          String       @id @default(cuid())
+  carrierId   String
+  carrier     Carrier      @relation(fields: [carrierId], references: [id], onDelete: Cascade)
+  type        String
+  name        String
+  filePath    String?
+  expiresAt   DateTime?
+  status      String       @default("Current")
+  uploadedAt  DateTime     @default(now())
+}
+
+model Load {
+  id                String              @id @default(cuid())
+  loadNumber        String              @unique
+  title             String
+  status            String              @default("QUOTE")
+  customerId        String
+  customer          Customer            @relation(fields: [customerId], references: [id])
+  branchId          String?
+  branch            Branch?             @relation(fields: [branchId], references: [id])
+  referenceNumber   String?
+  equipmentType     String              @default("Dry Van")
+  commodity         String?
+  weight            Int?
+  pickupCity        String
+  pickupState       String
+  deliveryCity      String
+  deliveryState     String
+  pickupDate        DateTime
+  deliveryDate      DateTime
+  revenueCents      Int                 @default(0)
+  carrierCostCents  Int                 @default(0)
+  stops             LoadStop[]
+  charges           LoadCharge[]
+  documents         LoadDocument[]
+  notes             LoadNote[]
+  activities        LoadActivity[]
+  dispatchAssignment DispatchAssignment?
+  invoices          Invoice[]
+  carrierBills      CarrierBill[]
+  createdAt         DateTime            @default(now())
+  updatedAt         DateTime            @updatedAt
+}
+
+model LoadStop {
+  id            String    @id @default(cuid())
+  loadId        String
+  load          Load      @relation(fields: [loadId], references: [id], onDelete: Cascade)
+  type          String
+  sequence      Int
+  facilityName  String
+  address       String?
+  city          String
+  state         String
+  postalCode    String?
+  appointmentAt DateTime?
+  actualAt      DateTime?
+  instructions  String?
+}
+
+model LoadCharge {
+  id          String   @id @default(cuid())
+  loadId      String
+  load        Load     @relation(fields: [loadId], references: [id], onDelete: Cascade)
+  label       String
+  chargeType  String   @default("Linehaul")
+  amountCents Int
+}
+
+model DispatchAssignment {
+  id             String      @id @default(cuid())
+  loadId         String      @unique
+  load           Load        @relation(fields: [loadId], references: [id], onDelete: Cascade)
+  carrierId      String
+  carrier        Carrier     @relation(fields: [carrierId], references: [id])
+  driverName     String?
+  driverPhone    String?
+  truckNumber    String?
+  trailerNumber  String?
+  rateCents      Int         @default(0)
+  assignedAt     DateTime    @default(now())
+  checkCalls     CheckCall[]
+}
+
+model CheckCall {
+  id           String             @id @default(cuid())
+  assignmentId String
+  assignment   DispatchAssignment @relation(fields: [assignmentId], references: [id], onDelete: Cascade)
+  location     String
+  status       String
+  notes        String?
+  occurredAt   DateTime           @default(now())
+  nextCheckAt  DateTime?
+}
+
+model LoadDocument {
+  id          String       @id @default(cuid())
+  loadId      String?
+  load        Load?        @relation(fields: [loadId], references: [id], onDelete: Cascade)
+  customerId  String?
+  customer    Customer?    @relation(fields: [customerId], references: [id])
+  carrierId   String?
+  carrier     Carrier?     @relation(fields: [carrierId], references: [id])
+  type        String
+  name        String
+  documentNumber String?
+  filePath    String?
+  notes       String?
+  generatedContent String?
+  generatedAt DateTime?
+  uploadedAt  DateTime     @default(now())
+}
+
+model LoadNote {
+  id        String   @id @default(cuid())
+  loadId    String
+  load      Load     @relation(fields: [loadId], references: [id], onDelete: Cascade)
+  userId    String?
+  user      User?    @relation(fields: [userId], references: [id])
+  body      String
+  createdAt DateTime @default(now())
+}
+
+model LoadActivity {
+  id        String   @id @default(cuid())
+  loadId    String
+  load      Load     @relation(fields: [loadId], references: [id], onDelete: Cascade)
+  userId    String?
+  user      User?    @relation(fields: [userId], references: [id])
+  action    String
+  details   String?
+  createdAt DateTime @default(now())
+}
+
+model Invoice {
+  id          String        @id @default(cuid())
+  invoiceNo   String        @unique
+  loadId      String
+  load        Load          @relation(fields: [loadId], references: [id])
+  customerId  String
+  customer    Customer      @relation(fields: [customerId], references: [id])
+  status      String        @default("DRAFT")
+  totalCents  Int
+  issuedAt    DateTime?
+  dueAt       DateTime?
+  paidAt      DateTime?
+  createdAt   DateTime      @default(now())
+  updatedAt   DateTime      @updatedAt
+}
+
+model CarrierBill {
+  id          String        @id @default(cuid())
+  billNo      String        @unique
+  loadId      String
+  load        Load          @relation(fields: [loadId], references: [id])
+  carrierId   String
+  carrier     Carrier       @relation(fields: [carrierId], references: [id])
+  status      String        @default("DRAFT")
+  totalCents  Int
+  receivedAt  DateTime?
+  dueAt       DateTime?
+  paidAt      DateTime?
+  createdAt   DateTime      @default(now())
+  updatedAt   DateTime      @updatedAt
+}
+
+model IntegrationAccount {
+  id           String              @id @default(cuid())
+  provider     String
+  displayName  String
+  status       String              @default("Not Connected")
+  apiKeyLast4  String?
+  notes        String?
+  createdAt    DateTime            @default(now())
+  updatedAt    DateTime            @updatedAt
+}
