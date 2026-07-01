@@ -5,7 +5,12 @@ import { requireUser } from "@/lib/auth";
 import { prisma } from "@/lib/db";
 import { formatDate, formatMoney } from "@/lib/format";
 
-export default async function CarriersPage() {
+export default async function CarriersPage({
+  searchParams
+}: {
+  searchParams: Promise<{ error?: string }>;
+}) {
+  const { error } = await searchParams;
   const user = await requireUser();
   const carriers = await prisma.carrier.findMany({
     where: { companyId: user.companyId },
@@ -24,6 +29,12 @@ export default async function CarriersPage() {
         title="Carriers"
         description="Track carrier profiles, authority details, insurance, compliance documents, and carrier performance."
       />
+
+      {error ? (
+        <div className="mb-6 rounded-2xl border border-rose-200 bg-rose-50 p-4 text-sm font-semibold text-rose-700">
+          {error}
+        </div>
+      ) : null}
 
       <div className="grid gap-6 xl:grid-cols-[1.35fr_0.8fr]">
         <section className="card overflow-hidden p-0">

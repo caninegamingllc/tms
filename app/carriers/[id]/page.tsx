@@ -19,8 +19,15 @@ function dateInputValue(date?: Date | string | null) {
   return new Date(date).toISOString().slice(0, 10);
 }
 
-export default async function CarrierDetailPage({ params }: { params: Promise<{ id: string }> }) {
+export default async function CarrierDetailPage({
+  params,
+  searchParams
+}: {
+  params: Promise<{ id: string }>;
+  searchParams: Promise<{ error?: string }>;
+}) {
   const { id } = await params;
+  const { error } = await searchParams;
   const user = await requireUser();
   const carrier = await prisma.carrier.findUnique({
     where: { id, companyId: user.companyId },
@@ -49,6 +56,12 @@ export default async function CarrierDetailPage({ params }: { params: Promise<{ 
           </Link>
         }
       />
+
+      {error ? (
+        <div className="mb-6 rounded-2xl border border-rose-200 bg-rose-50 p-4 text-sm font-semibold text-rose-700">
+          {error}
+        </div>
+      ) : null}
 
       <div className="grid gap-6 xl:grid-cols-[0.95fr_1.2fr]">
         <section className="card">

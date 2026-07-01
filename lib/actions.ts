@@ -26,6 +26,11 @@ function optionalString(formData: FormData, key: string) {
   return value || undefined;
 }
 
+function normalizeCarrierNumber(value?: string) {
+  const normalized = value?.replace(/[^a-z0-9]/gi, "").toUpperCase();
+  return normalized || undefined;
+}
+
 function optionalDate(formData: FormData, key: string) {
   const value = String(formData.get(key) ?? "").trim();
   return value ? new Date(value) : undefined;
@@ -71,6 +76,51 @@ async function requireCompanyLoad(loadId: string, companyId: string) {
 
 async function requireCompanyCarrier(carrierId: string, companyId: string) {
   return prisma.carrier.findUniqueOrThrow({ where: { id: carrierId, companyId } });
+}
+
+async function duplicateCarrierAuthority(
+  companyId: string,
+  mcNumberNormalized?: string,
+  dotNumberNormalized?: string,
+  excludeCarrierId?: string
+) {
+  if (!mcNumberNormalized && !dotNumberNormalized) {
+    return null;
+  }
+
+  const carriers = await prisma.carrier.findMany({
+    where: {
+      companyId,
+      id: excludeCarrierId ? { not: excludeCarrierId } : undefined
+    },
+    select: {
+      name: true,
+      mcNumber: true,
+      mcNumberNormalized: true,
+      dotNumber: true,
+      dotNumberNormalized: true
+    }
+  });
+
+  for (const carrier of carriers) {
+    if (
+      mcNumberNormalized &&
+      (carrier.mcNumberNormalized === mcNumberNormalized ||
+        normalizeCarrierNumber(carrier.mcNumber ?? undefined) === mcNumberNormalized)
+    ) {
+      return `MC number already exists for ${carrier.name}`;
+    }
+
+    if (
+      dotNumberNormalized &&
+      (carrier.dotNumberNormalized === dotNumberNormalized ||
+        normalizeCarrierNumber(carrier.dotNumber ?? undefined) === dotNumberNormalized)
+    ) {
+      return `DOT number already exists for ${carrier.name}`;
+    }
+  }
+
+  return null;
 }
 
 async function syncCarrierInsuranceSummary(carrierId: string) {
@@ -151,6 +201,19 @@ export async function createCustomer(formData: FormData) {
 export async function createCarrier(formData: FormData) {
   const user = await requireUser();
   const insuranceExpiresAt = optionalDate(formData, "insuranceExpiresAt");
+  const mcNumber = optionalString(formData, "mcNumber");
+  const dotNumber = optionalString(formData, "dotNumber");
+  const mcNumberNormalized = normalizeCarrierNumber(mcNumber);
+  const dotNumberNormalized = normalizeCarrierNumber(dotNumber);
+  const duplicate = await duplicateCarrierAuthority(
+    user.companyId,
+    mcNumberNormalized,
+    dotNumberNormalized
+  );
+
+  if (duplicate) {
+    redirect(`/carriers?error=${encodeURIComponent(duplicate)}`);
+  }
 
   await prisma.carrier.create({
     data: {
@@ -158,8 +221,10 @@ export async function createCarrier(formData: FormData) {
       branchId: user.branchId,
       name: requiredString(formData, "name"),
       status: requiredString(formData, "status"),
-      mcNumber: optionalString(formData, "mcNumber"),
-      dotNumber: optionalString(formData, "dotNumber"),
+      mcNumber,
+      mcNumberNormalized,
+      dotNumber,
+      dotNumberNormalized,
       phone: optionalString(formData, "phone"),
       email: optionalString(formData, "email"),
       equipmentTypes: optionalString(formData, "equipmentTypes"),
@@ -196,14 +261,30 @@ export async function updateCarrier(formData: FormData) {
   const user = await requireUser();
   const carrierId = requiredString(formData, "carrierId");
   await requireCompanyCarrier(carrierId, user.companyId);
+  const mcNumber = optionalString(formData, "mcNumber");
+  const dotNumber = optionalString(formData, "dotNumber");
+  const mcNumberNormalized = normalizeCarrierNumber(mcNumber);
+  const dotNumberNormalized = normalizeCarrierNumber(dotNumber);
+  const duplicate = await duplicateCarrierAuthority(
+    user.companyId,
+    mcNumberNormalized,
+    dotNumberNormalized,
+    carrierId
+  );
+
+  if (duplicate) {
+    redirect(`/carriers/${carrierId}?error=${encodeURIComponent(duplicate)}`);
+  }
 
   await prisma.carrier.update({
     where: { id: carrierId },
     data: {
       name: requiredString(formData, "name"),
       status: requiredString(formData, "status"),
-      mcNumber: optionalString(formData, "mcNumber"),
-      dotNumber: optionalString(formData, "dotNumber"),
+      mcNumber,
+      mcNumberNormalized,
+      dotNumber,
+      dotNumberNormalized,
       phone: optionalString(formData, "phone"),
       email: optionalString(formData, "email"),
       equipmentTypes: optionalString(formData, "equipmentTypes"),
