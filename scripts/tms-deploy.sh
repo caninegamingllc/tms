@@ -4,6 +4,7 @@ set -euo pipefail
 APP_DIR="/var/www/tms"
 BRANCH="main"
 LOG_FILE="/var/log/tms-deploy.log"
+PM2_APP="tms"
 
 export PATH="/usr/local/bin:/usr/bin:/bin:$PATH"
 
@@ -12,14 +13,17 @@ echo "=== Deploy started $(date) ==="
 
 cd "$APP_DIR"
 
-# Discard local edits from prior builds (e.g. next-env.d.ts, package-lock.json).
+# Stop the app before touching SQLite or rebuilding.
+pm2 stop "$PM2_APP" 2>/dev/null || true
+
 git fetch origin "$BRANCH"
 git reset --hard "origin/$BRANCH"
 
-npm ci
+# NODE_ENV=production causes npm ci to skip devDependencies (prisma CLI, typescript, dotenv).
+npm ci --include=dev
 npx prisma generate
 npx prisma db push
-npm run build
-pm2 restart tms
+NODE_ENV=production npm run build
+pm2 start "$PM2_APP" 2>/dev/null || pm2 restart "$PM2_APP"
 
 echo "=== Deploy finished $(date) ==="
