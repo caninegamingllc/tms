@@ -1,6 +1,9 @@
 import Link from "next/link";
 import { redirect } from "next/navigation";
 import { getCurrentUser, login } from "@/lib/auth";
+import packageJson from "@/package.json";
+
+const appVersion = packageJson.version;
 
 export default async function LoginPage({
   searchParams
@@ -60,6 +63,9 @@ export default async function LoginPage({
           <Link href="/register" className="font-semibold text-brand-700">
             Create a company workspace
           </Link>
+        </p>
+        <p className="mt-5 text-center text-xs font-semibold uppercase tracking-wide text-muted">
+          Version {appVersion}
         </p>
       </section>
     </main>
