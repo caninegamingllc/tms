@@ -104,7 +104,6 @@ export async function getCurrentUser(): Promise<CurrentUser | null> {
     if (session) {
       await prisma.session.delete({ where: { id: session.id } });
     }
-    cookieStore.delete(sessionCookieName);
     return null;
   }
 
@@ -115,7 +114,6 @@ export async function getCurrentUser(): Promise<CurrentUser | null> {
     session.user.disabledAt
   ) {
     await prisma.session.deleteMany({ where: { userId: session.userId } });
-    cookieStore.delete(sessionCookieName);
     return null;
   }
 
