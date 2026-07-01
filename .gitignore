@@ -4,6 +4,7 @@ dist
 coverage
 .env
 .env.local
+tsconfig.tsbuildinfo
 *.db
 *.db-journal
 uploads

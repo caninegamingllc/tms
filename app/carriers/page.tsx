@@ -1,14 +1,19 @@
+import Link from "next/link";
 import { PageHeader } from "@/components/page-header";
 import { createCarrier } from "@/lib/actions";
+import { requireUser } from "@/lib/auth";
 import { prisma } from "@/lib/db";
 import { formatDate, formatMoney } from "@/lib/format";
 
 export default async function CarriersPage() {
+  const user = await requireUser();
   const carriers = await prisma.carrier.findMany({
+    where: { companyId: user.companyId },
     orderBy: { name: "asc" },
     include: {
       contacts: true,
       complianceDocuments: true,
+      insuranceCoverages: true,
       assignments: { include: { load: true } }
     }
   });
@@ -48,7 +53,9 @@ export default async function CarriersPage() {
                   return (
                     <tr key={carrier.id}>
                       <td>
-                        <p className="font-semibold text-ink">{carrier.name}</p>
+                        <Link href={`/carriers/${carrier.id}`} className="font-semibold text-brand-700">
+                          {carrier.name}
+                        </Link>
                         <p className="muted">{carrier.email ?? carrier.phone ?? "No contact info"}</p>
                       </td>
                       <td>
@@ -60,7 +67,10 @@ export default async function CarriersPage() {
                         <p className="font-semibold">{carrier.complianceStatus}</p>
                         <p className="muted">{carrier.safetyRating ?? "No rating"}</p>
                       </td>
-                      <td>{formatDate(carrier.insuranceExpiresAt)}</td>
+                      <td>
+                        <p>{formatDate(carrier.insuranceExpiresAt)}</p>
+                        <p className="muted">{carrier.insuranceCoverages.length} coverages</p>
+                      </td>
                       <td>
                         <p>{carrier.assignments.length} loads</p>
                         <p className="muted">{formatMoney(totalSpend)} spend</p>

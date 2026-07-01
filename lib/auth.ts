@@ -9,6 +9,8 @@ const passwordKeyLength = 64;
 
 export type CurrentUser = {
   id: string;
+  companyId: string;
+  companyName: string;
   name: string;
   email: string;
   role: string;
@@ -16,6 +18,13 @@ export type CurrentUser = {
   mustChangePassword: boolean;
   branchId: string | null;
 };
+
+const starterIntegrations = [
+  ["DAT", "DAT Load Board", "Future posting and truck search integration."],
+  ["TRUCKSTOP", "Truckstop", "Future rate and posting integration."],
+  ["QUICKBOOKS", "QuickBooks Online", "Future invoice and bill sync."],
+  ["TRUCKER_TOOLS", "Tracking and Document Capture", "Future driver tracking and POD capture."]
+] as const;
 
 function hashToken(token: string) {
   return createHash("sha256").update(token).digest("hex");
@@ -88,18 +97,25 @@ export async function getCurrentUser(): Promise<CurrentUser | null> {
 
   const session = await prisma.session.findUnique({
     where: { tokenHash: hashToken(token) },
-    include: { user: true }
+    include: { user: { include: { company: true } } }
   });
 
   if (!session || session.expiresAt < new Date()) {
     if (session) {
       await prisma.session.delete({ where: { id: session.id } });
     }
+    cookieStore.delete(sessionCookieName);
     return null;
   }
 
-  if (session.user.status !== "ACTIVE" || session.user.lockedAt || session.user.disabledAt) {
+  if (
+    session.user.status !== "ACTIVE" ||
+    session.user.company.status !== "ACTIVE" ||
+    session.user.lockedAt ||
+    session.user.disabledAt
+  ) {
     await prisma.session.deleteMany({ where: { userId: session.userId } });
+    cookieStore.delete(sessionCookieName);
     return null;
   }
 
@@ -110,6 +126,8 @@ export async function getCurrentUser(): Promise<CurrentUser | null> {
 
   return {
     id: session.user.id,
+    companyId: session.user.companyId,
+    companyName: session.user.company.name,
     name: session.user.name,
     email: session.user.email,
     role: session.user.role,
@@ -179,6 +197,113 @@ export async function login(formData: FormData) {
     redirect("/change-password");
   }
 
+  redirect("/");
+}
+
+function slugify(value: string) {
+  return (
+    value
+      .toLowerCase()
+      .trim()
+      .replace(/[^a-z0-9]+/g, "-")
+      .replace(/(^-|-$)/g, "")
+      .slice(0, 48) || "company"
+  );
+}
+
+async function uniqueCompanySlug(companyName: string) {
+  const base = slugify(companyName);
+  let slug = base;
+  let suffix = 2;
+
+  while (await prisma.company.findUnique({ where: { slug } })) {
+    slug = `${base}-${suffix}`;
+    suffix += 1;
+  }
+
+  return slug;
+}
+
+export async function registerCompany(formData: FormData) {
+  "use server";
+
+  const companyName = String(formData.get("companyName") ?? "").trim();
+  const name = String(formData.get("name") ?? "").trim();
+  const email = String(formData.get("email") ?? "").trim().toLowerCase();
+  const password = String(formData.get("password") ?? "");
+  const confirmPassword = String(formData.get("confirmPassword") ?? "");
+
+  if (!companyName || !name || !email) {
+    redirect("/register?error=Company%2C%20name%2C%20and%20email%20are%20required");
+  }
+
+  if (password.length < 8 || password !== confirmPassword) {
+    redirect("/register?error=Password%20must%20match%20and%20be%20at%20least%208%20characters");
+  }
+
+  const existingUser = await prisma.user.findUnique({ where: { email } });
+  if (existingUser) {
+    redirect("/register?error=An%20account%20already%20exists%20for%20that%20email");
+  }
+
+  const slug = await uniqueCompanySlug(companyName);
+  const passwordHash = await hashPassword(password);
+
+  const user = await prisma.$transaction(async (tx) => {
+    const company = await tx.company.create({
+      data: {
+        name: companyName,
+        slug,
+        status: "ACTIVE"
+      }
+    });
+
+    const branch = await tx.branch.create({
+      data: {
+        companyId: company.id,
+        name: `${companyName} HQ`
+      }
+    });
+
+    const owner = await tx.user.create({
+      data: {
+        companyId: company.id,
+        branchId: branch.id,
+        name,
+        email,
+        role: "OWNER",
+        status: "ACTIVE",
+        passwordHash,
+        mustChangePassword: false
+      }
+    });
+
+    await tx.integrationAccount.createMany({
+      data: starterIntegrations.map(([provider, displayName, notes]) => ({
+        companyId: company.id,
+        provider,
+        displayName,
+        status: "Not Connected",
+        notes
+      }))
+    });
+
+    await tx.auditLog.create({
+      data: {
+        companyId: company.id,
+        actorUserId: owner.id,
+        targetUserId: owner.id,
+        action: "REGISTER_COMPANY",
+        entityType: "Company",
+        entityId: company.id,
+        details: `${owner.email} registered ${company.name}.`
+      }
+    });
+
+    return owner;
+  });
+
+  await createSession(user.id);
   redirect("/");
 }
 

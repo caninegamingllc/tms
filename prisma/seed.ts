@@ -29,17 +29,29 @@ async function main() {
   await prisma.loadCharge.deleteMany();
   await prisma.loadStop.deleteMany();
   await prisma.load.deleteMany();
+  await prisma.carrierInsuranceCoverage.deleteMany();
   await prisma.carrierComplianceDocument.deleteMany();
   await prisma.carrierContact.deleteMany();
   await prisma.customerContact.deleteMany();
+  await prisma.facility.deleteMany();
   await prisma.integrationAccount.deleteMany();
   await prisma.carrier.deleteMany();
   await prisma.customer.deleteMany();
   await prisma.user.deleteMany();
   await prisma.branch.deleteMany();
+  await prisma.company.deleteMany();
+
+  const company = await prisma.company.create({
+    data: {
+      name: "Great Lakes Brokerage",
+      slug: "great-lakes-brokerage",
+      status: "ACTIVE"
+    }
+  });
 
   const branch = await prisma.branch.create({
     data: {
+      companyId: company.id,
       name: "Great Lakes Brokerage",
       city: "Detroit",
       state: "MI"
@@ -54,6 +66,7 @@ async function main() {
       status: "ACTIVE",
       passwordHash: hashSeedPassword(seedPassword),
       mustChangePassword: false,
+      companyId: company.id,
       branchId: branch.id
     }
   });
@@ -66,6 +79,7 @@ async function main() {
       status: "ACTIVE",
       passwordHash: hashSeedPassword(seedPassword),
       mustChangePassword: true,
+      companyId: company.id,
       branchId: branch.id
     }
   });
@@ -81,6 +95,7 @@ async function main() {
       email: "logistics@northstar.example",
       city: "Detroit",
       state: "MI",
+      companyId: company.id,
       branchId: branch.id,
       contacts: {
         create: [
@@ -107,6 +122,7 @@ async function main() {
       email: "freight@summit.example",
       city: "Columbus",
       state: "OH",
+      companyId: company.id,
       branchId: branch.id,
       contacts: {
         create: [
@@ -122,8 +138,71 @@ async function main() {
     }
   });
 
+  const northstarPlant = await prisma.facility.create({
+    data: {
+      companyId: company.id,
+      branchId: branch.id,
+      customerId: customer.id,
+      name: "Northstar Foods Plant 4",
+      type: "SHIPPER",
+      address: "4100 East Jefferson Ave",
+      city: "Detroit",
+      state: "MI",
+      postalCode: "48207",
+      phone: "313-555-0160",
+      contactName: "Dock Supervisor",
+      notes: "Pre-cool reefer trailers before arrival."
+    }
+  });
+
+  const chicagoDistribution = await prisma.facility.create({
+    data: {
+      companyId: company.id,
+      branchId: branch.id,
+      customerId: customer.id,
+      name: "Chicago South Distribution",
+      type: "CONSIGNEE",
+      address: "2200 Logistics Park Dr",
+      city: "Joliet",
+      state: "IL",
+      postalCode: "60436",
+      phone: "815-555-0129",
+      contactName: "Receiving Office",
+      notes: "Lumper receipts required."
+    }
+  });
+
+  const summitCrossdock = await prisma.facility.create({
+    data: {
+      companyId: company.id,
+      branchId: branch.id,
+      customerId: customerTwo.id,
+      name: "Summit Retail Crossdock",
+      type: "SHIPPER",
+      address: "1550 Westbelt Dr",
+      city: "Columbus",
+      state: "OH",
+      postalCode: "43228"
+    }
+  });
+
+  const nashvilleBuildout = await prisma.facility.create({
+    data: {
+      companyId: company.id,
+      branchId: branch.id,
+      customerId: customerTwo.id,
+      name: "Nashville Store Buildout",
+      type: "CONSIGNEE",
+      address: "900 Commerce Way",
+      city: "Nashville",
+      state: "TN",
+      postalCode: "37203"
+    }
+  });
+
   const carrier = await prisma.carrier.create({
     data: {
+      companyId: company.id,
       name: "Blue Ridge Transport",
       status: "Active",
       mcNumber: "MC-784512",
@@ -135,6 +214,28 @@ async function main() {
       complianceStatus: "Approved",
       insuranceExpiresAt: daysFromNow(64),
       branchId: branch.id,
+      insuranceCoverages: {
+        create: [
+          {
+            coverageType: "AUTO_LIABILITY",
+            insurerName: "Mutual Transport Insurance",
+            policyNumber: "AL-884512",
+            limitAmount: "$1,000,000",
+            effectiveAt: daysFromNow(-300),
+            expiresAt: daysFromNow(64),
+            status: "Current"
+          },
+          {
+            coverageType: "CARGO",
+            insurerName: "Mutual Transport Insurance",
+            policyNumber: "CG-884512",
+            limitAmount: "$250,000",
+            effectiveAt: daysFromNow(-300),
+            expiresAt: daysFromNow(64),
+            status: "Current"
+          }
+        ]
+      },
       contacts: {
         create: [
           {
@@ -166,8 +267,9 @@ async function main() {
     }
   });
 
-  const carrierTwo = await prisma.carrier.create({
+  await prisma.carrier.create({
     data: {
+      companyId: company.id,
       name: "Prairie Line Logistics",
       status: "Active",
       mcNumber: "MC-552904",
@@ -178,12 +280,35 @@ async function main() {
       safetyRating: "Satisfactory",
       complianceStatus: "Review Soon",
       insuranceExpiresAt: daysFromNow(18),
-      branchId: branch.id
+      branchId: branch.id,
+      insuranceCoverages: {
+        create: [
+          {
+            coverageType: "AUTO_LIABILITY",
+            insurerName: "Prairie Mutual",
+            policyNumber: "AL-552904",
+            limitAmount: "$1,000,000",
+            effectiveAt: daysFromNow(-347),
+            expiresAt: daysFromNow(18),
+            status: "Expiring Soon"
+          },
+          {
+            coverageType: "CARGO",
+            insurerName: "Prairie Mutual",
+            policyNumber: "CG-552904",
+            limitAmount: "$150,000",
+            effectiveAt: daysFromNow(-347),
+            expiresAt: daysFromNow(18),
+            status: "Expiring Soon"
+          }
+        ]
+      }
     }
   });
 
   await prisma.load.create({
     data: {
+      companyId: company.id,
       loadNumber: "GLB-1001",
       title: "Frozen entrees to Chicago DC",
       status: "DISPATCHED",
@@ -206,18 +331,24 @@ async function main() {
           {
             type: "PICKUP",
             sequence: 1,
+            facilityId: northstarPlant.id,
             facilityName: "Northstar Foods Plant 4",
+            address: "4100 East Jefferson Ave",
             city: "Detroit",
             state: "MI",
+            postalCode: "48207",
             appointmentAt: daysFromNow(1),
             instructions: "Pre-cool trailer to -10 F."
           },
           {
             type: "DELIVERY",
             sequence: 2,
+            facilityId: chicagoDistribution.id,
             facilityName: "Chicago South Distribution",
+            address: "2200 Logistics Park Dr",
             city: "Joliet",
             state: "IL",
+            postalCode: "60436",
             appointmentAt: daysFromNow(2),
             instructions: "Lumper receipt required."
           }
@@ -253,11 +384,13 @@ async function main() {
       documents: {
         create: [
           {
+            companyId: company.id,
             type: "RATE_CONFIRMATION",
             name: "Carrier Rate Confirmation",
             filePath: "/uploads/demo/glb-1001-rate-confirmation.pdf"
           },
           {
+            companyId: company.id,
             type: "BOL",
             name: "Bill of Lading",
             filePath: "/uploads/demo/glb-1001-bol.pdf"
@@ -289,6 +422,7 @@ async function main() {
       invoices: {
         create: [
           {
+            companyId: company.id,
             invoiceNo: "INV-1001",
             customerId: customer.id,
             status: "DRAFT",
@@ -301,6 +435,7 @@ async function main() {
       carrierBills: {
         create: [
           {
+            companyId: company.id,
             billNo: "CB-1001",
             carrierId: carrier.id,
             status: "APPROVED",
@@ -315,6 +450,7 @@ async function main() {
 
   await prisma.load.create({
     data: {
+      companyId: company.id,
       loadNumber: "GLB-1002",
       title: "Retail fixtures to Nashville",
       status: "AVAILABLE",
@@ -337,17 +473,23 @@ async function main() {
           {
             type: "PICKUP",
             sequence: 1,
+            facilityId: summitCrossdock.id,
             facilityName: "Summit Retail Crossdock",
+            address: "1550 Westbelt Dr",
             city: "Columbus",
             state: "OH",
+            postalCode: "43228",
             appointmentAt: daysFromNow(3)
           },
           {
             type: "DELIVERY",
             sequence: 2,
+            facilityId: nashvilleBuildout.id,
             facilityName: "Nashville Store Buildout",
+            address: "900 Commerce Way",
             city: "Nashville",
             state: "TN",
+            postalCode: "37203",
             appointmentAt: daysFromNow(4)
           }
         ]
@@ -380,24 +522,28 @@ async function main() {
   await prisma.integrationAccount.createMany({
     data: [
       {
+        companyId: company.id,
         provider: "DAT",
         displayName: "DAT Load Board",
         status: "Not Connected",
         notes: "Future posting and truck search integration."
       },
       {
+        companyId: company.id,
         provider: "TRUCKSTOP",
         displayName: "Truckstop",
         status: "Not Connected",
         notes: "Future rate and posting integration."
       },
       {
+        companyId: company.id,
         provider: "QUICKBOOKS",
         displayName: "QuickBooks Online",
         status: "Not Connected",
         notes: "Future invoice and bill sync."
       },
       {
+        companyId: company.id,
         provider: "TRUCKER_TOOLS",
         displayName: "Tracking and Document Capture",
         status: "Not Connected",

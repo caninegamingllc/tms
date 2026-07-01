@@ -1,11 +1,14 @@
 import { MetricCard } from "@/components/metric-card";
 import { PageHeader } from "@/components/page-header";
+import { requireUser } from "@/lib/auth";
 import { prisma } from "@/lib/db";
 import { formatDate, formatMoney, marginPercent } from "@/lib/format";
 
 export default async function ReportsPage() {
+  const user = await requireUser();
   const [loads, customers, carriers] = await Promise.all([
     prisma.load.findMany({
+      where: { companyId: user.companyId },
       include: {
         customer: true,
         dispatchAssignment: { include: { carrier: true } },
@@ -14,8 +17,14 @@ export default async function ReportsPage() {
       },
       orderBy: { pickupDate: "desc" }
     }),
-    prisma.customer.findMany({ include: { loads: true, invoices: true } }),
-    prisma.carrier.findMany({ include: { assignments: { include: { load: true } } } })
+    prisma.customer.findMany({
+      where: { companyId: user.companyId },
+      include: { loads: true, invoices: true }
+    }),
+    prisma.carrier.findMany({
+      where: { companyId: user.companyId },
+      include: { assignments: { include: { load: true } } }
+    })
   ]);
 
   const revenue = loads.reduce((sum, load) => sum + load.revenueCents, 0);

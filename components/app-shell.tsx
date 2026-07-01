@@ -7,6 +7,7 @@ import { clsx } from "clsx";
 import {
   BarChart3,
   Building2,
+  MapPin,
   FileText,
   Gauge,
   Landmark,
@@ -22,6 +23,7 @@ const navItems = [
   { href: "/", label: "Dashboard", icon: LayoutDashboard },
   { href: "/loads", label: "Loads", icon: Truck },
   { href: "/customers", label: "Customers", icon: Building2 },
+  { href: "/locations", label: "Locations", icon: MapPin },
   { href: "/carriers", label: "Carriers", icon: ShieldCheck },
   { href: "/dispatch", label: "Dispatch", icon: Gauge },
   { href: "/documents", label: "Documents", icon: FileText },
@@ -40,7 +42,7 @@ export function AppShell({
 }) {
   const pathname = usePathname();
   const router = useRouter();
-  const publicPage = pathname === "/login" || pathname === "/change-password";
+  const publicPage = pathname === "/login" || pathname === "/register" || pathname === "/change-password";
 
   useEffect(() => {
     if (!currentUser && !publicPage) {
@@ -56,8 +58,11 @@ export function AppShell({
     return (
       <main className="flex min-h-screen items-center justify-center px-5">
         <div className="card max-w-md text-center">
-          <h1 className="text-2xl font-bold text-ink">Redirecting to sign in</h1>
-          <p className="mt-2 text-sm text-muted">Your session is missing or expired.</p>
+          <h1 className="text-2xl font-bold text-ink">Session expired</h1>
+          <p className="mt-2 text-sm text-muted">Sign in again to continue.</p>
+          <Link href="/login" className="btn mt-4 inline-flex">
+            Go to sign in
+          </Link>
         </div>
       </main>
     );
@@ -101,6 +106,7 @@ export function AppShell({
         <div className="mt-6 rounded-2xl border border-border bg-soft p-4">
           <p className="text-sm font-semibold text-ink">{currentUser?.name ?? "Not signed in"}</p>
           <p className="text-xs text-muted">{currentUser?.email ?? "Please sign in"}</p>
+          {currentUser ? <p className="text-xs text-muted">{currentUser.companyName}</p> : null}
           {currentUser ? (
             <form action="/logout" method="post" className="mt-3">
               <button className="btn-secondary w-full" type="submit">

@@ -3,6 +3,7 @@
 import { revalidatePath } from "next/cache";
 import { redirect } from "next/navigation";
 import { prisma } from "@/lib/db";
+import { requireUser } from "@/lib/auth";
 import {
   buildBillOfLading,
   buildCustomerInvoice,
@@ -30,14 +31,14 @@ function optionalDate(formData: FormData, key: string) {
   return value ? new Date(value) : undefined;
 }
 
-async function nextLoadNumber() {
-  const count = await prisma.load.count();
+async function nextLoadNumber(companyId: string) {
+  const count = await prisma.load.count({ where: { companyId } });
   return `GLB-${String(count + 1001).padStart(4, "0")}`;
 }
 
-async function loadForDocument(loadId: string) {
+async function loadForDocument(loadId: string, companyId: string) {
   return prisma.load.findUniqueOrThrow({
-    where: { id: loadId },
+    where: { id: loadId, companyId },
     include: {
       customer: { include: { contacts: true } },
       stops: true,
@@ -52,21 +53,76 @@ async function loadForDocument(loadId: string) {
   });
 }
 
-async function nextDocumentNumber(prefix: string) {
+async function nextDocumentNumber(companyId: string, prefix: string) {
   const count = await prisma.loadDocument.count({
-    where: { documentNumber: { startsWith: prefix } }
+    where: { companyId, documentNumber: { startsWith: prefix } }
   });
   return `${prefix}-${String(count + 1001).padStart(4, "0")}`;
 }
 
-async function nextInvoiceNumber() {
-  const count = await prisma.invoice.count();
+async function nextInvoiceNumber(companyId: string) {
+  const count = await prisma.invoice.count({ where: { companyId } });
   return `INV-${String(count + 1001).padStart(4, "0")}`;
 }
 
+async function requireCompanyLoad(loadId: string, companyId: string) {
+  return prisma.load.findUniqueOrThrow({ where: { id: loadId, companyId } });
+}
+
+async function requireCompanyCarrier(carrierId: string, companyId: string) {
+  return prisma.carrier.findUniqueOrThrow({ where: { id: carrierId, companyId } });
+}
+
+async function syncCarrierInsuranceSummary(carrierId: string) {
+  const coverages = await prisma.carrierInsuranceCoverage.findMany({
+    where: { carrierId, expiresAt: { not: null } },
+    orderBy: { expiresAt: "asc" }
+  });
+
+  await prisma.carrier.update({
+    where: { id: carrierId },
+    data: { insuranceExpiresAt: coverages[0]?.expiresAt ?? null }
+  });
+}
+
+async function requireCompanyCustomer(customerId: string, companyId: string) {
+  return prisma.customer.findUniqueOrThrow({ where: { id: customerId, companyId } });
+}
+
+async function facilitySnapshot(formData: FormData, prefix: "pickup" | "delivery", companyId: string) {
+  const facilityId = optionalString(formData, `${prefix}FacilityId`);
+
+  if (facilityId) {
+    const facility = await prisma.facility.findUniqueOrThrow({
+      where: { id: facilityId, companyId }
+    });
+
+    return {
+      facilityId: facility.id,
+      facilityName: facility.name,
+      address: facility.address ?? undefined,
+      city: facility.city,
+      state: facility.state,
+      postalCode: facility.postalCode ?? undefined
+    };
+  }
+
+  return {
+    facilityName: requiredString(formData, `${prefix}Facility`),
+    address: optionalString(formData, `${prefix}Address`),
+    city: requiredString(formData, `${prefix}City`),
+    state: requiredString(formData, `${prefix}State`),
+    postalCode: optionalString(formData, `${prefix}PostalCode`)
+  };
+}
+
 export async function createCustomer(formData: FormData) {
+  const user = await requireUser();
+
   await prisma.customer.create({
     data: {
+      companyId: user.companyId,
+      branchId: user.branchId,
       name: requiredString(formData, "name"),
       status: requiredString(formData, "status"),
       creditLimit: parseMoneyToCents(formData.get("creditLimit")),
@@ -93,8 +149,13 @@ export async function createCustomer(formData: FormData) {
 }
 
 export async function createCarrier(formData: FormData) {
+  const user = await requireUser();
+  const insuranceExpiresAt = optionalDate(formData, "insuranceExpiresAt");
+
   await prisma.carrier.create({
     data: {
+      companyId: user.companyId,
+      branchId: user.branchId,
       name: requiredString(formData, "name"),
       status: requiredString(formData, "status"),
       mcNumber: optionalString(formData, "mcNumber"),
@@ -104,7 +165,17 @@ export async function createCarrier(formData: FormData) {
       equipmentTypes: optionalString(formData, "equipmentTypes"),
       safetyRating: optionalString(formData, "safetyRating"),
       complianceStatus: requiredString(formData, "complianceStatus"),
-      insuranceExpiresAt: optionalDate(formData, "insuranceExpiresAt"),
+      insuranceExpiresAt,
+      insuranceCoverages: insuranceExpiresAt
+        ? {
+            create: {
+              coverageType: "AUTO_LIABILITY",
+              expiresAt: insuranceExpiresAt,
+              status: "Current",
+              notes: "Created from the carrier summary insurance date."
+            }
+          }
+        : undefined,
       contacts: {
         create: {
           name: optionalString(formData, "contactName") ?? "Dispatcher",
@@ -121,16 +192,167 @@ export async function createCarrier(formData: FormData) {
   redirect("/carriers");
 }
 
+export async function updateCarrier(formData: FormData) {
+  const user = await requireUser();
+  const carrierId = requiredString(formData, "carrierId");
+  await requireCompanyCarrier(carrierId, user.companyId);
+
+  await prisma.carrier.update({
+    where: { id: carrierId },
+    data: {
+      name: requiredString(formData, "name"),
+      status: requiredString(formData, "status"),
+      mcNumber: optionalString(formData, "mcNumber"),
+      dotNumber: optionalString(formData, "dotNumber"),
+      phone: optionalString(formData, "phone"),
+      email: optionalString(formData, "email"),
+      equipmentTypes: optionalString(formData, "equipmentTypes"),
+      safetyRating: optionalString(formData, "safetyRating"),
+      complianceStatus: requiredString(formData, "complianceStatus")
+    }
+  });
+
+  revalidatePath("/carriers");
+  revalidatePath(`/carriers/${carrierId}`);
+}
+
+export async function createCarrierInsuranceCoverage(formData: FormData) {
+  const user = await requireUser();
+  const carrierId = requiredString(formData, "carrierId");
+  await requireCompanyCarrier(carrierId, user.companyId);
+
+  await prisma.carrierInsuranceCoverage.create({
+    data: {
+      carrierId,
+      coverageType: requiredString(formData, "coverageType"),
+      insurerName: optionalString(formData, "insurerName"),
+      policyNumber: optionalString(formData, "policyNumber"),
+      limitAmount: optionalString(formData, "limitAmount"),
+      effectiveAt: optionalDate(formData, "effectiveAt"),
+      expiresAt: optionalDate(formData, "expiresAt"),
+      status: requiredString(formData, "status"),
+      notes: optionalString(formData, "notes")
+    }
+  });
+
+  await syncCarrierInsuranceSummary(carrierId);
+  revalidatePath("/carriers");
+  revalidatePath(`/carriers/${carrierId}`);
+}
+
+export async function updateCarrierInsuranceCoverage(formData: FormData) {
+  const user = await requireUser();
+  const coverageId = requiredString(formData, "coverageId");
+  const coverage = await prisma.carrierInsuranceCoverage.findUniqueOrThrow({
+    where: { id: coverageId },
+    include: { carrier: true }
+  });
+
+  if (coverage.carrier.companyId !== user.companyId) {
+    throw new Error("Coverage not found.");
+  }
+
+  await prisma.carrierInsuranceCoverage.update({
+    where: { id: coverageId },
+    data: {
+      coverageType: requiredString(formData, "coverageType"),
+      insurerName: optionalString(formData, "insurerName"),
+      policyNumber: optionalString(formData, "policyNumber"),
+      limitAmount: optionalString(formData, "limitAmount"),
+      effectiveAt: optionalDate(formData, "effectiveAt"),
+      expiresAt: optionalDate(formData, "expiresAt"),
+      status: requiredString(formData, "status"),
+      notes: optionalString(formData, "notes")
+    }
+  });
+
+  await syncCarrierInsuranceSummary(coverage.carrierId);
+  revalidatePath("/carriers");
+  revalidatePath(`/carriers/${coverage.carrierId}`);
+}
+
+export async function createFacility(formData: FormData) {
+  const user = await requireUser();
+  const customerId = optionalString(formData, "customerId");
+
+  if (customerId) {
+    await requireCompanyCustomer(customerId, user.companyId);
+  }
+
+  await prisma.facility.create({
+    data: {
+      companyId: user.companyId,
+      branchId: user.branchId,
+      customerId,
+      name: requiredString(formData, "name"),
+      type: requiredString(formData, "type"),
+      status: requiredString(formData, "status"),
+      address: optionalString(formData, "address"),
+      city: requiredString(formData, "city"),
+      state: requiredString(formData, "state"),
+      postalCode: optionalString(formData, "postalCode"),
+      phone: optionalString(formData, "phone"),
+      email: optionalString(formData, "email"),
+      contactName: optionalString(formData, "contactName"),
+      notes: optionalString(formData, "notes")
+    }
+  });
+
+  revalidatePath("/locations");
+  revalidatePath("/loads/new");
+  redirect("/locations");
+}
+
+export async function updateFacility(formData: FormData) {
+  const user = await requireUser();
+  const facilityId = requiredString(formData, "facilityId");
+  const customerId = optionalString(formData, "customerId");
+
+  await prisma.facility.findUniqueOrThrow({ where: { id: facilityId, companyId: user.companyId } });
+
+  if (customerId) {
+    await requireCompanyCustomer(customerId, user.companyId);
+  }
+
+  await prisma.facility.update({
+    where: { id: facilityId },
+    data: {
+      customerId,
+      name: requiredString(formData, "name"),
+      type: requiredString(formData, "type"),
+      status: requiredString(formData, "status"),
+      address: optionalString(formData, "address"),
+      city: requiredString(formData, "city"),
+      state: requiredString(formData, "state"),
+      postalCode: optionalString(formData, "postalCode"),
+      phone: optionalString(formData, "phone"),
+      email: optionalString(formData, "email"),
+      contactName: optionalString(formData, "contactName"),
+      notes: optionalString(formData, "notes")
+    }
+  });
+
+  revalidatePath("/locations");
+  revalidatePath("/loads/new");
+}
+
 export async function createLoad(formData: FormData) {
+  const user = await requireUser();
   const customerId = requiredString(formData, "customerId");
-  const loadNumber = optionalString(formData, "loadNumber") ?? (await nextLoadNumber());
+  await requireCompanyCustomer(customerId, user.companyId);
+
+  const loadNumber = optionalString(formData, "loadNumber") ?? (await nextLoadNumber(user.companyId));
   const pickupDate = optionalDate(formData, "pickupDate") ?? new Date();
   const deliveryDate = optionalDate(formData, "deliveryDate") ?? pickupDate;
   const revenueCents = parseMoneyToCents(formData.get("revenue"));
   const carrierCostCents = parseMoneyToCents(formData.get("carrierCost"));
+  const pickup = await facilitySnapshot(formData, "pickup", user.companyId);
+  const delivery = await facilitySnapshot(formData, "delivery", user.companyId);
 
   const load = await prisma.load.create({
     data: {
+      companyId: user.companyId,
+      branchId: user.branchId,
       loadNumber,
       title: requiredString(formData, "title"),
       status: requiredString(formData, "status"),
@@ -139,10 +361,10 @@ export async function createLoad(formData: FormData) {
       equipmentType: requiredString(formData, "equipmentType"),
       commodity: optionalString(formData, "commodity"),
       weight: Number(formData.get("weight") || 0) || undefined,
-      pickupCity: requiredString(formData, "pickupCity"),
-      pickupState: requiredString(formData, "pickupState"),
-      deliveryCity: requiredString(formData, "deliveryCity"),
-      deliveryState: requiredString(formData, "deliveryState"),
+      pickupCity: pickup.city,
+      pickupState: pickup.state,
+      deliveryCity: delivery.city,
+      deliveryState: delivery.state,
       pickupDate,
       deliveryDate,
       revenueCents,
@@ -152,18 +374,14 @@ export async function createLoad(formData: FormData) {
           {
             type: "PICKUP",
             sequence: 1,
-            facilityName: requiredString(formData, "pickupFacility"),
-            city: requiredString(formData, "pickupCity"),
-            state: requiredString(formData, "pickupState"),
+            ...pickup,
             appointmentAt: pickupDate,
             instructions: optionalString(formData, "pickupInstructions")
           },
           {
             type: "DELIVERY",
             sequence: 2,
-            facilityName: requiredString(formData, "deliveryFacility"),
-            city: requiredString(formData, "deliveryCity"),
-            state: requiredString(formData, "deliveryState"),
+            ...delivery,
             appointmentAt: deliveryDate,
             instructions: optionalString(formData, "deliveryInstructions")
           }
@@ -178,6 +396,7 @@ export async function createLoad(formData: FormData) {
       },
       activities: {
         create: {
+          userId: user.id,
           action: "Load created",
           details: "Created from the TMS load entry form."
         }
@@ -190,8 +409,10 @@ export async function createLoad(formData: FormData) {
 }
 
 export async function updateLoadStatus(formData: FormData) {
+  const user = await requireUser();
   const loadId = requiredString(formData, "loadId");
   const status = requiredString(formData, "status");
+  await requireCompanyLoad(loadId, user.companyId);
 
   await prisma.load.update({
     where: { id: loadId },
@@ -199,6 +420,7 @@ export async function updateLoadStatus(formData: FormData) {
       status,
       activities: {
         create: {
+          userId: user.id,
           action: "Status changed",
           details: `Load moved to ${status}.`
         }
@@ -211,9 +433,12 @@ export async function updateLoadStatus(formData: FormData) {
 }
 
 export async function assignCarrier(formData: FormData) {
+  const user = await requireUser();
   const loadId = requiredString(formData, "loadId");
   const carrierId = requiredString(formData, "carrierId");
   const rateCents = parseMoneyToCents(formData.get("rate"));
+  await requireCompanyLoad(loadId, user.companyId);
+  await requireCompanyCarrier(carrierId, user.companyId);
 
   await prisma.load.update({
     where: { id: loadId },
@@ -242,6 +467,7 @@ export async function assignCarrier(formData: FormData) {
       },
       activities: {
         create: {
+          userId: user.id,
           action: "Carrier assigned",
           details: `Carrier assignment updated at ${parseMoneyToCents(formData.get("rate")) / 100}.`
         }
@@ -255,8 +481,10 @@ export async function assignCarrier(formData: FormData) {
 }
 
 export async function addCheckCall(formData: FormData) {
+  const user = await requireUser();
   const assignmentId = requiredString(formData, "assignmentId");
   const loadId = requiredString(formData, "loadId");
+  await requireCompanyLoad(loadId, user.companyId);
 
   await prisma.checkCall.create({
     data: {
@@ -271,6 +499,7 @@ export async function addCheckCall(formData: FormData) {
   await prisma.loadActivity.create({
     data: {
       loadId,
+      userId: user.id,
       action: "Check call added",
       details: `${requiredString(formData, "status")} at ${requiredString(formData, "location")}.`
     }
@@ -281,12 +510,24 @@ export async function addCheckCall(formData: FormData) {
 }
 
 export async function addDocument(formData: FormData) {
+  const user = await requireUser();
   const loadId = optionalString(formData, "loadId");
   const customerId = optionalString(formData, "customerId");
   const carrierId = optionalString(formData, "carrierId");
 
+  if (loadId) {
+    await requireCompanyLoad(loadId, user.companyId);
+  }
+  if (customerId) {
+    await requireCompanyCustomer(customerId, user.companyId);
+  }
+  if (carrierId) {
+    await requireCompanyCarrier(carrierId, user.companyId);
+  }
+
   await prisma.loadDocument.create({
     data: {
+      companyId: user.companyId,
       loadId,
       customerId,
       carrierId,
@@ -301,6 +542,7 @@ export async function addDocument(formData: FormData) {
     await prisma.loadActivity.create({
       data: {
         loadId,
+        userId: user.id,
         action: "Document added",
         details: requiredString(formData, "name")
       }
@@ -315,16 +557,18 @@ export async function addDocument(formData: FormData) {
 }
 
 export async function generateRateConfirmation(formData: FormData) {
+  const user = await requireUser();
   const loadId = requiredString(formData, "loadId");
-  const load = await loadForDocument(loadId);
+  const load = await loadForDocument(loadId, user.companyId);
 
   if (!load.dispatchAssignment) {
     throw new Error("Assign a carrier before generating a rate confirmation.");
   }
 
-  const documentNumber = await nextDocumentNumber("RC");
+  const documentNumber = await nextDocumentNumber(user.companyId, "RC");
   const document = await prisma.loadDocument.create({
     data: {
+      companyId: user.companyId,
       loadId: load.id,
       carrierId: load.dispatchAssignment.carrierId,
       type: "RATE_CONFIRMATION",
@@ -339,6 +583,7 @@ export async function generateRateConfirmation(formData: FormData) {
   await prisma.loadActivity.create({
     data: {
       loadId,
+      userId: user.id,
       action: "Rate confirmation generated",
       details: documentNumber
     }
@@ -350,12 +595,14 @@ export async function generateRateConfirmation(formData: FormData) {
 }
 
 export async function generateBillOfLading(formData: FormData) {
+  const user = await requireUser();
   const loadId = requiredString(formData, "loadId");
-  const load = await loadForDocument(loadId);
-  const documentNumber = await nextDocumentNumber("BOL");
+  const load = await loadForDocument(loadId, user.companyId);
+  const documentNumber = await nextDocumentNumber(user.companyId, "BOL");
 
   const document = await prisma.loadDocument.create({
     data: {
+      companyId: user.companyId,
       loadId: load.id,
       customerId: load.customerId,
       type: "BOL",
@@ -370,6 +617,7 @@ export async function generateBillOfLading(formData: FormData) {
   await prisma.loadActivity.create({
     data: {
       loadId,
+      userId: user.id,
       action: "BOL generated",
       details: documentNumber
     }
@@ -381,9 +629,10 @@ export async function generateBillOfLading(formData: FormData) {
 }
 
 export async function generateCustomerInvoice(formData: FormData) {
+  const user = await requireUser();
   const loadId = requiredString(formData, "loadId");
-  const load = await loadForDocument(loadId);
-  const invoiceNumber = await nextInvoiceNumber();
+  const load = await loadForDocument(loadId, user.companyId);
+  const invoiceNumber = await nextInvoiceNumber(user.companyId);
   const issuedAt = new Date();
   const dueAt = new Date();
   dueAt.setDate(dueAt.getDate() + 30);
@@ -392,6 +641,7 @@ export async function generateCustomerInvoice(formData: FormData) {
     load.invoices[0] ??
     (await prisma.invoice.create({
       data: {
+        companyId: user.companyId,
         invoiceNo: invoiceNumber,
         loadId: load.id,
         customerId: load.customerId,
@@ -402,9 +652,10 @@ export async function generateCustomerInvoice(formData: FormData) {
       }
     }));
 
-  const refreshedLoad = await loadForDocument(loadId);
+  const refreshedLoad = await loadForDocument(loadId, user.companyId);
   const document = await prisma.loadDocument.create({
     data: {
+      companyId: user.companyId,
       loadId: load.id,
       customerId: load.customerId,
       type: "INVOICE",
@@ -419,6 +670,7 @@ export async function generateCustomerInvoice(formData: FormData) {
   await prisma.loadActivity.create({
     data: {
       loadId,
+      userId: user.id,
       action: "Customer invoice generated",
       details: invoice.invoiceNo
     }
@@ -431,11 +683,13 @@ export async function generateCustomerInvoice(formData: FormData) {
 }
 
 export async function createInvoice(formData: FormData) {
+  const user = await requireUser();
   const loadId = requiredString(formData, "loadId");
-  const load = await prisma.load.findUniqueOrThrow({ where: { id: loadId } });
+  const load = await requireCompanyLoad(loadId, user.companyId);
 
   await prisma.invoice.create({
     data: {
+      companyId: user.companyId,
       invoiceNo: requiredString(formData, "invoiceNo"),
       loadId,
       customerId: load.customerId,
@@ -451,11 +705,15 @@ export async function createInvoice(formData: FormData) {
 }
 
 export async function createCarrierBill(formData: FormData) {
+  const user = await requireUser();
   const loadId = requiredString(formData, "loadId");
   const carrierId = requiredString(formData, "carrierId");
+  await requireCompanyLoad(loadId, user.companyId);
+  await requireCompanyCarrier(carrierId, user.companyId);
 
   await prisma.carrierBill.create({
     data: {
+      companyId: user.companyId,
       billNo: requiredString(formData, "billNo"),
       loadId,
       carrierId,

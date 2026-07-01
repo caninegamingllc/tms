@@ -1,4 +1,5 @@
 import { PageHeader } from "@/components/page-header";
+import { requireUser } from "@/lib/auth";
 import { prisma } from "@/lib/db";
 import { formatDate, humanize } from "@/lib/format";
 
@@ -13,7 +14,9 @@ const capabilities: Record<string, string[]> = {
 };
 
 export default async function IntegrationsPage() {
+  const user = await requireUser();
   const integrations = await prisma.integrationAccount.findMany({
+    where: { companyId: user.companyId },
     orderBy: { provider: "asc" }
   });
 

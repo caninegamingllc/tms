@@ -1,6 +1,7 @@
 import { notFound } from "next/navigation";
 import Link from "next/link";
 import { PageHeader } from "@/components/page-header";
+import { SearchCombobox } from "@/components/search-combobox";
 import { StatusBadge } from "@/components/status-badge";
 import {
   addCheckCall,
@@ -11,15 +12,17 @@ import {
   generateRateConfirmation,
   updateLoadStatus
 } from "@/lib/actions";
+import { requireUser } from "@/lib/auth";
 import { documentTypes, loadStatuses } from "@/lib/constants";
 import { prisma } from "@/lib/db";
 import { formatDate, formatDateTime, formatMoney, humanize, marginPercent } from "@/lib/format";
 
 export default async function LoadDetailPage({ params }: { params: Promise<{ id: string }> }) {
   const { id } = await params;
+  const user = await requireUser();
   const [load, carriers] = await Promise.all([
     prisma.load.findUnique({
-      where: { id },
+      where: { id, companyId: user.companyId },
       include: {
         customer: true,
         stops: { orderBy: { sequence: "asc" } },
@@ -37,12 +40,25 @@ export default async function LoadDetailPage({ params }: { params: Promise<{ id:
         carrierBills: { include: { carrier: true } }
       }
     }),
-    prisma.carrier.findMany({ orderBy: { name: "asc" } })
+    prisma.carrier.findMany({ where: { companyId: user.companyId }, orderBy: { name: "asc" } })
   ]);
 
   if (!load) {
     notFound();
   }
+
+  const carrierOptions = carriers.map((carrier) => ({
+    id: carrier.id,
+    label: carrier.name,
+    description: [
+      carrier.mcNumber,
+      carrier.dotNumber,
+      carrier.complianceStatus,
+      carrier.insuranceExpiresAt ? `Insurance ${formatDate(carrier.insuranceExpiresAt)}` : "Insurance missing"
+    ]
+      .filter(Boolean)
+      .join(" - ")
+  }));
 
   return (
     <>
@@ -216,19 +232,14 @@ export default async function LoadDetailPage({ params }: { params: Promise<{ id:
             </p>
             <form action={assignCarrier} className="mt-4 grid gap-3">
               <input type="hidden" name="loadId" value={load.id} />
-              <select
+              <SearchCombobox
                 name="carrierId"
-                className="select"
+                label="Carrier"
+                placeholder="Search carriers"
+                options={carrierOptions}
                 defaultValue={load.dispatchAssignment?.carrierId ?? ""}
                 required
-              >
-                <option value="">Select carrier</option>
-                {carriers.map((carrier) => (
-                  <option key={carrier.id} value={carrier.id}>
-                    {carrier.name}
-                  </option>
-                ))}
-              </select>
+              />
               <input
                 name="rate"
                 className="input"

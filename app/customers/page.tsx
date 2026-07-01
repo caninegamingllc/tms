@@ -1,10 +1,13 @@
 import { PageHeader } from "@/components/page-header";
 import { createCustomer } from "@/lib/actions";
+import { requireUser } from "@/lib/auth";
 import { prisma } from "@/lib/db";
 import { formatMoney } from "@/lib/format";
 
 export default async function CustomersPage() {
+  const user = await requireUser();
   const customers = await prisma.customer.findMany({
+    where: { companyId: user.companyId },
     orderBy: { name: "asc" },
     include: {
       contacts: true,

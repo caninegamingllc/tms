@@ -17,9 +17,17 @@ import { formatDate, formatDateTime, humanize } from "@/lib/format";
 export default async function AdminPage() {
   const currentUser = await requireAdmin();
   const [users, branches, auditLogs] = await Promise.all([
-    prisma.user.findMany({ include: { branch: true }, orderBy: { name: "asc" } }),
-    prisma.branch.findMany({ include: { users: true, customers: true, carriers: true, loads: true } }),
+    prisma.user.findMany({
+      where: { companyId: currentUser.companyId },
+      include: { branch: true },
+      orderBy: { name: "asc" }
+    }),
+    prisma.branch.findMany({
+      where: { companyId: currentUser.companyId },
+      include: { users: true, customers: true, carriers: true, loads: true }
+    }),
     prisma.auditLog.findMany({
+      where: { companyId: currentUser.companyId },
       orderBy: { createdAt: "desc" },
       include: { actorUser: true, targetUser: true },
       take: 50

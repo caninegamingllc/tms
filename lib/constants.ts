@@ -43,3 +43,14 @@ export const paymentStatuses = [
 export const userRoles = ["OWNER", "ADMIN", "BROKER", "DISPATCHER", "ACCOUNTING", "VIEWER"] as const;
 
 export const userStatuses = ["ACTIVE", "LOCKED", "DISABLED", "INVITED"] as const;
+
+export const facilityTypes = ["GENERAL", "SHIPPER", "CONSIGNEE", "DISTRIBUTION_CENTER", "PORT", "RAIL"] as const;
+
+export const insuranceCoverageTypes = [
+  "AUTO_LIABILITY",
+  "CARGO",
+  "GENERAL_LIABILITY",
+  "WORKERS_COMP",
+  "TRAILER_INTERCHANGE",
+  "OTHER"
+] as const;

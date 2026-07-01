@@ -1,10 +1,17 @@
-import { login } from "@/lib/auth";
+import Link from "next/link";
+import { redirect } from "next/navigation";
+import { getCurrentUser, login } from "@/lib/auth";
 
 export default async function LoginPage({
   searchParams
 }: {
   searchParams: Promise<{ error?: string }>;
 }) {
+  const user = await getCurrentUser();
+  if (user) {
+    redirect(user.mustChangePassword ? "/change-password" : "/");
+  }
+
   const { error } = await searchParams;
 
   return (
@@ -47,6 +54,13 @@ export default async function LoginPage({
           <p>Email: owner@example.com</p>
           <p>Password: ChangeMe123!</p>
         </div>
+
+        <p className="mt-5 text-sm text-muted">
+          New brokerage?{" "}
+          <Link href="/register" className="font-semibold text-brand-700">
+            Create a company workspace
+          </Link>
+        </p>
       </section>
     </main>
   );

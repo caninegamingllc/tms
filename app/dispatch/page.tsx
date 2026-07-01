@@ -2,11 +2,14 @@ import Link from "next/link";
 import { PageHeader } from "@/components/page-header";
 import { StatusBadge } from "@/components/status-badge";
 import { addCheckCall } from "@/lib/actions";
+import { requireUser } from "@/lib/auth";
 import { prisma } from "@/lib/db";
 import { formatDateTime, formatMoney } from "@/lib/format";
 
 export default async function DispatchPage() {
+  const user = await requireUser();
   const assignments = await prisma.dispatchAssignment.findMany({
+    where: { load: { companyId: user.companyId } },
     orderBy: { assignedAt: "desc" },
     include: {
       carrier: true,
@@ -16,7 +19,11 @@ export default async function DispatchPage() {
   });
 
   const uncoveredLoads = await prisma.load.findMany({
-    where: { dispatchAssignment: null, status: { in: ["AVAILABLE", "COVERED", "QUOTE"] } },
+    where: {
+      companyId: user.companyId,
+      dispatchAssignment: null,
+      status: { in: ["AVAILABLE", "COVERED", "QUOTE"] }
+    },
     include: { customer: true },
     orderBy: { pickupDate: "asc" }
   });

@@ -2,25 +2,30 @@ import { MetricCard } from "@/components/metric-card";
 import { PageHeader } from "@/components/page-header";
 import { StatusBadge } from "@/components/status-badge";
 import { createCarrierBill, createInvoice, generateCustomerInvoice } from "@/lib/actions";
+import { requireUser } from "@/lib/auth";
 import { paymentStatuses } from "@/lib/constants";
 import { prisma } from "@/lib/db";
 import { formatDate, formatMoney, humanize } from "@/lib/format";
 
 export default async function AccountingPage() {
+  const user = await requireUser();
   const [loads, invoices, carrierBills, carriers] = await Promise.all([
     prisma.load.findMany({
+      where: { companyId: user.companyId },
       orderBy: { loadNumber: "desc" },
       include: { customer: true, dispatchAssignment: true }
     }),
     prisma.invoice.findMany({
+      where: { companyId: user.companyId },
       orderBy: { createdAt: "desc" },
       include: { customer: true, load: true }
     }),
     prisma.carrierBill.findMany({
+      where: { companyId: user.companyId },
       orderBy: { createdAt: "desc" },
       include: { carrier: true, load: true }
     }),
-    prisma.carrier.findMany({ orderBy: { name: "asc" } })
+    prisma.carrier.findMany({ where: { companyId: user.companyId }, orderBy: { name: "asc" } })
   ]);
 
   const openAr = invoices
@@ -122,7 +127,7 @@ export default async function AccountingPage() {
       <div className="mt-6 grid gap-6 xl:grid-cols-2">
         <section className="card">
           <h2 className="section-title">Generate Customer Invoice Document</h2>
-          <p className="muted">Create a printable invoice from the selected load's customer, lane, and charges.</p>
+          <p className="muted">Create a printable invoice from the selected load customer, lane, and charges.</p>
           <form action={generateCustomerInvoice} className="mt-4 grid gap-3">
             <select name="loadId" className="select" required>
               <option value="">Select load</option>

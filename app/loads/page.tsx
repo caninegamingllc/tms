@@ -1,11 +1,14 @@
 import Link from "next/link";
 import { PageHeader } from "@/components/page-header";
 import { StatusBadge } from "@/components/status-badge";
+import { requireUser } from "@/lib/auth";
 import { prisma } from "@/lib/db";
 import { formatDate, formatMoney, marginPercent } from "@/lib/format";
 
 export default async function LoadsPage() {
+  const user = await requireUser();
   const loads = await prisma.load.findMany({
+    where: { companyId: user.companyId },
     orderBy: [{ pickupDate: "asc" }, { loadNumber: "asc" }],
     include: {
       customer: true,

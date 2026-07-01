@@ -1,19 +1,22 @@
 import { PageHeader } from "@/components/page-header";
 import { addDocument } from "@/lib/actions";
+import { requireUser } from "@/lib/auth";
 import { documentTypes } from "@/lib/constants";
 import { prisma } from "@/lib/db";
 import { formatDate, humanize } from "@/lib/format";
 import Link from "next/link";
 
 export default async function DocumentsPage() {
+  const user = await requireUser();
   const [documents, loads, customers, carriers] = await Promise.all([
     prisma.loadDocument.findMany({
+      where: { companyId: user.companyId },
       orderBy: { uploadedAt: "desc" },
       include: { load: true, customer: true, carrier: true }
     }),
-    prisma.load.findMany({ orderBy: { loadNumber: "desc" } }),
-    prisma.customer.findMany({ orderBy: { name: "asc" } }),
-    prisma.carrier.findMany({ orderBy: { name: "asc" } })
+    prisma.load.findMany({ where: { companyId: user.companyId }, orderBy: { loadNumber: "desc" } }),
+    prisma.customer.findMany({ where: { companyId: user.companyId }, orderBy: { name: "asc" } }),
+    prisma.carrier.findMany({ where: { companyId: user.companyId }, orderBy: { name: "asc" } })
   ]);
 
   return (

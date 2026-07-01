@@ -1,11 +1,39 @@
 import { PageHeader } from "@/components/page-header";
+import { FacilityCombobox, SearchCombobox } from "@/components/search-combobox";
 import { createLoad } from "@/lib/actions";
+import { requireUser } from "@/lib/auth";
 import { equipmentTypes, loadStatuses } from "@/lib/constants";
 import { prisma } from "@/lib/db";
 import { humanize } from "@/lib/format";
 
 export default async function NewLoadPage() {
-  const customers = await prisma.customer.findMany({ orderBy: { name: "asc" } });
+  const user = await requireUser();
+  const [customers, facilities] = await Promise.all([
+    prisma.customer.findMany({
+      where: { companyId: user.companyId },
+      orderBy: { name: "asc" }
+    }),
+    prisma.facility.findMany({
+      where: { companyId: user.companyId, status: "Active" },
+      include: { customer: true },
+      orderBy: [{ name: "asc" }, { city: "asc" }]
+    })
+  ]);
+
+  const customerOptions = customers.map((customer) => ({
+    id: customer.id,
+    label: customer.name,
+    description: [customer.city, customer.state].filter(Boolean).join(", ")
+  }));
+  const facilityOptions = facilities.map((facility) => ({
+    id: facility.id,
+    label: facility.name,
+    description: facility.customer?.name,
+    address: facility.address,
+    city: facility.city,
+    state: facility.state,
+    postalCode: facility.postalCode
+  }));
 
   return (
     <>
@@ -16,17 +44,13 @@ export default async function NewLoadPage() {
 
       <form action={createLoad} className="card grid gap-6">
         <div className="grid gap-4 md:grid-cols-3">
-          <label className="grid gap-2">
-            <span className="label">Customer</span>
-            <select name="customerId" className="select" required>
-              <option value="">Select customer</option>
-              {customers.map((customer) => (
-                <option key={customer.id} value={customer.id}>
-                  {customer.name}
-                </option>
-              ))}
-            </select>
-          </label>
+          <SearchCombobox
+            name="customerId"
+            label="Customer"
+            placeholder="Search customers"
+            options={customerOptions}
+            required
+          />
           <label className="grid gap-2">
             <span className="label">Load Number</span>
             <input name="loadNumber" className="input" placeholder="Auto if blank" />
@@ -78,22 +102,8 @@ export default async function NewLoadPage() {
         </div>
 
         <div className="grid gap-4 md:grid-cols-2">
-          <fieldset className="grid gap-4 rounded-2xl border border-border p-4">
-            <legend className="px-2 text-sm font-semibold text-ink">Pickup</legend>
-            <label className="grid gap-2">
-              <span className="label">Facility</span>
-              <input name="pickupFacility" className="input" required />
-            </label>
-            <div className="grid gap-4 md:grid-cols-2">
-              <label className="grid gap-2">
-                <span className="label">City</span>
-                <input name="pickupCity" className="input" required />
-              </label>
-              <label className="grid gap-2">
-                <span className="label">State</span>
-                <input name="pickupState" className="input" maxLength={2} required />
-              </label>
-            </div>
+          <div className="grid gap-4">
+            <FacilityCombobox prefix="pickup" legend="Pickup" facilities={facilityOptions} />
             <label className="grid gap-2">
               <span className="label">Appointment</span>
               <input name="pickupDate" className="input" type="datetime-local" required />
@@ -102,24 +112,10 @@ export default async function NewLoadPage() {
               <span className="label">Instructions</span>
               <textarea name="pickupInstructions" className="textarea" rows={3} />
             </label>
-          </fieldset>
+          </div>
 
-          <fieldset className="grid gap-4 rounded-2xl border border-border p-4">
-            <legend className="px-2 text-sm font-semibold text-ink">Delivery</legend>
-            <label className="grid gap-2">
-              <span className="label">Facility</span>
-              <input name="deliveryFacility" className="input" required />
-            </label>
-            <div className="grid gap-4 md:grid-cols-2">
-              <label className="grid gap-2">
-                <span className="label">City</span>
-                <input name="deliveryCity" className="input" required />
-              </label>
-              <label className="grid gap-2">
-                <span className="label">State</span>
-                <input name="deliveryState" className="input" maxLength={2} required />
-              </label>
-            </div>
+          <div className="grid gap-4">
+            <FacilityCombobox prefix="delivery" legend="Delivery" facilities={facilityOptions} />
             <label className="grid gap-2">
               <span className="label">Appointment</span>
               <input name="deliveryDate" className="input" type="datetime-local" required />
@@ -128,7 +124,7 @@ export default async function NewLoadPage() {
               <span className="label">Instructions</span>
               <textarea name="deliveryInstructions" className="textarea" rows={3} />
             </label>
-          </fieldset>
+          </div>
         </div>
 
         <label className="grid gap-2 md:max-w-xs">
