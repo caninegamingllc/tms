@@ -36,11 +36,6 @@ function optionalDate(formData: FormData, key: string) {
   return value ? new Date(value) : undefined;
 }
 
-async function nextLoadNumber(companyId: string) {
-  const count = await prisma.load.count({ where: { companyId } });
-  return `GLB-${String(count + 1001).padStart(4, "0")}`;
-}
-
 async function loadForDocument(loadId: string, companyId: string) {
   return prisma.load.findUniqueOrThrow({
     where: { id: loadId, companyId },
@@ -422,7 +417,7 @@ export async function createLoad(formData: FormData) {
   const customerId = requiredString(formData, "customerId");
   await requireCompanyCustomer(customerId, user.companyId);
 
-  const loadNumber = optionalString(formData, "loadNumber") ?? (await nextLoadNumber(user.companyId));
+  const manualLoadNumber = optionalString(formData, "loadNumber");
   const pickupDate = optionalDate(formData, "pickupDate") ?? new Date();
   const deliveryDate = optionalDate(formData, "deliveryDate") ?? pickupDate;
   const revenueCents = parseMoneyToCents(formData.get("revenue"));
@@ -430,59 +425,75 @@ export async function createLoad(formData: FormData) {
   const pickup = await facilitySnapshot(formData, "pickup", user.companyId);
   const delivery = await facilitySnapshot(formData, "delivery", user.companyId);
 
-  const load = await prisma.load.create({
-    data: {
-      companyId: user.companyId,
-      branchId: user.branchId,
-      loadNumber,
-      title: requiredString(formData, "title"),
-      status: requiredString(formData, "status"),
-      customerId,
-      referenceNumber: optionalString(formData, "referenceNumber"),
-      equipmentType: requiredString(formData, "equipmentType"),
-      commodity: optionalString(formData, "commodity"),
-      weight: Number(formData.get("weight") || 0) || undefined,
-      pickupCity: pickup.city,
-      pickupState: pickup.state,
-      deliveryCity: delivery.city,
-      deliveryState: delivery.state,
-      pickupDate,
-      deliveryDate,
-      revenueCents,
-      carrierCostCents,
-      stops: {
-        create: [
-          {
-            type: "PICKUP",
-            sequence: 1,
-            ...pickup,
-            appointmentAt: pickupDate,
-            instructions: optionalString(formData, "pickupInstructions")
-          },
-          {
-            type: "DELIVERY",
-            sequence: 2,
-            ...delivery,
-            appointmentAt: deliveryDate,
-            instructions: optionalString(formData, "deliveryInstructions")
+  const load = await prisma.$transaction(async (tx) => {
+    const company = await tx.company.findUniqueOrThrow({ where: { id: user.companyId } });
+    const loadNumber =
+      manualLoadNumber ??
+      `${company.loadNumberPrefix}-${String(company.nextLoadSequence).padStart(4, "0")}`;
+
+    const createdLoad = await tx.load.create({
+      data: {
+        companyId: user.companyId,
+        branchId: user.branchId,
+        loadNumber,
+        title: requiredString(formData, "title"),
+        status: requiredString(formData, "status"),
+        customerId,
+        referenceNumber: optionalString(formData, "referenceNumber"),
+        equipmentType: requiredString(formData, "equipmentType"),
+        commodity: optionalString(formData, "commodity"),
+        weight: Number(formData.get("weight") || 0) || undefined,
+        pickupCity: pickup.city,
+        pickupState: pickup.state,
+        deliveryCity: delivery.city,
+        deliveryState: delivery.state,
+        pickupDate,
+        deliveryDate,
+        revenueCents,
+        carrierCostCents,
+        stops: {
+          create: [
+            {
+              type: "PICKUP",
+              sequence: 1,
+              ...pickup,
+              appointmentAt: pickupDate,
+              instructions: optionalString(formData, "pickupInstructions")
+            },
+            {
+              type: "DELIVERY",
+              sequence: 2,
+              ...delivery,
+              appointmentAt: deliveryDate,
+              instructions: optionalString(formData, "deliveryInstructions")
+            }
+          ]
+        },
+        charges: {
+          create: {
+            label: "Linehaul",
+            chargeType: "Linehaul",
+            amountCents: revenueCents
           }
-        ]
-      },
-      charges: {
-        create: {
-          label: "Linehaul",
-          chargeType: "Linehaul",
-          amountCents: revenueCents
-        }
-      },
-      activities: {
-        create: {
-          userId: user.id,
-          action: "Load created",
-          details: "Created from the TMS load entry form."
+        },
+        activities: {
+          create: {
+            userId: user.id,
+            action: "Load created",
+            details: "Created from the TMS load entry form."
+          }
         }
       }
+    });
+
+    if (!manualLoadNumber) {
+      await tx.company.update({
+        where: { id: user.companyId },
+        data: { nextLoadSequence: { increment: 1 } }
+      });
     }
+
+    return createdLoad;
   });
 
   revalidatePath("/loads");

@@ -12,6 +12,8 @@ model Company {
   name                 String
   slug                 String                 @unique
   status               String                 @default("ACTIVE")
+  loadNumberPrefix     String                 @default("GLB")
+  nextLoadSequence     Int                    @default(1001)
   users                User[]
   branches             Branch[]
   customers            Customer[]

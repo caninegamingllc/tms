@@ -7,7 +7,8 @@ import {
   resetUserPassword,
   setUserDisabled,
   setUserLock,
-  updateAdminUser
+  updateAdminUser,
+  updateLoadNumberSettings
 } from "@/lib/admin-actions";
 import { requireAdmin } from "@/lib/auth";
 import { userRoles, userStatuses } from "@/lib/constants";
@@ -16,7 +17,8 @@ import { formatDate, formatDateTime, humanize } from "@/lib/format";
 
 export default async function AdminPage() {
   const currentUser = await requireAdmin();
-  const [users, branches, auditLogs] = await Promise.all([
+  const [company, users, branches, auditLogs] = await Promise.all([
+    prisma.company.findUniqueOrThrow({ where: { id: currentUser.companyId } }),
     prisma.user.findMany({
       where: { companyId: currentUser.companyId },
       include: { branch: true },
@@ -191,6 +193,44 @@ export default async function AdminPage() {
           </form>
         </section>
       </div>
+
+      <section className="card mt-6">
+        <h2 className="section-title">Load Number Settings</h2>
+        <p className="muted">
+          Set the prefix and the next auto-generated load number. If the next number is set to
+          2500, the next blank load number will be {company.loadNumberPrefix}-2500 and then
+          increment from there.
+        </p>
+        <form action={updateLoadNumberSettings} className="mt-4 grid gap-3 md:grid-cols-[1fr_1fr_auto]">
+          <label className="grid gap-2">
+            <span className="label">Prefix</span>
+            <input
+              name="loadNumberPrefix"
+              className="input"
+              defaultValue={company.loadNumberPrefix}
+              placeholder="GLB"
+              required
+            />
+          </label>
+          <label className="grid gap-2">
+            <span className="label">Next Load Number</span>
+            <input
+              name="nextLoadSequence"
+              className="input"
+              type="number"
+              min={1}
+              step={1}
+              defaultValue={company.nextLoadSequence}
+              required
+            />
+          </label>
+          <div className="flex items-end">
+            <button className="btn" type="submit">
+              Save Settings
+            </button>
+          </div>
+        </form>
+      </section>
 
       <div className="mt-6 grid gap-6 xl:grid-cols-[0.9fr_1.2fr]">
         <section className="card">

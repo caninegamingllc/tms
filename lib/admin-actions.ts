@@ -200,3 +200,36 @@ export async function createBranch(formData: FormData) {
   await audit(actor.companyId, actor.id, "CREATE_BRANCH", "Branch", branch.id, `Created branch ${branch.name}.`);
   revalidatePath("/admin");
 }
+
+export async function updateLoadNumberSettings(formData: FormData) {
+  const actor = await requireAdmin();
+  const prefix = requiredString(formData, "loadNumberPrefix").toUpperCase().replace(/[^A-Z0-9-]/g, "");
+  const nextLoadSequence = Number(formData.get("nextLoadSequence"));
+
+  if (!prefix) {
+    throw new Error("Load number prefix is required.");
+  }
+
+  if (!Number.isInteger(nextLoadSequence) || nextLoadSequence < 1) {
+    throw new Error("Next load number must be a positive whole number.");
+  }
+
+  await prisma.company.update({
+    where: { id: actor.companyId },
+    data: {
+      loadNumberPrefix: prefix,
+      nextLoadSequence
+    }
+  });
+
+  await audit(
+    actor.companyId,
+    actor.id,
+    "UPDATE_LOAD_NUMBER_SETTINGS",
+    "Company",
+    actor.companyId,
+    `Set next auto load number to ${prefix}-${nextLoadSequence}.`
+  );
+  revalidatePath("/admin");
+  revalidatePath("/loads/new");
+}

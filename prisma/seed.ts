@@ -45,7 +45,9 @@ async function main() {
     data: {
       name: "Great Lakes Brokerage",
       slug: "great-lakes-brokerage",
-      status: "ACTIVE"
+      status: "ACTIVE",
+      loadNumberPrefix: "GLB",
+      nextLoadSequence: 1003
     }
   });
 

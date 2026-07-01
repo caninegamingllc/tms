@@ -8,7 +8,8 @@ import { humanize } from "@/lib/format";
 
 export default async function NewLoadPage() {
   const user = await requireUser();
-  const [customers, facilities] = await Promise.all([
+  const [company, customers, facilities] = await Promise.all([
+    prisma.company.findUniqueOrThrow({ where: { id: user.companyId } }),
     prisma.customer.findMany({
       where: { companyId: user.companyId },
       orderBy: { name: "asc" }
@@ -34,6 +35,7 @@ export default async function NewLoadPage() {
     state: facility.state,
     postalCode: facility.postalCode
   }));
+  const nextAutoLoadNumber = `${company.loadNumberPrefix}-${String(company.nextLoadSequence).padStart(4, "0")}`;
 
   return (
     <>
@@ -53,7 +55,7 @@ export default async function NewLoadPage() {
           />
           <label className="grid gap-2">
             <span className="label">Load Number</span>
-            <input name="loadNumber" className="input" placeholder="Auto if blank" />
+            <input name="loadNumber" className="input" placeholder={`Auto: ${nextAutoLoadNumber}`} />
           </label>
           <label className="grid gap-2">
             <span className="label">Status</span>
