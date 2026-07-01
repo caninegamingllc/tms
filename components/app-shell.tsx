@@ -1,8 +1,7 @@
 "use client";
 
 import Link from "next/link";
-import { useEffect } from "react";
-import { usePathname, useRouter } from "next/navigation";
+import { usePathname } from "next/navigation";
 import { clsx } from "clsx";
 import {
   BarChart3,
@@ -41,14 +40,7 @@ export function AppShell({
   currentUser: CurrentUser | null;
 }) {
   const pathname = usePathname();
-  const router = useRouter();
   const publicPage = pathname === "/login" || pathname === "/register" || pathname === "/change-password";
-
-  useEffect(() => {
-    if (!currentUser && !publicPage) {
-      router.replace("/login");
-    }
-  }, [currentUser, publicPage, router]);
 
   if (publicPage) {
     return <>{children}</>;

@@ -7,6 +7,17 @@ export const sessionCookieName = "tms_session";
 const sessionDays = 7;
 const passwordKeyLength = 64;
 
+function useSecureCookies() {
+  if (process.env.COOKIE_SECURE === "true") {
+    return true;
+  }
+  if (process.env.COOKIE_SECURE === "false") {
+    return false;
+  }
+
+  return process.env.NODE_ENV === "production";
+}
+
 export type CurrentUser = {
   id: string;
   companyId: string;
@@ -68,7 +79,7 @@ export async function createSession(userId: string) {
   cookieStore.set(sessionCookieName, token, {
     httpOnly: true,
     sameSite: "lax",
-    secure: process.env.NODE_ENV === "production",
+    secure: useSecureCookies(),
     path: "/",
     expires: expiresAt
   });
