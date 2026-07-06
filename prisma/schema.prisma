@@ -116,6 +116,7 @@ model Customer {
   address      String?
   city         String?
   state        String?
+  postalCode   String?
   branchId     String?
   branch       Branch?           @relation(fields: [branchId], references: [id])
   contacts     CustomerContact[]

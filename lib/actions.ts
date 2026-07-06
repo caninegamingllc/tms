@@ -175,8 +175,10 @@ export async function createCustomer(formData: FormData) {
       industry: optionalString(formData, "industry"),
       phone: optionalString(formData, "phone"),
       email: optionalString(formData, "email"),
+      address: optionalString(formData, "address"),
       city: optionalString(formData, "city"),
       state: optionalString(formData, "state"),
+      postalCode: optionalString(formData, "postalCode"),
       contacts: {
         create: {
           name: optionalString(formData, "contactName") ?? "Primary Contact",

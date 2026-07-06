@@ -1,4 +1,5 @@
 import { PageHeader } from "@/components/page-header";
+import { CustomerForm } from "@/components/customer-form";
 import { createCustomer } from "@/lib/actions";
 import { requireUser } from "@/lib/auth";
 import { prisma } from "@/lib/db";
@@ -74,42 +75,7 @@ export default async function CustomersPage() {
 
         <section className="card">
           <h2 className="section-title">Add Customer</h2>
-          <form action={createCustomer} className="mt-4 grid gap-3">
-            <input name="name" className="input" placeholder="Customer name" required />
-            <div className="grid gap-3 md:grid-cols-2">
-              <input name="city" className="input" placeholder="City" />
-              <input name="state" className="input" placeholder="State" maxLength={2} />
-            </div>
-            <div className="grid gap-3 md:grid-cols-2">
-              <input name="phone" className="input" placeholder="Main phone" />
-              <input name="email" className="input" placeholder="Main email" type="email" />
-            </div>
-            <div className="grid gap-3 md:grid-cols-2">
-              <input name="industry" className="input" placeholder="Industry" />
-              <select name="status" className="select" defaultValue="Active">
-                <option>Active</option>
-                <option>Prospect</option>
-                <option>Credit Hold</option>
-                <option>Inactive</option>
-              </select>
-            </div>
-            <div className="grid gap-3 md:grid-cols-2">
-              <input name="creditLimit" className="input" placeholder="Credit limit" />
-              <input name="paymentTerms" className="input" defaultValue="Net 30" />
-            </div>
-            <div className="rounded-2xl bg-soft p-4">
-              <p className="mb-3 text-sm font-semibold text-ink">Primary Contact</p>
-              <div className="grid gap-3">
-                <input name="contactName" className="input" placeholder="Contact name" />
-                <input name="contactTitle" className="input" placeholder="Title" />
-                <input name="contactEmail" className="input" placeholder="Email" type="email" />
-                <input name="contactPhone" className="input" placeholder="Phone" />
-              </div>
-            </div>
-            <button className="btn" type="submit">
-              Save Customer
-            </button>
-          </form>
+          <CustomerForm action={createCustomer} />
         </section>
       </div>
     </>
