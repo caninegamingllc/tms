@@ -1,11 +1,19 @@
 "use client";
 
-import { useEffect, useMemo, useState } from "react";
+import { useEffect, useMemo, useRef, useState } from "react";
 import type { BusinessSearchResult } from "@/lib/business-search";
 
 type CustomerFormProps = {
   action: (formData: FormData) => void | Promise<void>;
 };
+
+function createSessionToken() {
+  if (typeof crypto !== "undefined" && "randomUUID" in crypto) {
+    return crypto.randomUUID();
+  }
+
+  return `${Date.now()}-${Math.random().toString(36).slice(2)}`;
+}
 
 export function CustomerForm({ action }: CustomerFormProps) {
   const [name, setName] = useState("");
@@ -15,6 +23,8 @@ export function CustomerForm({ action }: CustomerFormProps) {
   const [postalCode, setPostalCode] = useState("");
   const [results, setResults] = useState<BusinessSearchResult[]>([]);
   const [loading, setLoading] = useState(false);
+  const [searchError, setSearchError] = useState("");
+  const sessionTokenRef = useRef(createSessionToken());
 
   const trimmedName = useMemo(() => name.trim(), [name]);
 
@@ -27,13 +37,19 @@ export function CustomerForm({ action }: CustomerFormProps) {
     const timeout = setTimeout(async () => {
       try {
         setLoading(true);
-        const params = new URLSearchParams({ q: trimmedName });
+        setSearchError("");
+        const params = new URLSearchParams({
+          q: trimmedName,
+          sessionToken: sessionTokenRef.current
+        });
         const response = await fetch(`/api/business-search?${params.toString()}`, {
           signal: controller.signal
         });
 
         if (!response.ok) {
+          const payload = (await response.json().catch(() => null)) as { error?: string } | null;
           setResults([]);
+          setSearchError(payload?.error ?? "Business search is unavailable.");
           return;
         }
 
@@ -56,13 +72,42 @@ export function CustomerForm({ action }: CustomerFormProps) {
     };
   }, [trimmedName]);
 
-  function selectResult(result: BusinessSearchResult) {
-    setName(result.name);
-    setAddress(result.address);
-    setCity(result.city);
-    setState(result.state);
-    setPostalCode(result.postalCode);
+  async function selectResult(result: BusinessSearchResult) {
     setResults([]);
+    setLoading(true);
+    setSearchError("");
+
+    try {
+      const params = new URLSearchParams({
+        placeId: result.id,
+        name: result.name,
+        sessionToken: sessionTokenRef.current
+      });
+      const response = await fetch(`/api/business-search?${params.toString()}`);
+
+      if (!response.ok) {
+        const payload = (await response.json().catch(() => null)) as { error?: string } | null;
+        setSearchError(payload?.error ?? "Could not load business details.");
+        setName(result.name);
+        return;
+      }
+
+      const payload = (await response.json()) as { result?: BusinessSearchResult };
+      const details = payload.result;
+      if (!details) {
+        setName(result.name);
+        return;
+      }
+
+      setName(details.name || result.name);
+      setAddress(details.address);
+      setCity(details.city);
+      setState(details.state);
+      setPostalCode(details.postalCode);
+    } finally {
+      setLoading(false);
+      sessionTokenRef.current = createSessionToken();
+    }
   }
 
   return (
@@ -78,9 +123,11 @@ export function CustomerForm({ action }: CustomerFormProps) {
           onChange={(event) => {
             const nextValue = event.target.value;
             setName(nextValue);
+            setSearchError("");
             if (nextValue.trim().length < 3) {
               setResults([]);
               setLoading(false);
+              sessionTokenRef.current = createSessionToken();
             }
           }}
           autoComplete="off"
@@ -106,7 +153,8 @@ export function CustomerForm({ action }: CustomerFormProps) {
             )}
           </div>
         ) : null}
-        <p className="text-xs text-muted">Business suggestions powered by OpenStreetMap.</p>
+        <p className="text-xs text-muted">Business suggestions powered by Google.</p>
+        {searchError ? <p className="text-xs text-red-600">{searchError}</p> : null}
       </label>
       <input
         name="address"
