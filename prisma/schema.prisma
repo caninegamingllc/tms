@@ -153,6 +153,10 @@ model Carrier {
   dotNumberNormalized String?
   phone               String?
   email               String?
+  address             String?
+  city                String?
+  state               String?
+  postalCode          String?
   equipmentTypes      String?
   safetyRating        String?
   insuranceExpiresAt  DateTime?

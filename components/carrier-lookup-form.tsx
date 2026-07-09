@@ -20,6 +20,10 @@ export function CarrierLookupForm({ action }: CarrierLookupFormProps) {
   const [dotNumber, setDotNumber] = useState("");
   const [phone, setPhone] = useState("");
   const [email, setEmail] = useState("");
+  const [address, setAddress] = useState("");
+  const [city, setCity] = useState("");
+  const [state, setState] = useState("");
+  const [postalCode, setPostalCode] = useState("");
   const [equipmentTypes, setEquipmentTypes] = useState("");
   const [safetyRating, setSafetyRating] = useState("");
   const [complianceStatus, setComplianceStatus] = useState("Needs Review");
@@ -102,7 +106,7 @@ export function CarrierLookupForm({ action }: CarrierLookupFormProps) {
     setHasSearched(false);
   }
 
-  function applyFmcsaResult(result: CarrierLookupResult) {
+  function applyLookupResult(result: CarrierLookupResult) {
     setName(result.name);
     if (result.mcNumber) {
       setMcNumber(result.mcNumber);
@@ -115,6 +119,18 @@ export function CarrierLookupForm({ action }: CarrierLookupFormProps) {
     }
     if (result.email) {
       setEmail(result.email);
+    }
+    if (result.address) {
+      setAddress(result.address);
+    }
+    if (result.city) {
+      setCity(result.city);
+    }
+    if (result.state) {
+      setState(result.state);
+    }
+    if (result.postalCode) {
+      setPostalCode(result.postalCode);
     }
     if (result.equipmentTypes) {
       setEquipmentTypes(result.equipmentTypes);
@@ -138,7 +154,7 @@ export function CarrierLookupForm({ action }: CarrierLookupFormProps) {
       return;
     }
 
-    applyFmcsaResult(result);
+    applyLookupResult(result);
   }
 
   function renderLookupPanel(field: ActiveField) {
@@ -255,6 +271,38 @@ export function CarrierLookupForm({ action }: CarrierLookupFormProps) {
           ? "Lookup checks your carrier network first, then FMCSA when no local match is found."
           : "Lookup checks your carrier network. Add FMCSA_WEB_KEY to enable federal carrier search."}
       </p>
+
+      <input
+        name="address"
+        className="input"
+        placeholder="Address"
+        value={address}
+        onChange={(event) => setAddress(event.target.value)}
+      />
+      <div className="grid gap-3 md:grid-cols-3">
+        <input
+          name="city"
+          className="input"
+          placeholder="City"
+          value={city}
+          onChange={(event) => setCity(event.target.value)}
+        />
+        <input
+          name="state"
+          className="input"
+          placeholder="State"
+          maxLength={2}
+          value={state}
+          onChange={(event) => setState(event.target.value.toUpperCase())}
+        />
+        <input
+          name="postalCode"
+          className="input"
+          placeholder="Zip"
+          value={postalCode}
+          onChange={(event) => setPostalCode(event.target.value)}
+        />
+      </div>
 
       <div className="grid gap-3 md:grid-cols-2">
         <input

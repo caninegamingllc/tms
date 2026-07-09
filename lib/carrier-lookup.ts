@@ -10,6 +10,10 @@ export type CarrierLookupResult = {
   dotNumber?: string;
   phone?: string;
   email?: string;
+  address?: string;
+  city?: string;
+  state?: string;
+  postalCode?: string;
   equipmentTypes?: string;
   safetyRating?: string;
   complianceStatus?: string;
@@ -22,6 +26,11 @@ type FmcsaCarrierRecord = {
   legalName?: string;
   dbaName?: string;
   telephone?: string;
+  phone?: string;
+  phyStreet?: string;
+  phyCity?: string;
+  phyState?: string;
+  phyZipcode?: string;
   safetyRating?: string;
   allowedToOperate?: string;
   allowToOperate?: string;
@@ -89,7 +98,11 @@ function mapFmcsaCarrier(carrier: FmcsaCarrierRecord, index: number): CarrierLoo
     name: name ?? "Unknown carrier",
     mcNumber,
     dotNumber,
-    phone: carrier.telephone?.trim() || undefined,
+    phone: carrier.telephone?.trim() || carrier.phone?.trim() || undefined,
+    address: carrier.phyStreet?.trim() || undefined,
+    city: carrier.phyCity?.trim() || undefined,
+    state: carrier.phyState?.trim() || undefined,
+    postalCode: carrier.phyZipcode?.trim() || undefined,
     safetyRating: carrier.safetyRating?.trim() || undefined,
     complianceStatus: mapComplianceStatus(carrier),
     description
@@ -180,6 +193,10 @@ export async function searchLocalCarriers(
       dotNumber: true,
       phone: true,
       email: true,
+      address: true,
+      city: true,
+      state: true,
+      postalCode: true,
       equipmentTypes: true,
       safetyRating: true,
       complianceStatus: true
@@ -195,6 +212,10 @@ export async function searchLocalCarriers(
     dotNumber: carrier.dotNumber ?? undefined,
     phone: carrier.phone ?? undefined,
     email: carrier.email ?? undefined,
+    address: carrier.address ?? undefined,
+    city: carrier.city ?? undefined,
+    state: carrier.state ?? undefined,
+    postalCode: carrier.postalCode ?? undefined,
     equipmentTypes: carrier.equipmentTypes ?? undefined,
     safetyRating: carrier.safetyRating ?? undefined,
     complianceStatus: carrier.complianceStatus,

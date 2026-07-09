@@ -77,6 +77,18 @@ export default async function CarrierDetailPage({
               <input name="phone" className="input" defaultValue={carrier.phone ?? ""} placeholder="Phone" />
               <input name="email" className="input" defaultValue={carrier.email ?? ""} placeholder="Email" type="email" />
             </div>
+            <input name="address" className="input" defaultValue={carrier.address ?? ""} placeholder="Address" />
+            <div className="grid gap-3 md:grid-cols-3">
+              <input name="city" className="input" defaultValue={carrier.city ?? ""} placeholder="City" />
+              <input
+                name="state"
+                className="input"
+                defaultValue={carrier.state ?? ""}
+                placeholder="State"
+                maxLength={2}
+              />
+              <input name="postalCode" className="input" defaultValue={carrier.postalCode ?? ""} placeholder="Zip" />
+            </div>
             <input name="equipmentTypes" className="input" defaultValue={carrier.equipmentTypes ?? ""} placeholder="Equipment types" />
             <div className="grid gap-3 md:grid-cols-2">
               <select name="status" className="select" defaultValue={carrier.status}>
