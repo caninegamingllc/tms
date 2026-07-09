@@ -10,6 +10,7 @@ import {
   buildRateConfirmation,
   documentTitle
 } from "@/lib/document-templates";
+import { normalizeCarrierNumber } from "@/lib/carrier-numbers";
 import { parseMoneyToCents } from "@/lib/format";
 
 function requiredString(formData: FormData, key: string) {
@@ -24,11 +25,6 @@ function requiredString(formData: FormData, key: string) {
 function optionalString(formData: FormData, key: string) {
   const value = String(formData.get(key) ?? "").trim();
   return value || undefined;
-}
-
-function normalizeCarrierNumber(value?: string) {
-  const normalized = value?.replace(/[^a-z0-9]/gi, "").toUpperCase();
-  return normalized || undefined;
 }
 
 function optionalDate(formData: FormData, key: string) {

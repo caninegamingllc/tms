@@ -1,4 +1,5 @@
 import Link from "next/link";
+import { CarrierLookupForm } from "@/components/carrier-lookup-form";
 import { PageHeader } from "@/components/page-header";
 import { createCarrier } from "@/lib/actions";
 import { requireUser } from "@/lib/auth";
@@ -96,48 +97,7 @@ export default async function CarriersPage({
 
         <section className="card">
           <h2 className="section-title">Add Carrier</h2>
-          <form action={createCarrier} className="mt-4 grid gap-3">
-            <input name="name" className="input" placeholder="Carrier name" required />
-            <div className="grid gap-3 md:grid-cols-2">
-              <input name="mcNumber" className="input" placeholder="MC number" />
-              <input name="dotNumber" className="input" placeholder="DOT number" />
-            </div>
-            <div className="grid gap-3 md:grid-cols-2">
-              <input name="phone" className="input" placeholder="Phone" />
-              <input name="email" className="input" placeholder="Email" type="email" />
-            </div>
-            <input name="equipmentTypes" className="input" placeholder="Dry Van, Reefer, Flatbed" />
-            <div className="grid gap-3 md:grid-cols-2">
-              <select name="status" className="select" defaultValue="Active">
-                <option>Active</option>
-                <option>Prospect</option>
-                <option>Do Not Use</option>
-                <option>Inactive</option>
-              </select>
-              <select name="complianceStatus" className="select" defaultValue="Needs Review">
-                <option>Approved</option>
-                <option>Needs Review</option>
-                <option>Review Soon</option>
-                <option>Blocked</option>
-              </select>
-            </div>
-            <div className="grid gap-3 md:grid-cols-2">
-              <input name="safetyRating" className="input" placeholder="Safety rating" />
-              <input name="insuranceExpiresAt" className="input" type="date" />
-            </div>
-            <div className="rounded-2xl bg-soft p-4">
-              <p className="mb-3 text-sm font-semibold text-ink">Primary Dispatch Contact</p>
-              <div className="grid gap-3">
-                <input name="contactName" className="input" placeholder="Contact name" />
-                <input name="contactTitle" className="input" placeholder="Title" />
-                <input name="contactEmail" className="input" placeholder="Email" type="email" />
-                <input name="contactPhone" className="input" placeholder="Phone" />
-              </div>
-            </div>
-            <button className="btn" type="submit">
-              Save Carrier
-            </button>
-          </form>
+          <CarrierLookupForm action={createCarrier} />
         </section>
       </div>
     </>
