@@ -96,6 +96,47 @@ function mapFmcsaCarrier(carrier: FmcsaCarrierRecord, index: number): CarrierLoo
   };
 }
 
+function fmcsaLookupNumber(type: "mc" | "dot", query: string) {
+  const digits = query.replace(/\D/g, "");
+  if (type === "dot") {
+    return digits;
+  }
+
+  return digits;
+}
+
+function localLookupCandidates(type: "mc" | "dot", query: string) {
+  const normalized = normalizeCarrierNumber(query);
+  const digits = query.replace(/\D/g, "");
+  const candidates = new Set<string>();
+
+  if (normalized) {
+    candidates.add(normalized);
+  }
+
+  if (digits) {
+    candidates.add(digits);
+    if (type === "mc") {
+      candidates.add(`MC${digits}`);
+    }
+  }
+
+  return [...candidates];
+}
+
+function unwrapFmcsaCarrier(item: unknown): FmcsaCarrierRecord | null {
+  if (!item || typeof item !== "object") {
+    return null;
+  }
+
+  const record = item as Record<string, unknown>;
+  if (record.carrier && typeof record.carrier === "object") {
+    return record.carrier as FmcsaCarrierRecord;
+  }
+
+  return record as FmcsaCarrierRecord;
+}
+
 function extractFmcsaCarriers(payload: FmcsaResponse) {
   const content = payload.content;
   if (!content) {
@@ -103,18 +144,13 @@ function extractFmcsaCarriers(payload: FmcsaResponse) {
   }
 
   if (Array.isArray(content)) {
-    return content;
+    return content
+      .map((item) => unwrapFmcsaCarrier(item))
+      .filter((carrier): carrier is FmcsaCarrierRecord => Boolean(carrier));
   }
 
-  if ("carrier" in content && content.carrier) {
-    return [content.carrier];
-  }
-
-  if ("carriers" in content && Array.isArray(content.carriers)) {
-    return content.carriers;
-  }
-
-  return [content as FmcsaCarrierRecord];
+  const carrier = unwrapFmcsaCarrier(content);
+  return carrier ? [carrier] : [];
 }
 
 export async function searchLocalCarriers(
@@ -122,8 +158,8 @@ export async function searchLocalCarriers(
   type: "mc" | "dot",
   query: string
 ): Promise<CarrierLookupResult[]> {
-  const normalized = normalizeCarrierNumber(query);
-  if (!normalized || normalized.length < 3) {
+  const candidates = localLookupCandidates(type, query).filter((value) => value.length >= 3);
+  if (!candidates.length) {
     return [];
   }
 
@@ -131,7 +167,9 @@ export async function searchLocalCarriers(
   const carriers = await prisma.carrier.findMany({
     where: {
       companyId,
-      [field]: { startsWith: normalized }
+      OR: candidates.map((candidate) => ({
+        [field]: { startsWith: candidate }
+      }))
     },
     orderBy: { name: "asc" },
     take: SEARCH_LIMIT,
@@ -165,12 +203,12 @@ export async function searchLocalCarriers(
 }
 
 async function fetchFmcsaCarriers(type: "mc" | "dot", query: string) {
-  const normalized = normalizeCarrierNumber(query);
-  if (!normalized || normalized.length < 4) {
+  const lookupNumber = fmcsaLookupNumber(type, query);
+  if (!lookupNumber || lookupNumber.length < 3) {
     return [];
   }
 
-  const cacheKey = `${type}:${normalized}`;
+  const cacheKey = `${type}:${lookupNumber}`;
   const now = Date.now();
   const cached = fmcsaCache.get(cacheKey);
   if (cached && cached.expiresAt > now) {
@@ -180,8 +218,8 @@ async function fetchFmcsaCarriers(type: "mc" | "dot", query: string) {
   const webKey = getFmcsaWebKey();
   const path =
     type === "dot"
-      ? `carriers/${encodeURIComponent(normalized)}`
-      : `carriers/docket-number/${encodeURIComponent(normalized)}/`;
+      ? `carriers/${encodeURIComponent(lookupNumber)}`
+      : `carriers/docket-number/${encodeURIComponent(lookupNumber)}`;
   const url = `${FMCSA_BASE_URL}/${path}?webKey=${encodeURIComponent(webKey)}`;
 
   const response = await fetch(url, { cache: "no-store" });
@@ -220,7 +258,8 @@ export async function lookupCarriers(
   try {
     const fmcsaResults = await fetchFmcsaCarriers(type, query);
     return { results: fmcsaResults, fmcsaAvailable: true };
-  } catch {
-    return { results: [], fmcsaAvailable: true };
+  } catch (error) {
+    const message = error instanceof Error ? error.message : "FMCSA lookup failed.";
+    throw new Error(message);
   }
 }
