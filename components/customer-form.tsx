@@ -47,9 +47,10 @@ export function CustomerForm({ action }: CustomerFormProps) {
         });
 
         if (!response.ok) {
-          const payload = (await response.json().catch(() => null)) as { error?: string } | null;
-          setResults([]);
-          setSearchError(payload?.error ?? "Business search is unavailable.");
+          if (response.status !== 429) {
+            const payload = (await response.json().catch(() => null)) as { error?: string } | null;
+            setSearchError(payload?.error ?? "Business search is unavailable.");
+          }
           return;
         }
 
@@ -64,7 +65,7 @@ export function CustomerForm({ action }: CustomerFormProps) {
           setLoading(false);
         }
       }
-    }, 300);
+    }, 450);
 
     return () => {
       clearTimeout(timeout);
