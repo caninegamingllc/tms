@@ -1,6 +1,11 @@
 import { NextRequest, NextResponse } from "next/server";
 import { getCurrentUser } from "@/lib/auth";
-import { getBusinessDetails, searchAddresses, searchBusinesses } from "@/lib/business-search";
+import {
+  getBusinessDetails,
+  searchBusinesses,
+  searchPlacesByText,
+  shouldUseTextSearch
+} from "@/lib/business-search";
 
 const RATE_LIMIT_WINDOW_MS = 60_000;
 const RATE_LIMIT_MAX_REQUESTS = 60;
@@ -52,10 +57,16 @@ export async function GET(request: NextRequest) {
     }
 
     const searchType = request.nextUrl.searchParams.get("type")?.trim() || "business";
-    const results =
-      searchType === "address"
-        ? await searchAddresses(query, sessionToken)
-        : await searchBusinesses(query, sessionToken);
+    let results;
+
+    if (searchType === "address") {
+      results = await searchPlacesByText(query);
+    } else if (shouldUseTextSearch(query, "name")) {
+      results = await searchPlacesByText(query);
+    } else {
+      results = await searchBusinesses(query, sessionToken);
+    }
+
     return NextResponse.json({ results });
   } catch (error) {
     const message = error instanceof Error ? error.message : "Business search is unavailable.";

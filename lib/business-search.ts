@@ -37,10 +37,87 @@ type GooglePlaceDetailsResponse = {
   nationalPhoneNumber?: string;
 };
 
+type GoogleTextSearchPlace = {
+  id?: string;
+  displayName?: { text?: string };
+  formattedAddress?: string;
+  addressComponents?: GoogleAddressComponent[];
+  nationalPhoneNumber?: string;
+};
+
+type GoogleTextSearchResponse = {
+  places?: GoogleTextSearchPlace[];
+};
+
+function buildResultDescription(parts: {
+  address: string;
+  city: string;
+  state: string;
+  postalCode: string;
+  formattedAddress?: string;
+  phone?: string;
+}) {
+  const locationLine =
+    toDescription(parts) || parts.formattedAddress?.trim() || parts.address.trim();
+  return [locationLine, parts.phone?.trim()].filter(Boolean).join(" · ");
+}
+
+function mapTextSearchPlace(place: GoogleTextSearchPlace): BusinessSearchResult | null {
+  const id = normalizePlaceId(place.id ?? "");
+  const name = place.displayName?.text?.trim() ?? "";
+  if (!id || !name) {
+    return null;
+  }
+
+  const parsed = parseAddressComponents(place.addressComponents ?? []);
+  const phone = place.nationalPhoneNumber?.trim() ?? "";
+  const address = parsed.address || place.formattedAddress?.trim() || "";
+  const description = buildResultDescription({
+    ...parsed,
+    address,
+    formattedAddress: place.formattedAddress,
+    phone
+  });
+
+  return {
+    id,
+    name,
+    address,
+    city: parsed.city,
+    state: parsed.state,
+    postalCode: parsed.postalCode,
+    phone,
+    description
+  };
+}
+
+export function isEnrichedPlaceResult(result: BusinessSearchResult) {
+  return Boolean(result.name && result.city && (result.address || result.phone));
+}
+
 const SEARCH_LIMIT = 8;
 const CACHE_TTL_MS = 5 * 60 * 1000;
 const autocompleteCache = new Map<string, { expiresAt: number; results: BusinessSearchResult[] }>();
+const textSearchCache = new Map<string, { expiresAt: number; results: BusinessSearchResult[] }>();
 const detailsCache = new Map<string, { expiresAt: number; result: BusinessSearchResult }>();
+
+export function shouldUseTextSearch(query: string, field: "name" | "address") {
+  const trimmed = query.trim();
+  if (field === "address") {
+    return true;
+  }
+
+  if (trimmed.includes(",")) {
+    return true;
+  }
+
+  const tokens = trimmed.split(/\s+/).filter(Boolean);
+  return tokens.length >= 2;
+}
+
+function normalizePlaceId(placeId: string) {
+  return placeId.trim().replace(/^places\//, "");
+}
 
 function getGooglePlacesApiKey() {
   const apiKey = process.env.GOOGLE_PLACES_API_KEY?.trim();
@@ -175,6 +252,43 @@ async function googlePlacesRequest<T>(
   return (await response.json()) as T;
 }
 
+export async function searchPlacesByText(query: string) {
+  const normalizedQuery = normalizeQuery(query);
+  if (normalizedQuery.length < 3) {
+    return [];
+  }
+
+  const cacheKey = `text:${normalizedQuery}`;
+  const now = Date.now();
+  const cached = textSearchCache.get(cacheKey);
+  if (cached && cached.expiresAt > now) {
+    return cached.results;
+  }
+
+  const payload = await googlePlacesRequest<GoogleTextSearchResponse>(
+    "https://places.googleapis.com/v1/places:searchText",
+    {
+      method: "POST",
+      fieldMask:
+        "places.id,places.displayName,places.formattedAddress,places.addressComponents,places.nationalPhoneNumber",
+      body: JSON.stringify({
+        textQuery: query.trim(),
+        maxResultCount: SEARCH_LIMIT,
+        regionCode: "US",
+        languageCode: "en"
+      })
+    }
+  );
+
+  const results = (payload.places ?? [])
+    .map((place) => mapTextSearchPlace(place))
+    .filter((result): result is BusinessSearchResult => Boolean(result))
+    .slice(0, SEARCH_LIMIT);
+
+  textSearchCache.set(cacheKey, { results, expiresAt: now + CACHE_TTL_MS });
+  return results;
+}
+
 export async function searchAddresses(query: string, sessionToken?: string) {
   const normalizedQuery = normalizeQuery(query);
   if (normalizedQuery.length < 3) {
@@ -254,7 +368,7 @@ export async function getBusinessDetails(
   fallbackName?: string,
   sessionToken?: string
 ) {
-  const normalizedPlaceId = placeId.trim();
+  const normalizedPlaceId = normalizePlaceId(placeId);
   if (!normalizedPlaceId) {
     return null;
   }
@@ -282,8 +396,7 @@ export async function getBusinessDetails(
   });
 
   const parsed = parseAddressComponents(payload.addressComponents ?? []);
-  const name =
-    fallbackName?.trim() || payload.displayName?.text?.trim() || "";
+  const name = payload.displayName?.text?.trim() || fallbackName?.trim() || "";
   const phone = payload.nationalPhoneNumber?.trim() ?? "";
   const result: BusinessSearchResult = {
     id: normalizedPlaceId,
@@ -300,8 +413,12 @@ export async function getBusinessDetails(
     result.address = payload.formattedAddress;
   }
 
-  const locationLine = result.description || payload.formattedAddress || "";
-  result.description = [locationLine, phone].filter(Boolean).join(" · ");
+  result.description = buildResultDescription({
+    ...parsed,
+    address: result.address,
+    formattedAddress: payload.formattedAddress,
+    phone
+  });
 
   detailsCache.set(cacheKey, { result, expiresAt: now + CACHE_TTL_MS });
   return result;

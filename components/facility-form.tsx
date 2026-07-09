@@ -1,7 +1,7 @@
 "use client";
 
 import { useEffect, useMemo, useRef, useState } from "react";
-import type { BusinessSearchResult } from "@/lib/business-search";
+import { isEnrichedPlaceResult, type BusinessSearchResult } from "@/lib/business-search";
 import { facilityTypes } from "@/lib/constants";
 import { humanize } from "@/lib/format";
 
@@ -41,15 +41,13 @@ function createSessionToken() {
 }
 
 function formatSuggestionLine(result: BusinessSearchResult) {
-  const locationParts = [result.address, result.city, result.state, result.postalCode]
-    .filter(Boolean)
-    .join(", ");
-
   if (result.description) {
     return result.description;
   }
 
-  return locationParts;
+  return [result.address, result.city, result.state, result.postalCode, result.phone]
+    .filter(Boolean)
+    .join(", ");
 }
 
 export function FacilityForm({ action, customers, facility }: FacilityFormProps) {
@@ -135,11 +133,24 @@ export function FacilityForm({ action, customers, facility }: FacilityFormProps)
   }
 
   function applyPlaceDetails(details: BusinessSearchResult, fallback: BusinessSearchResult) {
-    setName(details.name || fallback.name);
-    setAddress(details.address || fallback.address || fallback.name);
-    setCity(details.city);
-    setState(details.state);
-    setPostalCode(details.postalCode);
+    const resolvedName = details.name || fallback.name;
+    const resolvedAddress = details.address || fallback.address;
+
+    if (resolvedName) {
+      setName(resolvedName);
+    }
+    if (resolvedAddress) {
+      setAddress(resolvedAddress);
+    }
+    if (details.city) {
+      setCity(details.city);
+    }
+    if (details.state) {
+      setState(details.state);
+    }
+    if (details.postalCode) {
+      setPostalCode(details.postalCode);
+    }
     if (details.phone) {
       setPhone(details.phone);
     }
@@ -147,13 +158,20 @@ export function FacilityForm({ action, customers, facility }: FacilityFormProps)
 
   async function selectResult(result: BusinessSearchResult) {
     setResults([]);
-    setLoading(true);
     setSearchError("");
+
+    if (isEnrichedPlaceResult(result)) {
+      applyPlaceDetails(result, result);
+      sessionTokenRef.current = createSessionToken();
+      setActiveField(null);
+      return;
+    }
+
+    setLoading(true);
 
     try {
       const params = new URLSearchParams({
         placeId: result.id,
-        name: result.name,
         sessionToken: sessionTokenRef.current
       });
       const response = await fetch(`/api/business-search?${params.toString()}`);
@@ -222,7 +240,7 @@ export function FacilityForm({ action, customers, facility }: FacilityFormProps)
       <input
         name="name"
         className="input"
-        placeholder="Facility name"
+        placeholder="Business name, city"
         required
         value={name}
         autoComplete="off"
@@ -254,7 +272,7 @@ export function FacilityForm({ action, customers, facility }: FacilityFormProps)
       <input
         name="address"
         className="input"
-        placeholder={isEdit ? "Address" : "Street address"}
+        placeholder={isEdit ? "Address or business" : "Street address or business"}
         value={address}
         autoComplete="off"
         onChange={(event) => {
@@ -304,8 +322,8 @@ export function FacilityForm({ action, customers, facility }: FacilityFormProps)
 
       {!isEdit ? (
         <p className="text-xs text-muted">
-          Search by business name or address. Selecting a result fills the facility name, address, and phone when
-          available.
+          Type a business name, then add a city to narrow results (e.g. &quot;Acme Warehouse, Dallas&quot;). Address
+          search returns matching businesses with phone numbers when available.
         </p>
       ) : null}
 
