@@ -35,6 +35,9 @@ type GooglePlaceDetailsResponse = {
   formattedAddress?: string;
   addressComponents?: GoogleAddressComponent[];
   nationalPhoneNumber?: string;
+  location?: { latitude?: number; longitude?: number };
+  types?: string[];
+  primaryType?: string;
 };
 
 type GoogleTextSearchPlace = {
@@ -92,7 +95,72 @@ function mapTextSearchPlace(place: GoogleTextSearchPlace): BusinessSearchResult 
 }
 
 export function isEnrichedPlaceResult(result: BusinessSearchResult) {
-  return Boolean(result.name && result.city && (result.address || result.phone));
+  if (!result.name || !result.city || (!result.address && !result.phone)) {
+    return false;
+  }
+
+  if (looksLikeStreetAddress(result.name, result.address)) {
+    return Boolean(result.phone);
+  }
+
+  return Boolean(result.phone);
+}
+
+const ADDRESS_PRIMARY_TYPES = new Set([
+  "street_address",
+  "route",
+  "subpremise",
+  "premise",
+  "geocode",
+  "plus_code"
+]);
+
+function looksLikeStreetAddress(name: string, address: string) {
+  const normalizedName = name.trim().toLowerCase();
+  const normalizedAddress = address.trim().toLowerCase();
+
+  if (normalizedAddress && normalizedName === normalizedAddress) {
+    return true;
+  }
+
+  return /^\d{1,6}\s+\S/.test(name.trim());
+}
+
+function isBusinessPlace(types: string[] = [], primaryType?: string) {
+  if (primaryType && !ADDRESS_PRIMARY_TYPES.has(primaryType)) {
+    return true;
+  }
+
+  return types.some(
+    (type) =>
+      type === "establishment" ||
+      type === "point_of_interest" ||
+      type === "store" ||
+      type.endsWith("_store")
+  );
+}
+
+function mergeBusinessWithAddress(
+  business: BusinessSearchResult,
+  address: BusinessSearchResult
+): BusinessSearchResult {
+  return {
+    id: business.id || address.id,
+    name: business.name || address.name,
+    address: address.address || business.address,
+    city: address.city || business.city,
+    state: address.state || business.state,
+    postalCode: address.postalCode || business.postalCode,
+    phone: business.phone || address.phone,
+    description: buildResultDescription({
+      address: address.address || business.address,
+      city: address.city || business.city,
+      state: address.state || business.state,
+      postalCode: address.postalCode || business.postalCode,
+      formattedAddress: business.description,
+      phone: business.phone || address.phone
+    })
+  };
 }
 
 const SEARCH_LIMIT = 8;
@@ -289,6 +357,160 @@ export async function searchPlacesByText(query: string) {
   return results;
 }
 
+async function searchNearbyEstablishments(latitude: number, longitude: number) {
+  const cacheKey = `nearby:${latitude.toFixed(5)}:${longitude.toFixed(5)}`;
+  const now = Date.now();
+  const cached = textSearchCache.get(cacheKey);
+  if (cached && cached.expiresAt > now) {
+    return cached.results;
+  }
+
+  const payload = await googlePlacesRequest<GoogleTextSearchResponse>(
+    "https://places.googleapis.com/v1/places:searchNearby",
+    {
+      method: "POST",
+      fieldMask:
+        "places.id,places.displayName,places.formattedAddress,places.addressComponents,places.nationalPhoneNumber,places.primaryType,places.types",
+      body: JSON.stringify({
+        includedTypes: ["establishment", "point_of_interest", "store"],
+        maxResultCount: SEARCH_LIMIT,
+        locationRestriction: {
+          circle: {
+            center: { latitude, longitude },
+            radius: 120
+          }
+        },
+        languageCode: "en"
+      })
+    }
+  );
+
+  const results = (payload.places ?? [])
+    .map((place) => mapTextSearchPlace(place))
+    .filter((result): result is BusinessSearchResult => Boolean(result))
+    .slice(0, SEARCH_LIMIT);
+
+  textSearchCache.set(cacheKey, { results, expiresAt: now + CACHE_TTL_MS });
+  return results;
+}
+
+function mapPlaceDetails(
+  placeId: string,
+  payload: GooglePlaceDetailsResponse,
+  fallbackName?: string
+): BusinessSearchResult {
+  const parsed = parseAddressComponents(payload.addressComponents ?? []);
+  const name = payload.displayName?.text?.trim() || fallbackName?.trim() || "";
+  const phone = payload.nationalPhoneNumber?.trim() ?? "";
+  const result: BusinessSearchResult = {
+    id: placeId,
+    name,
+    address: parsed.address,
+    city: parsed.city,
+    state: parsed.state,
+    postalCode: parsed.postalCode,
+    phone,
+    description: toDescription(parsed)
+  };
+
+  if (!result.address && payload.formattedAddress) {
+    result.address = payload.formattedAddress;
+  }
+
+  result.description = buildResultDescription({
+    ...parsed,
+    address: result.address,
+    formattedAddress: payload.formattedAddress,
+    phone
+  });
+
+  return result;
+}
+
+export async function resolvePlaceForFacility(placeId: string, sessionToken?: string) {
+  const normalizedPlaceId = normalizePlaceId(placeId);
+  if (!normalizedPlaceId) {
+    return null;
+  }
+
+  const cacheKey = `facility:${normalizedPlaceId}:${sessionToken ?? "default"}`;
+  const now = Date.now();
+  const cached = detailsCache.get(cacheKey);
+  if (cached && cached.expiresAt > now) {
+    return cached.result;
+  }
+
+  const encodedPlaceId = encodeURIComponent(normalizedPlaceId);
+  const detailsParams = new URLSearchParams();
+  if (sessionToken) {
+    detailsParams.set("sessionToken", sessionToken);
+  }
+
+  const detailsUrl = detailsParams.toString()
+    ? `https://places.googleapis.com/v1/places/${encodedPlaceId}?${detailsParams.toString()}`
+    : `https://places.googleapis.com/v1/places/${encodedPlaceId}`;
+
+  const payload = await googlePlacesRequest<GooglePlaceDetailsResponse>(detailsUrl, {
+    method: "GET",
+    fieldMask:
+      "addressComponents,formattedAddress,displayName,nationalPhoneNumber,location,types,primaryType"
+  });
+
+  const addressResult = mapPlaceDetails(normalizedPlaceId, payload);
+  const hasBusinessIdentity =
+    Boolean(addressResult.phone) || isBusinessPlace(payload.types, payload.primaryType);
+
+  if (hasBusinessIdentity && !looksLikeStreetAddress(addressResult.name, addressResult.address)) {
+    detailsCache.set(cacheKey, { result: addressResult, expiresAt: now + CACHE_TTL_MS });
+    return addressResult;
+  }
+
+  const latitude = payload.location?.latitude;
+  const longitude = payload.location?.longitude;
+
+  if (latitude !== undefined && longitude !== undefined) {
+    const nearbyBusinesses = await searchNearbyEstablishments(latitude, longitude);
+    const matchedBusiness =
+      nearbyBusinesses.find((business) => business.phone) ?? nearbyBusinesses[0];
+
+    if (matchedBusiness) {
+      const resolved = mergeBusinessWithAddress(matchedBusiness, addressResult);
+      detailsCache.set(cacheKey, { result: resolved, expiresAt: now + CACHE_TTL_MS });
+      return resolved;
+    }
+  }
+
+  const formattedQuery = [
+    addressResult.address,
+    addressResult.city,
+    addressResult.state,
+    addressResult.postalCode
+  ]
+    .filter(Boolean)
+    .join(", ");
+
+  if (formattedQuery) {
+    const textMatches = await searchPlacesByText(formattedQuery);
+    const matchedBusiness =
+      textMatches.find(
+        (match) =>
+          match.phone &&
+          !looksLikeStreetAddress(match.name, match.address) &&
+          match.city.toLowerCase() === addressResult.city.toLowerCase()
+      ) ??
+      textMatches.find((match) => match.phone && !looksLikeStreetAddress(match.name, match.address));
+
+    if (matchedBusiness) {
+      const resolved = mergeBusinessWithAddress(matchedBusiness, addressResult);
+      detailsCache.set(cacheKey, { result: resolved, expiresAt: now + CACHE_TTL_MS });
+      return resolved;
+    }
+  }
+
+  detailsCache.set(cacheKey, { result: addressResult, expiresAt: now + CACHE_TTL_MS });
+  return addressResult;
+}
+
 export async function searchAddresses(query: string, sessionToken?: string) {
   const normalizedQuery = normalizeQuery(query);
   if (normalizedQuery.length < 3) {
@@ -324,6 +546,40 @@ export async function searchAddresses(query: string, sessionToken?: string) {
 
   autocompleteCache.set(cacheKey, { results, expiresAt: now + CACHE_TTL_MS });
   return results;
+}
+
+export async function searchAddressSuggestions(query: string, sessionToken?: string) {
+  const [autocompleteResults, textResults] = await Promise.all([
+    searchAddresses(query, sessionToken),
+    searchPlacesByText(query)
+  ]);
+
+  const merged = new Map<string, BusinessSearchResult>();
+
+  for (const result of autocompleteResults) {
+    merged.set(result.id, result);
+  }
+
+  for (const result of textResults) {
+    const existing = merged.get(result.id);
+    if (existing) {
+      merged.set(result.id, {
+        ...existing,
+        ...result,
+        name: result.name || existing.name,
+        address: result.address || existing.address,
+        city: result.city || existing.city,
+        state: result.state || existing.state,
+        postalCode: result.postalCode || existing.postalCode,
+        phone: result.phone || existing.phone,
+        description: result.description || existing.description
+      });
+    } else {
+      merged.set(result.id, result);
+    }
+  }
+
+  return Array.from(merged.values()).slice(0, SEARCH_LIMIT);
 }
 
 export async function searchBusinesses(query: string, sessionToken?: string) {
@@ -395,30 +651,7 @@ export async function getBusinessDetails(
     fieldMask: "addressComponents,formattedAddress,displayName,nationalPhoneNumber"
   });
 
-  const parsed = parseAddressComponents(payload.addressComponents ?? []);
-  const name = payload.displayName?.text?.trim() || fallbackName?.trim() || "";
-  const phone = payload.nationalPhoneNumber?.trim() ?? "";
-  const result: BusinessSearchResult = {
-    id: normalizedPlaceId,
-    name,
-    address: parsed.address,
-    city: parsed.city,
-    state: parsed.state,
-    postalCode: parsed.postalCode,
-    phone,
-    description: toDescription(parsed)
-  };
-
-  if (!result.address && payload.formattedAddress) {
-    result.address = payload.formattedAddress;
-  }
-
-  result.description = buildResultDescription({
-    ...parsed,
-    address: result.address,
-    formattedAddress: payload.formattedAddress,
-    phone
-  });
+  const result = mapPlaceDetails(normalizedPlaceId, payload, fallbackName);
 
   detailsCache.set(cacheKey, { result, expiresAt: now + CACHE_TTL_MS });
   return result;

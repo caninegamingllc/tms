@@ -2,6 +2,8 @@ import { NextRequest, NextResponse } from "next/server";
 import { getCurrentUser } from "@/lib/auth";
 import {
   getBusinessDetails,
+  resolvePlaceForFacility,
+  searchAddressSuggestions,
   searchBusinesses,
   searchPlacesByText,
   shouldUseTextSearch
@@ -40,7 +42,11 @@ export async function GET(request: NextRequest) {
   try {
     if (placeId) {
       const fallbackName = request.nextUrl.searchParams.get("name")?.trim() || undefined;
-      const result = await getBusinessDetails(placeId, fallbackName, sessionToken);
+      const context = request.nextUrl.searchParams.get("context")?.trim();
+      const result =
+        context === "facility"
+          ? await resolvePlaceForFacility(placeId, sessionToken)
+          : await getBusinessDetails(placeId, fallbackName, sessionToken);
       if (!result) {
         return NextResponse.json({ error: "Business details not found." }, { status: 404 });
       }
@@ -60,7 +66,7 @@ export async function GET(request: NextRequest) {
     let results;
 
     if (searchType === "address") {
-      results = await searchPlacesByText(query);
+      results = await searchAddressSuggestions(query, sessionToken);
     } else if (shouldUseTextSearch(query, "name")) {
       results = await searchPlacesByText(query);
     } else {

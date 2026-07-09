@@ -156,11 +156,11 @@ export function FacilityForm({ action, customers, facility }: FacilityFormProps)
     }
   }
 
-  async function selectResult(result: BusinessSearchResult) {
+  async function selectResult(result: BusinessSearchResult, field: ActiveField) {
     setResults([]);
     setSearchError("");
 
-    if (isEnrichedPlaceResult(result)) {
+    if (field === "name" && isEnrichedPlaceResult(result)) {
       applyPlaceDetails(result, result);
       sessionTokenRef.current = createSessionToken();
       setActiveField(null);
@@ -174,6 +174,9 @@ export function FacilityForm({ action, customers, facility }: FacilityFormProps)
         placeId: result.id,
         sessionToken: sessionTokenRef.current
       });
+      if (field === "address") {
+        params.set("context", "facility");
+      }
       const response = await fetch(`/api/business-search?${params.toString()}`);
 
       if (!response.ok) {
@@ -222,7 +225,7 @@ export function FacilityForm({ action, customers, facility }: FacilityFormProps)
               type="button"
               className="block w-full px-4 py-3 text-left text-sm transition hover:bg-soft"
               onMouseDown={(event) => event.preventDefault()}
-              onClick={() => selectResult(result)}
+              onClick={() => selectResult(result, field)}
             >
               <span className="font-semibold text-ink">{result.name}</span>
               {formatSuggestionLine(result) ? (
