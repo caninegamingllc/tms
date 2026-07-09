@@ -136,10 +136,17 @@ function mapAutocompleteSuggestion(
   };
 }
 
+type GooglePlacesError = {
+  error?: {
+    message?: string;
+    status?: string;
+  };
+};
+
 async function googlePlacesRequest<T>(
   url: string,
   init: RequestInit & { fieldMask?: string }
-): Promise<T | null> {
+): Promise<T> {
   const apiKey = getGooglePlacesApiKey();
   const headers = new Headers(init.headers);
   headers.set("Content-Type", "application/json");
@@ -155,7 +162,11 @@ async function googlePlacesRequest<T>(
   });
 
   if (!response.ok) {
-    return null;
+    const payload = (await response.json().catch(() => null)) as GooglePlacesError | null;
+    const message =
+      payload?.error?.message ??
+      `Google Places request failed with status ${response.status}.`;
+    throw new Error(message);
   }
 
   return (await response.json()) as T;
@@ -183,16 +194,11 @@ export async function searchBusinesses(query: string, sessionToken?: string) {
       body: JSON.stringify({
         input: query.trim(),
         includedRegionCodes: ["us"],
-        includedPrimaryTypes: ["establishment"],
         languageCode: "en",
         sessionToken: sessionToken || undefined
       })
     }
   );
-
-  if (!payload) {
-    return [];
-  }
 
   const results = (payload.suggestions ?? [])
     .map((suggestion) => mapAutocompleteSuggestion(suggestion))
@@ -234,10 +240,6 @@ export async function getBusinessDetails(
     method: "GET",
     fieldMask: "addressComponents,formattedAddress"
   });
-
-  if (!payload) {
-    return null;
-  }
 
   const parsed = parseAddressComponents(payload.addressComponents ?? []);
   const name = fallbackName?.trim() || "";

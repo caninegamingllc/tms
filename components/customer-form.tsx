@@ -133,10 +133,12 @@ export function CustomerForm({ action }: CustomerFormProps) {
           }}
           autoComplete="off"
         />
-        {trimmedName.length >= 3 && (results.length > 0 || loading) ? (
+        {trimmedName.length >= 3 && (results.length > 0 || loading || searchError) ? (
           <div className="absolute left-0 right-0 top-full z-20 mt-1 overflow-hidden rounded-2xl border border-border bg-white shadow-card">
             {loading ? (
               <p className="px-4 py-3 text-sm text-muted">Searching businesses...</p>
+            ) : searchError ? (
+              <p className="px-4 py-3 text-sm text-red-600">{searchError}</p>
             ) : (
               results.map((result) => (
                 <button
@@ -155,7 +157,6 @@ export function CustomerForm({ action }: CustomerFormProps) {
           </div>
         ) : null}
         <p className="text-xs text-muted">Business suggestions powered by Google.</p>
-        {searchError ? <p className="text-xs text-red-600">{searchError}</p> : null}
       </label>
       <input
         name="address"
