@@ -5,6 +5,7 @@ export type BusinessSearchResult = {
   city: string;
   state: string;
   postalCode: string;
+  phone: string;
   description: string;
 };
 
@@ -33,6 +34,7 @@ type GooglePlaceDetailsResponse = {
   displayName?: { text?: string };
   formattedAddress?: string;
   addressComponents?: GoogleAddressComponent[];
+  nationalPhoneNumber?: string;
 };
 
 const SEARCH_LIMIT = 8;
@@ -132,6 +134,7 @@ function mapAutocompleteSuggestion(
     city: "",
     state: "",
     postalCode: "",
+    phone: "",
     description
   };
 }
@@ -172,40 +175,13 @@ async function googlePlacesRequest<T>(
   return (await response.json()) as T;
 }
 
-function mapAddressAutocompleteSuggestion(
-  suggestion: GoogleAutocompleteSuggestion
-): BusinessSearchResult | null {
-  const prediction = suggestion.placePrediction;
-  const placeId = prediction?.placeId?.trim();
-  const address =
-    prediction?.structuredFormat?.mainText?.text?.trim() ||
-    prediction?.text?.text?.trim() ||
-    "";
-
-  if (!placeId || !address) {
-    return null;
-  }
-
-  const description = prediction?.structuredFormat?.secondaryText?.text?.trim() ?? "";
-
-  return {
-    id: placeId,
-    name: address,
-    address,
-    city: "",
-    state: "",
-    postalCode: "",
-    description
-  };
-}
-
 export async function searchAddresses(query: string, sessionToken?: string) {
   const normalizedQuery = normalizeQuery(query);
   if (normalizedQuery.length < 3) {
     return [];
   }
 
-  const cacheKey = `address:${normalizedQuery}:${sessionToken ?? "default"}`;
+  const cacheKey = `place:${normalizedQuery}:${sessionToken ?? "default"}`;
   const now = Date.now();
   const cached = autocompleteCache.get(cacheKey);
   if (cached && cached.expiresAt > now) {
@@ -220,7 +196,6 @@ export async function searchAddresses(query: string, sessionToken?: string) {
         "suggestions.placePrediction.placeId,suggestions.placePrediction.structuredFormat,suggestions.placePrediction.text",
       body: JSON.stringify({
         input: query.trim(),
-        includedPrimaryTypes: ["street_address", "premise", "subpremise", "route"],
         includedRegionCodes: ["us"],
         languageCode: "en",
         sessionToken: sessionToken || undefined
@@ -229,7 +204,7 @@ export async function searchAddresses(query: string, sessionToken?: string) {
   );
 
   const results = (payload.suggestions ?? [])
-    .map((suggestion) => mapAddressAutocompleteSuggestion(suggestion))
+    .map((suggestion) => mapAutocompleteSuggestion(suggestion))
     .filter((result): result is BusinessSearchResult => Boolean(result))
     .slice(0, SEARCH_LIMIT);
 
@@ -303,11 +278,13 @@ export async function getBusinessDetails(
 
   const payload = await googlePlacesRequest<GooglePlaceDetailsResponse>(detailsUrl, {
     method: "GET",
-    fieldMask: "addressComponents,formattedAddress"
+    fieldMask: "addressComponents,formattedAddress,displayName,nationalPhoneNumber"
   });
 
   const parsed = parseAddressComponents(payload.addressComponents ?? []);
-  const name = fallbackName?.trim() || "";
+  const name =
+    fallbackName?.trim() || payload.displayName?.text?.trim() || "";
+  const phone = payload.nationalPhoneNumber?.trim() ?? "";
   const result: BusinessSearchResult = {
     id: normalizedPlaceId,
     name,
@@ -315,13 +292,16 @@ export async function getBusinessDetails(
     city: parsed.city,
     state: parsed.state,
     postalCode: parsed.postalCode,
+    phone,
     description: toDescription(parsed)
   };
 
   if (!result.address && payload.formattedAddress) {
     result.address = payload.formattedAddress;
-    result.description = payload.formattedAddress;
   }
+
+  const locationLine = result.description || payload.formattedAddress || "";
+  result.description = [locationLine, phone].filter(Boolean).join(" · ");
 
   detailsCache.set(cacheKey, { result, expiresAt: now + CACHE_TTL_MS });
   return result;
