@@ -172,6 +172,71 @@ async function googlePlacesRequest<T>(
   return (await response.json()) as T;
 }
 
+function mapAddressAutocompleteSuggestion(
+  suggestion: GoogleAutocompleteSuggestion
+): BusinessSearchResult | null {
+  const prediction = suggestion.placePrediction;
+  const placeId = prediction?.placeId?.trim();
+  const address =
+    prediction?.structuredFormat?.mainText?.text?.trim() ||
+    prediction?.text?.text?.trim() ||
+    "";
+
+  if (!placeId || !address) {
+    return null;
+  }
+
+  const description = prediction?.structuredFormat?.secondaryText?.text?.trim() ?? "";
+
+  return {
+    id: placeId,
+    name: address,
+    address,
+    city: "",
+    state: "",
+    postalCode: "",
+    description
+  };
+}
+
+export async function searchAddresses(query: string, sessionToken?: string) {
+  const normalizedQuery = normalizeQuery(query);
+  if (normalizedQuery.length < 3) {
+    return [];
+  }
+
+  const cacheKey = `address:${normalizedQuery}:${sessionToken ?? "default"}`;
+  const now = Date.now();
+  const cached = autocompleteCache.get(cacheKey);
+  if (cached && cached.expiresAt > now) {
+    return cached.results;
+  }
+
+  const payload = await googlePlacesRequest<GoogleAutocompleteResponse>(
+    "https://places.googleapis.com/v1/places:autocomplete",
+    {
+      method: "POST",
+      fieldMask:
+        "suggestions.placePrediction.placeId,suggestions.placePrediction.structuredFormat,suggestions.placePrediction.text",
+      body: JSON.stringify({
+        input: query.trim(),
+        includedPrimaryTypes: ["street_address", "premise", "subpremise", "route"],
+        includedRegionCodes: ["us"],
+        languageCode: "en",
+        sessionToken: sessionToken || undefined
+      })
+    }
+  );
+
+  const results = (payload.suggestions ?? [])
+    .map((suggestion) => mapAddressAutocompleteSuggestion(suggestion))
+    .filter((result): result is BusinessSearchResult => Boolean(result))
+    .slice(0, SEARCH_LIMIT);
+
+  autocompleteCache.set(cacheKey, { results, expiresAt: now + CACHE_TTL_MS });
+  return results;
+}
+
 export async function searchBusinesses(query: string, sessionToken?: string) {
   const normalizedQuery = normalizeQuery(query);
   if (normalizedQuery.length < 3) {
