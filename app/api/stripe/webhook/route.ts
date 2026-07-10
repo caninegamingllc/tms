@@ -5,6 +5,18 @@ import { syncSeatSubscriptionFromStripe } from "@/lib/billing-actions";
 import { autoAssignOwnerOnPurchase } from "@/lib/seats";
 import { getStripe } from "@/lib/stripe";
 
+function getInvoiceSubscriptionId(invoice: Stripe.Invoice) {
+  const subscription = (invoice as Stripe.Invoice & {
+    subscription?: string | Stripe.Subscription | null;
+  }).subscription;
+
+  if (!subscription) {
+    return null;
+  }
+
+  return typeof subscription === "string" ? subscription : subscription.id;
+}
+
 export async function POST(request: Request) {
   const body = await request.text();
   const signature = (await headers()).get("stripe-signature");
@@ -55,8 +67,10 @@ export async function POST(request: Request) {
       }
       case "invoice.payment_failed": {
         const invoice = event.data.object as Stripe.Invoice;
-        if (invoice.subscription && typeof invoice.subscription === "string") {
-          const subscription = await stripe.subscriptions.retrieve(invoice.subscription, {
+        const subscriptionId = getInvoiceSubscriptionId(invoice);
+
+        if (subscriptionId) {
+          const subscription = await stripe.subscriptions.retrieve(subscriptionId, {
             expand: ["items.data.price"]
           });
           await syncSeatSubscriptionFromStripe(subscription);
