@@ -330,6 +330,125 @@ export async function createBranch(formData: FormData) {
   revalidatePath("/admin");
 }
 
+async function assertBranchCanBeDeleted(companyId: string, branchId: string) {
+  const [loadCount, customerCount] = await Promise.all([
+    prisma.load.count({ where: { companyId, branchId } }),
+    prisma.customer.count({ where: { companyId, branchId } })
+  ]);
+
+  if (loadCount > 0 || customerCount > 0) {
+    const parts: string[] = [];
+    if (loadCount > 0) {
+      parts.push(`${loadCount} load${loadCount === 1 ? "" : "s"}`);
+    }
+    if (customerCount > 0) {
+      parts.push(`${customerCount} customer${customerCount === 1 ? "" : "s"}`);
+    }
+    throw new Error(`This branch cannot be deleted because it is assigned to ${parts.join(" and ")}.`);
+  }
+}
+
+export async function deleteBranch(formData: FormData) {
+  const actor = await requireAdmin();
+  const branchId = requiredString(formData, "branchId");
+  const branch = await prisma.branch.findUniqueOrThrow({
+    where: { id: branchId, companyId: actor.companyId }
+  });
+
+  await assertBranchCanBeDeleted(actor.companyId, branchId);
+
+  await prisma.$transaction([
+    prisma.user.updateMany({ where: { branchId }, data: { branchId: null } }),
+    prisma.carrier.updateMany({ where: { branchId }, data: { branchId: null } }),
+    prisma.facility.updateMany({ where: { branchId }, data: { branchId: null } }),
+    prisma.branch.delete({ where: { id: branchId } })
+  ]);
+
+  await audit(
+    actor.companyId,
+    actor.id,
+    "DELETE_BRANCH",
+    "Branch",
+    branchId,
+    `Deleted branch ${branch.name}.`
+  );
+  revalidatePath("/admin");
+}
+
+async function assertUserCanBeDeleted(companyId: string, userId: string) {
+  const [noteCount, activityCount] = await Promise.all([
+    prisma.loadNote.count({ where: { userId } }),
+    prisma.loadActivity.count({ where: { userId } })
+  ]);
+
+  if (noteCount > 0 || activityCount > 0) {
+    const parts: string[] = [];
+    if (noteCount > 0) {
+      parts.push(`${noteCount} load note${noteCount === 1 ? "" : "s"}`);
+    }
+    if (activityCount > 0) {
+      parts.push(`${activityCount} load activit${activityCount === 1 ? "y" : "ies"}`);
+    }
+    throw new Error(`This user cannot be deleted because they are linked to ${parts.join(" and ")}.`);
+  }
+}
+
+async function assertNotLastOwner(companyId: string, userId: string, role: string) {
+  if (role !== "OWNER") {
+    return;
+  }
+
+  const ownerCount = await prisma.user.count({
+    where: {
+      companyId,
+      role: "OWNER",
+      status: { not: "INVITED" }
+    }
+  });
+
+  if (ownerCount <= 1) {
+    throw new Error("You cannot delete the last owner account.");
+  }
+}
+
+export async function deleteUser(formData: FormData) {
+  const actor = await requireAdmin();
+  const userId = requiredString(formData, "userId");
+  const target = await prisma.user.findUniqueOrThrow({
+    where: { id: userId, companyId: actor.companyId }
+  });
+
+  if (target.status === "INVITED") {
+    throw new Error("Use cancel invite for invited users.");
+  }
+
+  if (actor.id === userId) {
+    throw new Error("You cannot delete your own account.");
+  }
+
+  assertCanManageTarget(actor.role, target.role, userId, actor.id);
+  await assertNotLastOwner(actor.companyId, userId, target.role);
+  await assertUserCanBeDeleted(actor.companyId, userId);
+
+  await audit(
+    actor.companyId,
+    actor.id,
+    "DELETE_USER",
+    "User",
+    userId,
+    `Deleted user ${target.email}.`,
+    userId
+  );
+
+  await prisma.$transaction([
+    prisma.auditLog.updateMany({ where: { actorUserId: userId }, data: { actorUserId: null } }),
+    prisma.auditLog.updateMany({ where: { targetUserId: userId }, data: { targetUserId: null } }),
+    prisma.user.delete({ where: { id: userId } })
+  ]);
+
+  revalidatePath("/admin");
+}
+
 export async function updateLoadNumberSettings(formData: FormData) {
   const actor = await requireAdmin();
   const prefix = requiredString(formData, "loadNumberPrefix").toUpperCase().replace(/[^A-Z0-9-]/g, "");

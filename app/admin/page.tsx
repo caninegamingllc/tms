@@ -3,6 +3,8 @@ import { StatusBadge } from "@/components/status-badge";
 import {
   cancelInvite,
   createBranch,
+  deleteBranch,
+  deleteUser,
   forcePasswordChange,
   inviteUser,
   resendInvite,
@@ -29,7 +31,12 @@ export default async function AdminPage({
     prisma.company.findUniqueOrThrow({ where: { id: currentUser.companyId } }),
     prisma.user.findMany({
       where: { companyId: currentUser.companyId },
-      include: { branch: true },
+      include: {
+        branch: true,
+        _count: {
+          select: { notes: true, activities: true }
+        }
+      },
       orderBy: { name: "asc" }
     }),
     prisma.branch.findMany({
@@ -43,6 +50,8 @@ export default async function AdminPage({
       take: 50
     })
   ]);
+
+  const ownerCount = users.filter((user) => user.role === "OWNER" && user.status !== "INVITED").length;
 
   return (
     <>
@@ -71,7 +80,16 @@ export default async function AdminPage({
                 </tr>
               </thead>
               <tbody>
-                {users.map((user) => (
+                {users.map((user) => {
+                  const loadUsageCount = user._count.notes + user._count.activities;
+                  const canDeleteUser =
+                    user.status !== "INVITED" &&
+                    currentUser.id !== user.id &&
+                    loadUsageCount === 0 &&
+                    !(user.role === "OWNER" && ownerCount <= 1) &&
+                    (currentUser.role === "OWNER" || user.role !== "OWNER");
+
+                  return (
                   <tr key={user.id}>
                     <td>
                       <p className="font-semibold text-ink">{user.name}</p>
@@ -160,13 +178,28 @@ export default async function AdminPage({
                           </form>
                         </div>
                       ) : (
-                        <form action={setUserDisabled}>
-                          <input type="hidden" name="userId" value={user.id} />
-                          <input type="hidden" name="mode" value={user.disabledAt ? "enable" : "disable"} />
-                          <button className="btn-secondary" type="submit" disabled={currentUser.id === user.id && !user.disabledAt}>
-                            {user.disabledAt ? "Enable Account" : "Disable Account"}
-                          </button>
-                        </form>
+                        <div className="grid gap-2">
+                          <form action={setUserDisabled}>
+                            <input type="hidden" name="userId" value={user.id} />
+                            <input type="hidden" name="mode" value={user.disabledAt ? "enable" : "disable"} />
+                            <button className="btn-secondary w-full" type="submit" disabled={currentUser.id === user.id && !user.disabledAt}>
+                              {user.disabledAt ? "Enable Account" : "Disable Account"}
+                            </button>
+                          </form>
+                          {canDeleteUser ? (
+                            <form action={deleteUser}>
+                              <input type="hidden" name="userId" value={user.id} />
+                              <button className="btn-danger w-full" type="submit">
+                                Delete User
+                              </button>
+                            </form>
+                          ) : user.status !== "INVITED" && loadUsageCount > 0 ? (
+                            <p className="text-xs text-muted">
+                              In use on {user._count.notes} note{user._count.notes === 1 ? "" : "s"} and{" "}
+                              {user._count.activities} activit{user._count.activities === 1 ? "y" : "ies"}.
+                            </p>
+                          ) : null}
+                        </div>
                       )}
                       <p className="mt-2 text-xs text-muted">
                         Created {formatDate(user.createdAt)}
@@ -176,7 +209,8 @@ export default async function AdminPage({
                       ) : null}
                     </td>
                   </tr>
-                ))}
+                  );
+                })}
               </tbody>
             </table>
           </div>
@@ -266,7 +300,10 @@ export default async function AdminPage({
             </button>
           </form>
           <div className="mt-5 grid gap-3">
-            {branches.map((branch) => (
+            {branches.map((branch) => {
+              const canDeleteBranch = branch.loads.length === 0 && branch.customers.length === 0;
+
+              return (
               <div key={branch.id} className="rounded-2xl border border-border p-4">
                 <p className="font-semibold text-ink">{branch.name}</p>
                 <p className="muted">
@@ -290,8 +327,32 @@ export default async function AdminPage({
                     <p className="text-xs text-muted">Loads</p>
                   </div>
                 </div>
+                {canDeleteBranch ? (
+                  <form action={deleteBranch} className="mt-3">
+                    <input type="hidden" name="branchId" value={branch.id} />
+                    <button className="btn-danger w-full" type="submit">
+                      Delete Branch
+                    </button>
+                  </form>
+                ) : (
+                  <p className="mt-3 text-xs text-muted">
+                    Cannot delete while assigned to{" "}
+                    {[
+                      branch.loads.length > 0
+                        ? `${branch.loads.length} load${branch.loads.length === 1 ? "" : "s"}`
+                        : null,
+                      branch.customers.length > 0
+                        ? `${branch.customers.length} customer${branch.customers.length === 1 ? "" : "s"}`
+                        : null
+                    ]
+                      .filter(Boolean)
+                      .join(" and ")}
+                    .
+                  </p>
+                )}
               </div>
-            ))}
+              );
+            })}
           </div>
         </section>
 
