@@ -1,12 +1,12 @@
 import { FacilityForm } from "@/components/facility-form";
 import { PageHeader } from "@/components/page-header";
 import { createFacility, updateFacility } from "@/lib/actions";
-import { requireUser } from "@/lib/auth";
+import { requireTmsAccess } from "@/lib/permissions";
 import { prisma } from "@/lib/db";
 import { formatDate, humanize } from "@/lib/format";
 
 export default async function LocationsPage() {
-  const user = await requireUser();
+  const user = await requireTmsAccess();
   const [facilities, customers] = await Promise.all([
     prisma.facility.findMany({
       where: { companyId: user.companyId },

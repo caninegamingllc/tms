@@ -1,14 +1,14 @@
 import { PageHeader } from "@/components/page-header";
 import { FacilityCombobox, SearchCombobox } from "@/components/search-combobox";
 import { createLoad } from "@/lib/actions";
-import { requireUser } from "@/lib/auth";
+import { requireTmsAccess } from "@/lib/permissions";
 import { branchScopedWhere, canSeeAllBranches } from "@/lib/scope";
 import { equipmentTypes, loadStatuses } from "@/lib/constants";
 import { prisma } from "@/lib/db";
 import { humanize } from "@/lib/format";
 
 export default async function NewLoadPage() {
-  const user = await requireUser();
+  const user = await requireTmsAccess();
   const customerScope = branchScopedWhere(user);
   const [company, customers, facilities, branches] = await Promise.all([
     prisma.company.findUniqueOrThrow({ where: { id: user.companyId } }),

@@ -14,7 +14,8 @@ model Company {
   status               String                 @default("ACTIVE")
   loadNumberPrefix     String                 @default("GLB")
   nextLoadSequence     Int                    @default(1001)
-  users                User[]
+  memberships          CompanyMembership[]
+  seatSubscription     SeatSubscription?
   branches             Branch[]
   customers            Customer[]
   carriers             Carrier[]
@@ -36,7 +37,7 @@ model Branch {
   name      String
   city      String?
   state     String?
-  users     User[]
+  memberships CompanyMembership[]
   customers Customer[]
   carriers  Carrier[]
   facilities Facility[]
@@ -48,44 +49,72 @@ model Branch {
 }
 
 model User {
-  id                    String         @id @default(cuid())
-  companyId             String
-  company               Company        @relation(fields: [companyId], references: [id], onDelete: Cascade)
-  name                  String
-  email                 String         @unique
-  role                  String         @default("BROKER")
-  status                String         @default("ACTIVE")
-  passwordHash          String?
-  mustChangePassword    Boolean        @default(false)
-  lastLoginAt           DateTime?
-  lockedAt              DateTime?
-  disabledAt            DateTime?
-  passwordResetAt       DateTime?
-  passwordResetTokenHash String?       @unique
-  passwordResetExpiresAt DateTime?
-  inviteTokenHash       String?        @unique
-  inviteExpiresAt       DateTime?
-  branchId              String?
-  branch                Branch?        @relation(fields: [branchId], references: [id])
-  notes                 LoadNote[]
-  activities            LoadActivity[]
-  sessions              Session[]
-  auditLogs             AuditLog[]      @relation("AuditActor")
-  targetAuditLogs       AuditLog[]      @relation("AuditTargetUser")
-  createdAt             DateTime       @default(now())
-  updatedAt             DateTime       @updatedAt
+  id                     String              @id @default(cuid())
+  name                   String
+  email                  String              @unique
+  passwordHash           String?
+  mustChangePassword     Boolean             @default(false)
+  lastLoginAt            DateTime?
+  passwordResetAt        DateTime?
+  passwordResetTokenHash   String?             @unique
+  passwordResetExpiresAt   DateTime?
+  memberships            CompanyMembership[]
+  notes                  LoadNote[]
+  activities             LoadActivity[]
+  sessions               Session[]
+  auditLogs              AuditLog[]          @relation("AuditActor")
+  targetAuditLogs        AuditLog[]          @relation("AuditTargetUser")
+  createdAt              DateTime            @default(now())
+  updatedAt              DateTime            @updatedAt
+}
 
+model CompanyMembership {
+  id              String    @id @default(cuid())
+  userId          String
+  user            User      @relation(fields: [userId], references: [id], onDelete: Cascade)
+  companyId       String
+  company         Company   @relation(fields: [companyId], references: [id], onDelete: Cascade)
+  role            String    @default("BROKER")
+  status          String    @default("ACTIVE")
+  branchId        String?
+  branch          Branch?   @relation(fields: [branchId], references: [id])
+  seatAssignedAt  DateTime?
+  inviteTokenHash String?   @unique
+  inviteExpiresAt DateTime?
+  lockedAt        DateTime?
+  disabledAt      DateTime?
+  sessions        Session[]
+  createdAt       DateTime  @default(now())
+  updatedAt       DateTime  @updatedAt
+
+  @@unique([userId, companyId])
   @@index([companyId])
 }
 
+model SeatSubscription {
+  id                   String    @id @default(cuid())
+  companyId            String    @unique
+  company              Company   @relation(fields: [companyId], references: [id], onDelete: Cascade)
+  stripeCustomerId     String?   @unique
+  stripeSubscriptionId String?   @unique
+  stripePriceId        String?
+  seatQuantity         Int       @default(0)
+  status               String    @default("NONE")
+  currentPeriodEnd     DateTime?
+  createdAt            DateTime  @default(now())
+  updatedAt            DateTime  @updatedAt
+}
+
 model Session {
-  id           String   @id @default(cuid())
-  tokenHash    String   @unique
+  id           String            @id @default(cuid())
+  tokenHash    String            @unique
   userId       String
-  user         User     @relation(fields: [userId], references: [id], onDelete: Cascade)
+  user         User              @relation(fields: [userId], references: [id], onDelete: Cascade)
+  membershipId String
+  membership   CompanyMembership @relation(fields: [membershipId], references: [id], onDelete: Cascade)
   expiresAt    DateTime
-  lastSeenAt   DateTime @default(now())
-  createdAt    DateTime @default(now())
+  lastSeenAt   DateTime          @default(now())
+  createdAt    DateTime          @default(now())
 }
 
 model AuditLog {

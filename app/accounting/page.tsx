@@ -2,14 +2,14 @@ import { MetricCard } from "@/components/metric-card";
 import { PageHeader } from "@/components/page-header";
 import { StatusBadge } from "@/components/status-badge";
 import { createCarrierBill, createInvoice, generateCustomerInvoice } from "@/lib/actions";
-import { requireUser } from "@/lib/auth";
+import { requireTmsAccess } from "@/lib/permissions";
 import { branchScopedWhere } from "@/lib/scope";
 import { paymentStatuses } from "@/lib/constants";
 import { prisma } from "@/lib/db";
 import { formatDate, formatMoney, humanize } from "@/lib/format";
 
 export default async function AccountingPage() {
-  const user = await requireUser();
+  const user = await requireTmsAccess();
   const loadScope = branchScopedWhere(user);
   const [loads, invoices, carrierBills, carriers] = await Promise.all([
     prisma.load.findMany({

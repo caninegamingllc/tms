@@ -6,7 +6,7 @@ import {
   updateCarrier,
   updateCarrierInsuranceCoverage
 } from "@/lib/actions";
-import { requireUser } from "@/lib/auth";
+import { requireTmsAccess } from "@/lib/permissions";
 import { insuranceCoverageTypes } from "@/lib/constants";
 import { prisma } from "@/lib/db";
 import { formatDate, formatMoney, humanize } from "@/lib/format";
@@ -28,7 +28,7 @@ export default async function CarrierDetailPage({
 }) {
   const { id } = await params;
   const { error } = await searchParams;
-  const user = await requireUser();
+  const user = await requireTmsAccess();
   const carrier = await prisma.carrier.findUnique({
     where: { id, companyId: user.companyId },
     include: {

@@ -1,6 +1,7 @@
 import { PageHeader } from "@/components/page-header";
 import { StatusBadge } from "@/components/status-badge";
 import {
+  assignSeatToMember,
   cancelInvite,
   createBranch,
   deleteBranch,
@@ -11,6 +12,7 @@ import {
   resetUserPassword,
   setUserDisabled,
   setUserLock,
+  unassignSeatFromMember,
   updateAdminUser,
   updateLoadNumberSettings
 } from "@/lib/admin-actions";
@@ -19,6 +21,8 @@ import { requireAdmin } from "@/lib/auth";
 import { userRoles, userStatuses } from "@/lib/constants";
 import { prisma } from "@/lib/db";
 import { formatDate, formatDateTime, humanize } from "@/lib/format";
+import { getSeatSummary } from "@/lib/seats";
+import Link from "next/link";
 
 export default async function AdminPage({
   searchParams
@@ -27,31 +31,38 @@ export default async function AdminPage({
 }) {
   const currentUser = await requireAdmin();
   const { invite, emailSent, error } = await searchParams;
-  const [company, users, branches, auditLogs] = await Promise.all([
+  const [company, memberships, branches, auditLogs, seatSummary] = await Promise.all([
     prisma.company.findUniqueOrThrow({ where: { id: currentUser.companyId } }),
-    prisma.user.findMany({
+    prisma.companyMembership.findMany({
       where: { companyId: currentUser.companyId },
       include: {
-        branch: true,
-        _count: {
-          select: { notes: true, activities: true }
-        }
+        user: {
+          include: {
+            _count: {
+              select: { notes: true, activities: true }
+            }
+          }
+        },
+        branch: true
       },
-      orderBy: { name: "asc" }
+      orderBy: { user: { name: "asc" } }
     }),
     prisma.branch.findMany({
       where: { companyId: currentUser.companyId },
-      include: { users: true, customers: true, carriers: true, loads: true }
+      include: { memberships: true, customers: true, carriers: true, loads: true }
     }),
     prisma.auditLog.findMany({
       where: { companyId: currentUser.companyId },
       orderBy: { createdAt: "desc" },
       include: { actorUser: true, targetUser: true },
       take: 50
-    })
+    }),
+    getSeatSummary(currentUser.companyId)
   ]);
 
-  const ownerCount = users.filter((user) => user.role === "OWNER" && user.status !== "INVITED").length;
+  const ownerCount = memberships.filter(
+    (membership) => membership.role === "OWNER" && membership.status !== "INVITED"
+  ).length;
 
   return (
     <>
@@ -68,6 +79,21 @@ export default async function AdminPage({
 
       {invite ? <InviteLinkBanner invitePath={invite} emailSent={emailSent === "1"} /> : null}
 
+      <div className="card mb-6">
+        <div className="flex flex-wrap items-center justify-between gap-3">
+          <div>
+            <h2 className="section-title">Seat Usage</h2>
+            <p className="muted">
+              {seatSummary.assigned} of {seatSummary.purchased} seats assigned ({seatSummary.available}{" "}
+              available)
+            </p>
+          </div>
+          <Link href="/admin/billing" className="btn-secondary">
+            Manage Billing
+          </Link>
+        </div>
+      </div>
+
       <div className="grid gap-6 2xl:grid-cols-[1.4fr_0.8fr]">
         <section className="card overflow-hidden p-0">
           <div className="border-b border-border p-5">
@@ -78,6 +104,7 @@ export default async function AdminPage({
             <table className="table">
               <thead>
                 <tr>
+                  <th>Seat</th>
                   <th>User</th>
                   <th>Access</th>
                   <th>Status</th>
@@ -86,17 +113,47 @@ export default async function AdminPage({
                 </tr>
               </thead>
               <tbody>
-                {users.map((user) => {
+                {memberships.map((membership) => {
+                  const user = membership.user;
                   const loadUsageCount = user._count.notes + user._count.activities;
                   const canDeleteUser =
-                    user.status !== "INVITED" &&
+                    membership.status !== "INVITED" &&
                     currentUser.id !== user.id &&
                     loadUsageCount === 0 &&
-                    !(user.role === "OWNER" && ownerCount <= 1) &&
-                    (currentUser.role === "OWNER" || user.role !== "OWNER");
+                    !(membership.role === "OWNER" && ownerCount <= 1) &&
+                    (currentUser.role === "OWNER" || membership.role !== "OWNER");
 
                   return (
-                  <tr key={user.id}>
+                  <tr key={membership.id}>
+                    <td>
+                      {membership.seatAssignedAt ? (
+                        <div className="grid gap-2">
+                          <span className="text-sm font-semibold text-emerald-700">Assigned</span>
+                          <form action={unassignSeatFromMember}>
+                            <input type="hidden" name="membershipId" value={membership.id} />
+                            <button className="btn-secondary w-full" type="submit">
+                              Remove Seat
+                            </button>
+                          </form>
+                        </div>
+                      ) : membership.status === "INVITED" ? (
+                        <span className="text-sm text-muted">Pending invite</span>
+                      ) : (
+                        <div className="grid gap-2">
+                          <span className="text-sm font-semibold text-amber-700">Unassigned</span>
+                          <form action={assignSeatToMember}>
+                            <input type="hidden" name="membershipId" value={membership.id} />
+                            <button
+                              className="btn-secondary w-full"
+                              type="submit"
+                              disabled={seatSummary.available <= 0}
+                            >
+                              Assign Seat
+                            </button>
+                          </form>
+                        </div>
+                      )}
+                    </td>
                     <td>
                       <p className="font-semibold text-ink">{user.name}</p>
                       <p className="muted">{user.email}</p>
@@ -104,9 +161,9 @@ export default async function AdminPage({
                     </td>
                     <td>
                       <form action={updateAdminUser} className="grid min-w-64 gap-2">
-                        <input type="hidden" name="userId" value={user.id} />
+                        <input type="hidden" name="membershipId" value={membership.id} />
                         <input name="name" className="input" defaultValue={user.name} />
-                        <select name="role" className="select" defaultValue={user.role}>
+                        <select name="role" className="select" defaultValue={membership.role}>
                           {userRoles
                             .filter((role) => currentUser.role === "OWNER" || role !== "OWNER")
                             .map((role) => (
@@ -115,7 +172,7 @@ export default async function AdminPage({
                             </option>
                           ))}
                         </select>
-                        <select name="branchId" className="select" defaultValue={user.branchId ?? ""}>
+                        <select name="branchId" className="select" defaultValue={membership.branchId ?? ""}>
                           <option value="">No branch</option>
                           {branches.map((branch) => (
                             <option key={branch.id} value={branch.id}>
@@ -123,7 +180,7 @@ export default async function AdminPage({
                             </option>
                           ))}
                         </select>
-                        <select name="status" className="select" defaultValue={user.status}>
+                        <select name="status" className="select" defaultValue={membership.status}>
                           {userStatuses.map((status) => (
                             <option key={status} value={status}>
                               {humanize(status)}
@@ -136,8 +193,8 @@ export default async function AdminPage({
                       </form>
                     </td>
                     <td>
-                      <StatusBadge value={user.status} />
-                      <p className="mt-2 muted">{user.branch?.name ?? "No branch"}</p>
+                      <StatusBadge value={membership.status} />
+                      <p className="mt-2 muted">{membership.branch?.name ?? "No branch"}</p>
                       {user.mustChangePassword ? (
                         <p className="mt-2 text-sm font-semibold text-amber-700">Password change required</p>
                       ) : null}
@@ -159,25 +216,25 @@ export default async function AdminPage({
                           </button>
                         </form>
                         <form action={setUserLock}>
-                          <input type="hidden" name="userId" value={user.id} />
-                          <input type="hidden" name="mode" value={user.lockedAt ? "unlock" : "lock"} />
-                          <button className="btn-secondary w-full" type="submit" disabled={currentUser.id === user.id && !user.lockedAt}>
-                            {user.lockedAt ? "Unlock" : "Lock"}
+                          <input type="hidden" name="membershipId" value={membership.id} />
+                          <input type="hidden" name="mode" value={membership.lockedAt ? "unlock" : "lock"} />
+                          <button className="btn-secondary w-full" type="submit" disabled={currentUser.id === user.id && !membership.lockedAt}>
+                            {membership.lockedAt ? "Unlock" : "Lock"}
                           </button>
                         </form>
                       </div>
                     </td>
                     <td>
-                      {user.status === "INVITED" ? (
+                      {membership.status === "INVITED" ? (
                         <div className="grid gap-2">
                           <form action={resendInvite}>
-                            <input type="hidden" name="userId" value={user.id} />
+                            <input type="hidden" name="membershipId" value={membership.id} />
                             <button className="btn-secondary w-full" type="submit">
                               Resend Invite
                             </button>
                           </form>
                           <form action={cancelInvite}>
-                            <input type="hidden" name="userId" value={user.id} />
+                            <input type="hidden" name="membershipId" value={membership.id} />
                             <button className="btn-secondary w-full" type="submit">
                               Cancel Invite
                             </button>
@@ -186,20 +243,20 @@ export default async function AdminPage({
                       ) : (
                         <div className="grid gap-2">
                           <form action={setUserDisabled}>
-                            <input type="hidden" name="userId" value={user.id} />
-                            <input type="hidden" name="mode" value={user.disabledAt ? "enable" : "disable"} />
-                            <button className="btn-secondary w-full" type="submit" disabled={currentUser.id === user.id && !user.disabledAt}>
-                              {user.disabledAt ? "Enable Account" : "Disable Account"}
+                            <input type="hidden" name="membershipId" value={membership.id} />
+                            <input type="hidden" name="mode" value={membership.disabledAt ? "enable" : "disable"} />
+                            <button className="btn-secondary w-full" type="submit" disabled={currentUser.id === user.id && !membership.disabledAt}>
+                              {membership.disabledAt ? "Enable Account" : "Disable Account"}
                             </button>
                           </form>
                           {canDeleteUser ? (
                             <form action={deleteUser}>
-                              <input type="hidden" name="userId" value={user.id} />
+                              <input type="hidden" name="membershipId" value={membership.id} />
                               <button className="btn-danger w-full" type="submit">
-                                Delete User
+                                Remove Member
                               </button>
                             </form>
-                          ) : user.status !== "INVITED" && loadUsageCount > 0 ? (
+                          ) : membership.status !== "INVITED" && loadUsageCount > 0 ? (
                             <p className="text-xs text-muted">
                               In use on {user._count.notes} note{user._count.notes === 1 ? "" : "s"} and{" "}
                               {user._count.activities} activit{user._count.activities === 1 ? "y" : "ies"}.
@@ -208,7 +265,7 @@ export default async function AdminPage({
                         </div>
                       )}
                       <p className="mt-2 text-xs text-muted">
-                        Created {formatDate(user.createdAt)}
+                        Joined {formatDate(membership.createdAt)}
                       </p>
                       {user.passwordResetAt ? (
                         <p className="text-xs text-muted">Password reset {formatDate(user.passwordResetAt)}</p>
@@ -317,7 +374,7 @@ export default async function AdminPage({
                 </p>
                 <div className="mt-3 grid grid-cols-4 gap-2 text-center text-sm">
                   <div className="rounded-xl bg-soft p-2">
-                    <p className="font-bold">{branch.users.length}</p>
+                    <p className="font-bold">{branch.memberships.length}</p>
                     <p className="text-xs text-muted">Users</p>
                   </div>
                   <div className="rounded-xl bg-soft p-2">

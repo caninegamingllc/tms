@@ -2,7 +2,7 @@ import Link from "next/link";
 import { CarrierLookupForm } from "@/components/carrier-lookup-form";
 import { PageHeader } from "@/components/page-header";
 import { createCarrier } from "@/lib/actions";
-import { requireUser } from "@/lib/auth";
+import { requireTmsAccess } from "@/lib/permissions";
 import { prisma } from "@/lib/db";
 import { formatDate, formatMoney } from "@/lib/format";
 
@@ -12,7 +12,7 @@ export default async function CarriersPage({
   searchParams: Promise<{ error?: string }>;
 }) {
   const { error } = await searchParams;
-  const user = await requireUser();
+  const user = await requireTmsAccess();
   const carriers = await prisma.carrier.findMany({
     where: { companyId: user.companyId },
     orderBy: { name: "asc" },

@@ -7,6 +7,7 @@ import { appBaseUrl } from "@/lib/app-url";
 import { prisma } from "@/lib/db";
 import { hashPassword, requireAdmin } from "@/lib/auth";
 import { sendInviteEmail } from "@/lib/mail";
+import { assignSeat, unassignSeat } from "@/lib/seats";
 
 const inviteDays = 7;
 
@@ -59,8 +60,7 @@ function assertCanManageTarget(actorRole: string, targetRole: string, targetId: 
     throw new Error("Only an owner can manage owner accounts.");
   }
 
-  const nextRole = targetRole;
-  if (nextRole === "OWNER" && actorRole !== "OWNER") {
+  if (targetRole === "OWNER" && actorRole !== "OWNER") {
     throw new Error("Only an owner can assign the owner role.");
   }
 }
@@ -112,6 +112,7 @@ export async function inviteUser(formData: FormData) {
   const email = requiredString(formData, "email").toLowerCase();
   const branchId = requiredString(formData, "branchId");
   const role = requiredString(formData, "role");
+  const name = requiredString(formData, "name");
 
   if (role === "OWNER" && actor.role !== "OWNER") {
     redirectWithAdminError("Only an owner can invite another owner.");
@@ -121,26 +122,36 @@ export async function inviteUser(formData: FormData) {
     await prisma.branch.findUniqueOrThrow({ where: { id: branchId, companyId: actor.companyId } });
   }
 
-  const existing = await prisma.user.findUnique({ where: { email } });
-  if (existing) {
-    if (existing.companyId === actor.companyId && existing.status === "INVITED") {
-      redirectWithAdminError(
-        "This user already has a pending invite. Use Resend Invite in the users table."
-      );
-    }
+  let user = await prisma.user.findUnique({ where: { email } });
 
-    redirectWithAdminError("An account already exists for that email.");
+  if (user) {
+    const existingMembership = await prisma.companyMembership.findUnique({
+      where: { userId_companyId: { userId: user.id, companyId: actor.companyId } }
+    });
+
+    if (existingMembership) {
+      if (existingMembership.status === "INVITED") {
+        redirectWithAdminError(
+          "This user already has a pending invite. Use Resend Invite in the users table."
+        );
+      }
+
+      redirectWithAdminError("This user is already a member of your organization.");
+    }
+  } else {
+    user = await prisma.user.create({
+      data: { name, email }
+    });
   }
 
   const token = randomBytes(32).toString("base64url");
   const inviteExpiresAt = new Date();
   inviteExpiresAt.setDate(inviteExpiresAt.getDate() + inviteDays);
 
-  const user = await prisma.user.create({
+  const membership = await prisma.companyMembership.create({
     data: {
+      userId: user.id,
       companyId: actor.companyId,
-      name: requiredString(formData, "name"),
-      email,
       role,
       status: "INVITED",
       branchId,
@@ -149,13 +160,17 @@ export async function inviteUser(formData: FormData) {
     }
   });
 
+  if (user.name !== name) {
+    await prisma.user.update({ where: { id: user.id }, data: { name } });
+  }
+
   await audit(
     actor.companyId,
     actor.id,
     "INVITE_USER",
-    "User",
-    user.id,
-    `Invited ${user.email} as ${user.role}.`,
+    "CompanyMembership",
+    membership.id,
+    `Invited ${email} as ${role}.`,
     user.id
   );
   revalidatePath("/admin");
@@ -163,9 +178,9 @@ export async function inviteUser(formData: FormData) {
   const emailResult = await deliverInviteEmail({
     companyId: actor.companyId,
     inviterName: actor.name,
-    inviteeName: user.name,
-    email: user.email,
-    role: user.role,
+    inviteeName: name,
+    email,
+    role,
     token
   });
 
@@ -174,10 +189,13 @@ export async function inviteUser(formData: FormData) {
 
 export async function resendInvite(formData: FormData) {
   const actor = await requireAdmin();
-  const userId = requiredString(formData, "userId");
-  const user = await prisma.user.findUniqueOrThrow({ where: { id: userId, companyId: actor.companyId } });
+  const membershipId = requiredString(formData, "membershipId");
+  const membership = await prisma.companyMembership.findUniqueOrThrow({
+    where: { id: membershipId, companyId: actor.companyId },
+    include: { user: true }
+  });
 
-  if (user.status !== "INVITED") {
+  if (membership.status !== "INVITED") {
     throw new Error("Only invited users can be re-invited.");
   }
 
@@ -185,23 +203,31 @@ export async function resendInvite(formData: FormData) {
   const inviteExpiresAt = new Date();
   inviteExpiresAt.setDate(inviteExpiresAt.getDate() + inviteDays);
 
-  await prisma.user.update({
-    where: { id: userId },
+  await prisma.companyMembership.update({
+    where: { id: membershipId },
     data: {
       inviteTokenHash: hashInviteToken(token),
       inviteExpiresAt
     }
   });
 
-  await audit(actor.companyId, actor.id, "RESEND_INVITE", "User", user.id, `Re-sent invite to ${user.email}.`, user.id);
+  await audit(
+    actor.companyId,
+    actor.id,
+    "RESEND_INVITE",
+    "CompanyMembership",
+    membership.id,
+    `Re-sent invite to ${membership.user.email}.`,
+    membership.userId
+  );
   revalidatePath("/admin");
 
   const emailResult = await deliverInviteEmail({
     companyId: actor.companyId,
     inviterName: actor.name,
-    inviteeName: user.name,
-    email: user.email,
-    role: user.role,
+    inviteeName: membership.user.name,
+    email: membership.user.email,
+    role: membership.role,
     token
   });
 
@@ -210,15 +236,26 @@ export async function resendInvite(formData: FormData) {
 
 export async function cancelInvite(formData: FormData) {
   const actor = await requireAdmin();
-  const userId = requiredString(formData, "userId");
-  const user = await prisma.user.findUniqueOrThrow({ where: { id: userId, companyId: actor.companyId } });
+  const membershipId = requiredString(formData, "membershipId");
+  const membership = await prisma.companyMembership.findUniqueOrThrow({
+    where: { id: membershipId, companyId: actor.companyId },
+    include: { user: true }
+  });
 
-  if (user.status !== "INVITED") {
+  if (membership.status !== "INVITED") {
     throw new Error("Only invited users can have their invite canceled.");
   }
 
-  await prisma.user.delete({ where: { id: userId } });
-  await audit(actor.companyId, actor.id, "CANCEL_INVITE", "User", userId, `Canceled invite for ${user.email}.`, userId);
+  await prisma.companyMembership.delete({ where: { id: membershipId } });
+  await audit(
+    actor.companyId,
+    actor.id,
+    "CANCEL_INVITE",
+    "CompanyMembership",
+    membershipId,
+    `Canceled invite for ${membership.user.email}.`,
+    membership.userId
+  );
   revalidatePath("/admin");
 }
 
@@ -228,40 +265,75 @@ export async function createAdminUser(formData: FormData) {
   const password = requiredString(formData, "password");
   const mustChangePassword = formData.get("mustChangePassword") === "on";
   const branchId = optionalString(formData, "branchId");
+  const role = requiredString(formData, "role");
+  const status = requiredString(formData, "status");
+  const name = requiredString(formData, "name");
 
   if (branchId) {
     await prisma.branch.findUniqueOrThrow({ where: { id: branchId, companyId: actor.companyId } });
   }
 
-  const user = await prisma.user.create({
+  let user = await prisma.user.findUnique({ where: { email } });
+
+  if (user) {
+    const existing = await prisma.companyMembership.findUnique({
+      where: { userId_companyId: { userId: user.id, companyId: actor.companyId } }
+    });
+
+    if (existing) {
+      throw new Error("This user is already a member of your organization.");
+    }
+  } else {
+    user = await prisma.user.create({
+      data: {
+        name,
+        email,
+        passwordHash: await hashPassword(password),
+        mustChangePassword
+      }
+    });
+  }
+
+  const membership = await prisma.companyMembership.create({
     data: {
+      userId: user.id,
       companyId: actor.companyId,
-      name: requiredString(formData, "name"),
-      email,
-      role: requiredString(formData, "role"),
-      status: requiredString(formData, "status"),
-      branchId,
-      passwordHash: await hashPassword(password),
-      mustChangePassword
+      role,
+      status,
+      branchId
     }
   });
 
-  await audit(actor.companyId, actor.id, "CREATE_USER", "User", user.id, `Created ${user.email} as ${user.role}.`, user.id);
+  await audit(
+    actor.companyId,
+    actor.id,
+    "CREATE_USER",
+    "CompanyMembership",
+    membership.id,
+    `Created ${email} as ${role}.`,
+    user.id
+  );
   revalidatePath("/admin");
 }
 
 export async function updateAdminUser(formData: FormData) {
   const actor = await requireAdmin();
-  const userId = requiredString(formData, "userId");
+  const membershipId = requiredString(formData, "membershipId");
   const branchId = optionalString(formData, "branchId");
   const role = requiredString(formData, "role");
-  const target = await prisma.user.findUniqueOrThrow({ where: { id: userId, companyId: actor.companyId } });
+  const status = requiredString(formData, "status");
+  const name = requiredString(formData, "name");
 
-  if (userId === actor.id && role !== target.role) {
+  const target = await prisma.companyMembership.findUniqueOrThrow({
+    where: { id: membershipId, companyId: actor.companyId },
+    include: { user: true }
+  });
+
+  if (target.userId === actor.id && role !== target.role) {
     throw new Error("You cannot change your own role.");
   }
 
-  assertCanManageTarget(actor.role, target.role, userId, actor.id);
+  assertCanManageTarget(actor.role, target.role, target.userId, actor.id);
 
   if (role === "OWNER" && actor.role !== "OWNER") {
     throw new Error("Only an owner can assign the owner role.");
@@ -271,17 +343,25 @@ export async function updateAdminUser(formData: FormData) {
     await prisma.branch.findUniqueOrThrow({ where: { id: branchId, companyId: actor.companyId } });
   }
 
-  const user = await prisma.user.update({
-    where: { id: userId },
-    data: {
-      name: requiredString(formData, "name"),
-      role,
-      branchId,
-      status: requiredString(formData, "status")
-    }
+  await prisma.user.update({
+    where: { id: target.userId },
+    data: { name }
   });
 
-  await audit(actor.companyId, actor.id, "UPDATE_USER", "User", user.id, `Updated ${user.email}.`, user.id);
+  const membership = await prisma.companyMembership.update({
+    where: { id: membershipId },
+    data: { role, branchId, status }
+  });
+
+  await audit(
+    actor.companyId,
+    actor.id,
+    "UPDATE_USER",
+    "CompanyMembership",
+    membership.id,
+    `Updated ${target.user.email}.`,
+    target.userId
+  );
   revalidatePath("/admin");
 }
 
@@ -289,7 +369,10 @@ export async function resetUserPassword(formData: FormData) {
   const actor = await requireAdmin();
   const userId = requiredString(formData, "userId");
   const password = requiredString(formData, "newPassword");
-  await prisma.user.findUniqueOrThrow({ where: { id: userId, companyId: actor.companyId } });
+
+  await prisma.companyMembership.findFirstOrThrow({
+    where: { userId, companyId: actor.companyId }
+  });
 
   if (password.length < 8) {
     throw new Error("Password must be at least 8 characters.");
@@ -305,23 +388,35 @@ export async function resetUserPassword(formData: FormData) {
   });
 
   await prisma.session.deleteMany({ where: { userId } });
-  await audit(actor.companyId, actor.id, "RESET_PASSWORD", "User", user.id, `Reset password for ${user.email}.`, user.id);
+  await audit(
+    actor.companyId,
+    actor.id,
+    "RESET_PASSWORD",
+    "User",
+    user.id,
+    `Reset password for ${user.email}.`,
+    user.id
+  );
   revalidatePath("/admin");
 }
 
 export async function setUserLock(formData: FormData) {
   const actor = await requireAdmin();
-  const userId = requiredString(formData, "userId");
+  const membershipId = requiredString(formData, "membershipId");
   const mode = requiredString(formData, "mode");
   const locked = mode === "lock";
-  await prisma.user.findUniqueOrThrow({ where: { id: userId, companyId: actor.companyId } });
 
-  if (actor.id === userId && locked) {
+  const target = await prisma.companyMembership.findUniqueOrThrow({
+    where: { id: membershipId, companyId: actor.companyId },
+    include: { user: true }
+  });
+
+  if (target.userId === actor.id && locked) {
     throw new Error("You cannot lock your own account.");
   }
 
-  const user = await prisma.user.update({
-    where: { id: userId },
+  const membership = await prisma.companyMembership.update({
+    where: { id: membershipId },
     data: {
       lockedAt: locked ? new Date() : null,
       status: locked ? "LOCKED" : "ACTIVE"
@@ -329,30 +424,42 @@ export async function setUserLock(formData: FormData) {
   });
 
   if (locked) {
-    await prisma.session.deleteMany({ where: { userId } });
+    await prisma.session.deleteMany({ where: { userId: target.userId } });
   }
 
-  await audit(actor.companyId, actor.id, locked ? "LOCK_USER" : "UNLOCK_USER", "User", user.id, `${locked ? "Locked" : "Unlocked"} ${user.email}.`, user.id);
+  await audit(
+    actor.companyId,
+    actor.id,
+    locked ? "LOCK_USER" : "UNLOCK_USER",
+    "CompanyMembership",
+    membership.id,
+    `${locked ? "Locked" : "Unlocked"} ${target.user.email}.`,
+    target.userId
+  );
   revalidatePath("/admin");
 }
 
 export async function setUserDisabled(formData: FormData) {
   const actor = await requireAdmin();
-  const userId = requiredString(formData, "userId");
+  const membershipId = requiredString(formData, "membershipId");
   const mode = requiredString(formData, "mode");
   const disabled = mode === "disable";
-  const target = await prisma.user.findUniqueOrThrow({ where: { id: userId, companyId: actor.companyId } });
+
+  const target = await prisma.companyMembership.findUniqueOrThrow({
+    where: { id: membershipId, companyId: actor.companyId },
+    include: { user: true }
+  });
 
   if (target.role === "OWNER" && actor.role !== "OWNER") {
     throw new Error("Only an owner can disable owner accounts.");
   }
 
-  if (actor.id === userId && disabled) {
+  if (target.userId === actor.id && disabled) {
     throw new Error("You cannot disable your own account.");
   }
 
-  const user = await prisma.user.update({
-    where: { id: userId },
+  const membership = await prisma.companyMembership.update({
+    where: { id: membershipId },
     data: {
       disabledAt: disabled ? new Date() : null,
       status: disabled ? "DISABLED" : "ACTIVE"
@@ -360,10 +467,18 @@ export async function setUserDisabled(formData: FormData) {
   });
 
   if (disabled) {
-    await prisma.session.deleteMany({ where: { userId } });
+    await prisma.session.deleteMany({ where: { userId: target.userId } });
   }
 
-  await audit(actor.companyId, actor.id, disabled ? "DISABLE_USER" : "ENABLE_USER", "User", user.id, `${disabled ? "Disabled" : "Enabled"} ${user.email}.`, user.id);
+  await audit(
+    actor.companyId,
+    actor.id,
+    disabled ? "DISABLE_USER" : "ENABLE_USER",
+    "CompanyMembership",
+    membership.id,
+    `${disabled ? "Disabled" : "Enabled"} ${target.user.email}.`,
+    target.userId
+  );
   revalidatePath("/admin");
 }
 
@@ -371,15 +486,64 @@ export async function forcePasswordChange(formData: FormData) {
   const actor = await requireAdmin();
   const userId = requiredString(formData, "userId");
   const force = requiredString(formData, "mode") === "force";
-  await prisma.user.findUniqueOrThrow({ where: { id: userId, companyId: actor.companyId } });
+
+  await prisma.companyMembership.findFirstOrThrow({
+    where: { userId, companyId: actor.companyId }
+  });
 
   const user = await prisma.user.update({
     where: { id: userId },
     data: { mustChangePassword: force }
   });
 
-  await audit(actor.companyId, actor.id, force ? "FORCE_PASSWORD_CHANGE" : "CLEAR_PASSWORD_CHANGE", "User", user.id, `${force ? "Required" : "Cleared required"} password change for ${user.email}.`, user.id);
+  await audit(
+    actor.companyId,
+    actor.id,
+    force ? "FORCE_PASSWORD_CHANGE" : "CLEAR_PASSWORD_CHANGE",
+    "User",
+    user.id,
+    `${force ? "Required" : "Cleared required"} password change for ${user.email}.`,
+    user.id
+  );
   revalidatePath("/admin");
+}
+
+export async function assignSeatToMember(formData: FormData) {
+  const actor = await requireAdmin();
+  const membershipId = requiredString(formData, "membershipId");
+
+  const membership = await assignSeat(membershipId, actor.companyId);
+
+  await audit(
+    actor.companyId,
+    actor.id,
+    "ASSIGN_SEAT",
+    "CompanyMembership",
+    membership.id,
+    `Assigned seat to membership ${membership.id}.`,
+    membership.userId
+  );
+  revalidatePath("/admin");
+  revalidatePath("/admin/billing");
+}
+
+export async function unassignSeatFromMember(formData: FormData) {
+  const actor = await requireAdmin();
+  const membershipId = requiredString(formData, "membershipId");
+
+  const membership = await unassignSeat(membershipId, actor.companyId);
+
+  await audit(
+    actor.companyId,
+    actor.id,
+    "UNASSIGN_SEAT",
+    "CompanyMembership",
+    membership.id,
+    `Unassigned seat from membership ${membership.id}.`,
+    membership.userId
+  );
+  revalidatePath("/admin");
+  revalidatePath("/admin/billing");
 }
 
 export async function createBranch(formData: FormData) {
@@ -426,7 +590,7 @@ export async function deleteBranch(formData: FormData) {
   await assertBranchCanBeDeleted(actor.companyId, branchId);
 
   await prisma.$transaction([
-    prisma.user.updateMany({ where: { branchId }, data: { branchId: null } }),
+    prisma.companyMembership.updateMany({ where: { branchId }, data: { branchId: null } }),
     prisma.carrier.updateMany({ where: { branchId }, data: { branchId: null } }),
     prisma.facility.updateMany({ where: { branchId }, data: { branchId: null } }),
     prisma.branch.delete({ where: { id: branchId } })
@@ -443,7 +607,7 @@ export async function deleteBranch(formData: FormData) {
   revalidatePath("/admin");
 }
 
-async function assertUserCanBeDeleted(companyId: string, userId: string) {
+async function assertUserCanBeDeleted(userId: string) {
   const [noteCount, activityCount] = await Promise.all([
     prisma.loadNote.count({ where: { userId } }),
     prisma.loadActivity.count({ where: { userId } })
@@ -461,12 +625,12 @@ async function assertUserCanBeDeleted(companyId: string, userId: string) {
   }
 }
 
-async function assertNotLastOwner(companyId: string, userId: string, role: string) {
+async function assertNotLastOwner(companyId: string, membershipId: string, role: string) {
   if (role !== "OWNER") {
     return;
   }
 
-  const ownerCount = await prisma.user.count({
+  const ownerCount = await prisma.companyMembership.count({
     where: {
       companyId,
       role: "OWNER",
@@ -481,38 +645,50 @@ async function assertNotLastOwner(companyId: string, userId: string, role: strin
 
 export async function deleteUser(formData: FormData) {
   const actor = await requireAdmin();
-  const userId = requiredString(formData, "userId");
-  const target = await prisma.user.findUniqueOrThrow({
-    where: { id: userId, companyId: actor.companyId }
+  const membershipId = requiredString(formData, "membershipId");
+  const target = await prisma.companyMembership.findUniqueOrThrow({
+    where: { id: membershipId, companyId: actor.companyId },
+    include: { user: true }
   });
 
   if (target.status === "INVITED") {
     throw new Error("Use cancel invite for invited users.");
   }
 
-  if (actor.id === userId) {
+  if (target.userId === actor.id) {
     throw new Error("You cannot delete your own account.");
   }
 
-  assertCanManageTarget(actor.role, target.role, userId, actor.id);
-  await assertNotLastOwner(actor.companyId, userId, target.role);
-  await assertUserCanBeDeleted(actor.companyId, userId);
+  assertCanManageTarget(actor.role, target.role, target.userId, actor.id);
+  await assertNotLastOwner(actor.companyId, membershipId, target.role);
+
+  const otherMemberships = await prisma.companyMembership.count({
+    where: { userId: target.userId, id: { not: membershipId } }
+  });
+
+  if (otherMemberships === 0) {
+    await assertUserCanBeDeleted(target.userId);
+  }
 
   await audit(
     actor.companyId,
     actor.id,
     "DELETE_USER",
-    "User",
-    userId,
-    `Deleted user ${target.email}.`,
-    userId
+    "CompanyMembership",
+    membershipId,
+    `Removed ${target.user.email} from organization.`,
+    target.userId
   );
 
-  await prisma.$transaction([
-    prisma.auditLog.updateMany({ where: { actorUserId: userId }, data: { actorUserId: null } }),
-    prisma.auditLog.updateMany({ where: { targetUserId: userId }, data: { targetUserId: null } }),
-    prisma.user.delete({ where: { id: userId } })
-  ]);
+  await prisma.$transaction(async (tx) => {
+    await tx.companyMembership.delete({ where: { id: membershipId } });
+
+    if (otherMemberships === 0) {
+      await tx.auditLog.updateMany({ where: { actorUserId: target.userId }, data: { actorUserId: null } });
+      await tx.auditLog.updateMany({ where: { targetUserId: target.userId }, data: { targetUserId: null } });
+      await tx.user.delete({ where: { id: target.userId } });
+    }
+  });
 
   revalidatePath("/admin");
 }

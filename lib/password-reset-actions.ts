@@ -20,11 +20,21 @@ export async function requestPasswordReset(formData: FormData) {
 
   if (
     user &&
-    user.status === "ACTIVE" &&
-    !user.lockedAt &&
-    !user.disabledAt &&
     user.passwordHash
   ) {
+    const activeMembership = await prisma.companyMembership.findFirst({
+      where: {
+        userId: user.id,
+        status: "ACTIVE",
+        lockedAt: null,
+        disabledAt: null
+      }
+    });
+
+    if (!activeMembership) {
+      redirect(`/forgot-password?sent=1`);
+    }
+
     const token = randomBytes(32).toString("base64url");
     const passwordResetExpiresAt = new Date();
     passwordResetExpiresAt.setHours(passwordResetExpiresAt.getHours() + passwordResetHours);
@@ -53,7 +63,7 @@ export async function requestPasswordReset(formData: FormData) {
 
     await prisma.auditLog.create({
       data: {
-        companyId: user.companyId,
+        companyId: activeMembership.companyId,
         actorUserId: user.id,
         targetUserId: user.id,
         action: "REQUEST_PASSWORD_RESET",
@@ -93,14 +103,16 @@ export async function resetPassword(formData: FormData) {
 
   if (
     !user ||
-    user.status !== "ACTIVE" ||
-    user.lockedAt ||
-    user.disabledAt ||
     !user.passwordResetExpiresAt ||
     user.passwordResetExpiresAt < new Date()
   ) {
     redirect("/login?error=This%20password%20reset%20link%20is%20invalid%20or%20expired");
   }
+
+  const membership = await prisma.companyMembership.findFirst({
+    where: { userId: user.id, status: "ACTIVE" },
+    orderBy: { createdAt: "asc" }
+  });
 
   await prisma.user.update({
     where: { id: user.id },
@@ -117,7 +129,7 @@ export async function resetPassword(formData: FormData) {
 
   await prisma.auditLog.create({
     data: {
-      companyId: user.companyId,
+      companyId: membership?.companyId,
       actorUserId: user.id,
       targetUserId: user.id,
       action: "RESET_PASSWORD",

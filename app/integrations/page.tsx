@@ -1,5 +1,5 @@
 import { PageHeader } from "@/components/page-header";
-import { requireUser } from "@/lib/auth";
+import { requireTmsAccess } from "@/lib/permissions";
 import { prisma } from "@/lib/db";
 import { formatDate, humanize } from "@/lib/format";
 
@@ -14,7 +14,7 @@ const capabilities: Record<string, string[]> = {
 };
 
 export default async function IntegrationsPage() {
-  const user = await requireUser();
+  const user = await requireTmsAccess();
   const integrations = await prisma.integrationAccount.findMany({
     where: { companyId: user.companyId },
     orderBy: { provider: "asc" }

@@ -18,6 +18,8 @@ import {
 } from "lucide-react";
 import type { CurrentUser } from "@/lib/auth";
 import { canManageUsers } from "@/lib/scope";
+import { canAccessAdmin } from "@/lib/seats";
+import { OrgSwitcher } from "@/components/org-switcher";
 
 const navItems = [
   { href: "/", label: "Dashboard", icon: LayoutDashboard },
@@ -30,6 +32,7 @@ const navItems = [
   { href: "/accounting", label: "Accounting", icon: Landmark },
   { href: "/reports", label: "Reports", icon: BarChart3 },
   { href: "/admin", label: "Admin", icon: Settings, adminOnly: true },
+  { href: "/admin/billing", label: "Billing", icon: Landmark, adminOnly: true },
   { href: "/integrations", label: "Integrations", icon: Plug }
 ] as const;
 
@@ -47,7 +50,8 @@ export function AppShell({
     pathname === "/change-password" ||
     pathname === "/accept-invite" ||
     pathname === "/forgot-password" ||
-    pathname === "/reset-password";
+    pathname === "/reset-password" ||
+    pathname === "/select-organization";
   const visibleNavItems = navItems.filter(
     (item) => !("adminOnly" in item && item.adminOnly) || (currentUser && canManageUsers(currentUser))
   );
@@ -85,7 +89,11 @@ export function AppShell({
           {visibleNavItems.map((item) => {
             const Icon = item.icon;
             const active =
-              item.href === "/" ? pathname === "/" : pathname.startsWith(item.href);
+              item.href === "/"
+                ? pathname === "/"
+                : item.href === "/admin"
+                  ? pathname === "/admin"
+                  : pathname.startsWith(item.href);
 
             return (
               <Link
@@ -104,6 +112,21 @@ export function AppShell({
             );
           })}
         </nav>
+
+        <OrgSwitcher
+          organizations={currentUser.organizations}
+          currentMembershipId={currentUser.membershipId}
+        />
+
+        {!currentUser.hasSeat && canAccessAdmin(currentUser.role) ? (
+          <div className="mt-4 rounded-2xl border border-amber-200 bg-amber-50 p-3 text-xs text-amber-800">
+            No seat assigned.{" "}
+            <Link href="/admin/billing" className="font-semibold underline">
+              Purchase and assign a seat
+            </Link>{" "}
+            to use the TMS.
+          </div>
+        ) : null}
 
         <div className="mt-6 rounded-2xl border border-border bg-soft p-4">
           <p className="text-sm font-semibold text-ink">{currentUser?.name ?? "Not signed in"}</p>

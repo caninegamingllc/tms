@@ -1,13 +1,13 @@
 import { PageHeader } from "@/components/page-header";
 import { CustomerForm } from "@/components/customer-form";
 import { createCustomer } from "@/lib/actions";
-import { requireUser } from "@/lib/auth";
+import { requireTmsAccess } from "@/lib/permissions";
 import { branchScopedWhere, canSeeAllBranches } from "@/lib/scope";
 import { prisma } from "@/lib/db";
 import { formatMoney } from "@/lib/format";
 
 export default async function CustomersPage() {
-  const user = await requireUser();
+  const user = await requireTmsAccess();
   const [customers, branches] = await Promise.all([
     prisma.customer.findMany({
       where: branchScopedWhere(user),

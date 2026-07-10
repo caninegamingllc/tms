@@ -19,6 +19,8 @@ const daysFromNow = (days: number) => {
 async function main() {
   await prisma.session.deleteMany();
   await prisma.auditLog.deleteMany();
+  await prisma.companyMembership.deleteMany();
+  await prisma.seatSubscription.deleteMany();
   await prisma.checkCall.deleteMany();
   await prisma.dispatchAssignment.deleteMany();
   await prisma.carrierBill.deleteMany();
@@ -64,12 +66,8 @@ async function main() {
     data: {
       name: "Jordan Miles",
       email: "owner@example.com",
-      role: "OWNER",
-      status: "ACTIVE",
       passwordHash: hashSeedPassword(seedPassword),
-      mustChangePassword: false,
-      companyId: company.id,
-      branchId: branch.id
+      mustChangePassword: false
     }
   });
 
@@ -77,12 +75,38 @@ async function main() {
     data: {
       name: "Avery Chen",
       email: "dispatch@example.com",
+      passwordHash: hashSeedPassword(seedPassword),
+      mustChangePassword: true
+    }
+  });
+
+  await prisma.companyMembership.create({
+    data: {
+      userId: owner.id,
+      companyId: company.id,
+      branchId: branch.id,
+      role: "OWNER",
+      status: "ACTIVE",
+      seatAssignedAt: new Date()
+    }
+  });
+
+  await prisma.companyMembership.create({
+    data: {
+      userId: dispatcher.id,
+      companyId: company.id,
+      branchId: branch.id,
       role: "DISPATCHER",
       status: "ACTIVE",
-      passwordHash: hashSeedPassword(seedPassword),
-      mustChangePassword: true,
+      seatAssignedAt: new Date()
+    }
+  });
+
+  await prisma.seatSubscription.create({
+    data: {
       companyId: company.id,
-      branchId: branch.id
+      seatQuantity: 2,
+      status: "ACTIVE"
     }
   });
 

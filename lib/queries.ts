@@ -1,9 +1,9 @@
 import { prisma } from "@/lib/db";
-import { requireUser } from "@/lib/auth";
+import { requireTmsAccess } from "@/lib/permissions";
 import { branchScopedWhere } from "@/lib/scope";
 
 export async function getDashboardData() {
-  const user = await requireUser();
+  const user = await requireTmsAccess();
   const loadScope = branchScopedWhere(user);
 
   const [loads, customers, carriers, invoices, carrierBills, checkCalls] = await Promise.all([
@@ -82,7 +82,7 @@ export async function getDashboardData() {
 }
 
 export async function getLoadOptions() {
-  const user = await requireUser();
+  const user = await requireTmsAccess();
   const [customers, carriers] = await Promise.all([
     prisma.customer.findMany({ where: branchScopedWhere(user), orderBy: { name: "asc" } }),
     prisma.carrier.findMany({ where: { companyId: user.companyId }, orderBy: { name: "asc" } })

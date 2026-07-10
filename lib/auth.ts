@@ -2,7 +2,8 @@ import { randomBytes, scryptSync, timingSafeEqual, createHash } from "crypto";
 import { cookies } from "next/headers";
 import { redirect } from "next/navigation";
 import { prisma } from "@/lib/db";
-import type { SessionUser } from "@/lib/types";
+import { tryAutoAssignSeat } from "@/lib/seats";
+import type { OrganizationSummary, SessionUser } from "@/lib/types";
 
 export const sessionCookieName = "tms_session";
 const sessionDays = 7;
@@ -53,7 +54,68 @@ export async function verifyPassword(password: string, storedHash?: string | nul
   return expected.length === actual.length && timingSafeEqual(expected, actual);
 }
 
-export async function createSession(userId: string) {
+async function getActiveMemberships(userId: string) {
+  return prisma.companyMembership.findMany({
+    where: {
+      userId,
+      status: "ACTIVE",
+      lockedAt: null,
+      disabledAt: null,
+      company: { status: "ACTIVE" }
+    },
+    include: { company: true },
+    orderBy: { company: { name: "asc" } }
+  });
+}
+
+function toOrganizationSummary(
+  membership: Awaited<ReturnType<typeof getActiveMemberships>>[number]
+): OrganizationSummary {
+  return {
+    membershipId: membership.id,
+    companyId: membership.companyId,
+    companyName: membership.company.name,
+    role: membership.role,
+    hasSeat: membership.seatAssignedAt != null
+  };
+}
+
+function buildSessionUser(
+  user: { id: string; name: string; email: string; mustChangePassword: boolean },
+  membership: Awaited<ReturnType<typeof getActiveMemberships>>[number],
+  organizations: OrganizationSummary[]
+): SessionUser {
+  return {
+    id: user.id,
+    membershipId: membership.id,
+    companyId: membership.companyId,
+    companyName: membership.company.name,
+    name: user.name,
+    email: user.email,
+    role: membership.role,
+    status: membership.status,
+    mustChangePassword: user.mustChangePassword,
+    branchId: membership.branchId,
+    hasSeat: membership.seatAssignedAt != null,
+    organizations
+  };
+}
+
+export async function createSession(userId: string, membershipId: string) {
+  const membership = await prisma.companyMembership.findFirst({
+    where: {
+      id: membershipId,
+      userId,
+      status: "ACTIVE",
+      lockedAt: null,
+      disabledAt: null
+    }
+  });
+
+  if (!membership) {
+    throw new Error("Invalid membership for session.");
+  }
+
   const token = randomBytes(32).toString("base64url");
   const expiresAt = new Date();
   expiresAt.setDate(expiresAt.getDate() + sessionDays);
@@ -62,6 +124,7 @@ export async function createSession(userId: string) {
     data: {
       tokenHash: hashToken(token),
       userId,
+      membershipId,
       expiresAt
     }
   });
@@ -99,7 +162,10 @@ export async function getCurrentUser(): Promise<CurrentUser | null> {
 
   const session = await prisma.session.findUnique({
     where: { tokenHash: hashToken(token) },
-    include: { user: { include: { company: true } } }
+    include: {
+      user: true,
+      membership: { include: { company: true } }
+    }
   });
 
   if (!session || session.expiresAt < new Date()) {
@@ -109,13 +175,15 @@ export async function getCurrentUser(): Promise<CurrentUser | null> {
     return null;
   }
 
+  const membership = session.membership;
+
   if (
-    session.user.status !== "ACTIVE" ||
-    session.user.company.status !== "ACTIVE" ||
-    session.user.lockedAt ||
-    session.user.disabledAt
+    membership.status !== "ACTIVE" ||
+    membership.company.status !== "ACTIVE" ||
+    membership.lockedAt ||
+    membership.disabledAt
   ) {
-    await prisma.session.deleteMany({ where: { userId: session.userId } });
+    await prisma.session.deleteMany({ where: { id: session.id } });
     return null;
   }
 
@@ -124,17 +192,10 @@ export async function getCurrentUser(): Promise<CurrentUser | null> {
     data: { lastSeenAt: new Date() }
   });
 
-  return {
-    id: session.user.id,
-    companyId: session.user.companyId,
-    companyName: session.user.company.name,
-    name: session.user.name,
-    email: session.user.email,
-    role: session.user.role,
-    status: session.user.status,
-    mustChangePassword: session.user.mustChangePassword,
-    branchId: session.user.branchId
-  };
+  const activeMemberships = await getActiveMemberships(session.userId);
+  const organizations = activeMemberships.map(toOrganizationSummary);
+
+  return buildSessionUser(session.user, membership, organizations);
 }
 
 export async function requireUser() {
@@ -174,16 +235,51 @@ export async function login(formData: FormData) {
     redirect("/login?error=Invalid%20email%20or%20password");
   }
 
-  if (user.status !== "ACTIVE" || user.lockedAt || user.disabledAt) {
-    redirect("/login?error=This%20account%20is%20locked%20or%20disabled");
+  const memberships = await getActiveMemberships(user.id);
+
+  if (memberships.length === 0) {
+    redirect("/login?error=No%20active%20organization%20memberships%20found");
   }
 
   await prisma.user.update({
     where: { id: user.id },
     data: { lastLoginAt: new Date() }
   });
+
+  if (memberships.length > 1) {
+    const token = randomBytes(32).toString("base64url");
+    const expiresAt = new Date();
+    expiresAt.setMinutes(expiresAt.getMinutes() + 15);
+
+    await prisma.session.deleteMany({ where: { userId: user.id } });
+    await prisma.session.create({
+      data: {
+        tokenHash: hashToken(token),
+        userId: user.id,
+        membershipId: memberships[0].id,
+        expiresAt
+      }
+    });
+
+    const cookieStore = await cookies();
+    cookieStore.set(sessionCookieName, token, {
+      httpOnly: true,
+      sameSite: "lax",
+      secure: shouldUseSecureCookies(),
+      path: "/",
+      expires: expiresAt
+    });
+
+    if (user.mustChangePassword) {
+      redirect("/change-password");
+    }
+
+    redirect("/select-organization");
+  }
+
   await prisma.auditLog.create({
     data: {
+      companyId: memberships[0].companyId,
       actorUserId: user.id,
       action: "LOGIN",
       entityType: "User",
@@ -191,7 +287,8 @@ export async function login(formData: FormData) {
       details: "User signed in."
     }
   });
-  await createSession(user.id);
+
+  await createSession(user.id, memberships[0].id);
 
   if (user.mustChangePassword) {
     redirect("/change-password");
@@ -211,48 +308,80 @@ export async function acceptInvite(formData: FormData) {
     redirect("/login?error=Invalid%20invite%20link");
   }
 
-  if (password.length < 8 || password !== confirmPassword) {
-    redirect(`/accept-invite?token=${encodeURIComponent(token)}&error=Password%20must%20match%20and%20be%20at%20least%208%20characters`);
-  }
-
-  const user = await prisma.user.findUnique({
+  const membership = await prisma.companyMembership.findUnique({
     where: { inviteTokenHash: hashToken(token) },
-    include: { company: true }
+    include: { user: true, company: true }
   });
 
-  if (!user || user.status !== "INVITED" || !user.inviteExpiresAt || user.inviteExpiresAt < new Date()) {
+  if (
+    !membership ||
+    membership.status !== "INVITED" ||
+    !membership.inviteExpiresAt ||
+    membership.inviteExpiresAt < new Date()
+  ) {
     redirect("/login?error=This%20invite%20link%20is%20invalid%20or%20expired");
   }
 
-  if (user.company.status !== "ACTIVE") {
+  if (membership.company.status !== "ACTIVE") {
     redirect("/login?error=This%20organization%20is%20not%20active");
   }
 
-  await prisma.user.update({
-    where: { id: user.id },
+  const user = membership.user;
+  const isNewUser = !user.passwordHash;
+
+  if (isNewUser) {
+    if (password.length < 8 || password !== confirmPassword) {
+      redirect(
+        `/accept-invite?token=${encodeURIComponent(token)}&error=Password%20must%20match%20and%20be%20at%20least%208%20characters`
+      );
+    }
+
+    await prisma.user.update({
+      where: { id: user.id },
+      data: {
+        passwordHash: await hashPassword(password),
+        mustChangePassword: false,
+        lastLoginAt: new Date()
+      }
+    });
+  } else {
+    await prisma.user.update({
+      where: { id: user.id },
+      data: { lastLoginAt: new Date() }
+    });
+  }
+
+  await prisma.companyMembership.update({
+    where: { id: membership.id },
     data: {
-      passwordHash: await hashPassword(password),
       status: "ACTIVE",
-      mustChangePassword: false,
       inviteTokenHash: null,
-      inviteExpiresAt: null,
-      lastLoginAt: new Date()
+      inviteExpiresAt: null
     }
   });
+
+  await tryAutoAssignSeat(membership.id, membership.companyId);
 
   await prisma.auditLog.create({
     data: {
-      companyId: user.companyId,
+      companyId: membership.companyId,
       actorUserId: user.id,
       targetUserId: user.id,
       action: "ACCEPT_INVITE",
-      entityType: "User",
-      entityId: user.id,
-      details: `${user.email} accepted their invite.`
+      entityType: "CompanyMembership",
+      entityId: membership.id,
+      details: `${user.email} accepted their invite to ${membership.company.name}.`
     }
   });
 
-  await createSession(user.id);
+  const activeMemberships = await getActiveMemberships(user.id);
+
+  if (activeMemberships.length > 1) {
+    await createSession(user.id, membership.id);
+    redirect("/select-organization");
+  }
+
+  await createSession(user.id, membership.id);
   redirect("/");
 }
 
@@ -305,7 +434,7 @@ export async function registerCompany(formData: FormData) {
   const slug = await uniqueCompanySlug(companyName);
   const passwordHash = await hashPassword(password);
 
-  const user = await prisma.$transaction(async (tx) => {
+  const result = await prisma.$transaction(async (tx) => {
     const company = await tx.company.create({
       data: {
         name: companyName,
@@ -323,14 +452,28 @@ export async function registerCompany(formData: FormData) {
 
     const owner = await tx.user.create({
       data: {
-        companyId: company.id,
-        branchId: branch.id,
         name,
         email,
-        role: "OWNER",
-        status: "ACTIVE",
         passwordHash,
         mustChangePassword: false
+      }
+    });
+
+    const membership = await tx.companyMembership.create({
+      data: {
+        userId: owner.id,
+        companyId: company.id,
+        branchId: branch.id,
+        role: "OWNER",
+        status: "ACTIVE"
+      }
+    });
+
+    await tx.seatSubscription.create({
+      data: {
+        companyId: company.id,
+        status: "NONE",
+        seatQuantity: 0
       }
     });
 
@@ -356,11 +499,11 @@ export async function registerCompany(formData: FormData) {
       }
     });
 
-    return owner;
+    return { owner, membership };
   });
 
-  await createSession(user.id);
-  redirect("/");
+  await createSession(result.owner.id, result.membership.id);
+  redirect("/admin/billing?welcome=1");
 }
 
 export async function changeOwnPassword(formData: FormData) {
@@ -397,6 +540,7 @@ export async function changeOwnPassword(formData: FormData) {
   });
   await prisma.auditLog.create({
     data: {
+      companyId: user.companyId,
       actorUserId: user.id,
       targetUserId: user.id,
       action: "CHANGE_OWN_PASSWORD",
@@ -407,4 +551,22 @@ export async function changeOwnPassword(formData: FormData) {
   });
 
   redirect("/");
+}
+
+export async function getInviteByToken(token: string) {
+  const membership = await prisma.companyMembership.findUnique({
+    where: { inviteTokenHash: hashToken(token) },
+    include: { user: true, company: true }
+  });
+
+  if (
+    !membership ||
+    membership.status !== "INVITED" ||
+    !membership.inviteExpiresAt ||
+    membership.inviteExpiresAt < new Date()
+  ) {
+    return null;
+  }
+
+  return membership;
 }

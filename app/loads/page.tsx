@@ -1,13 +1,13 @@
 import Link from "next/link";
 import { PageHeader } from "@/components/page-header";
 import { StatusBadge } from "@/components/status-badge";
-import { requireUser } from "@/lib/auth";
+import { requireTmsAccess } from "@/lib/permissions";
 import { branchScopedWhere } from "@/lib/scope";
 import { prisma } from "@/lib/db";
 import { formatDate, formatMoney, marginPercent } from "@/lib/format";
 
 export default async function LoadsPage() {
-  const user = await requireUser();
+  const user = await requireTmsAccess();
   const loads = await prisma.load.findMany({
     where: branchScopedWhere(user),
     orderBy: [{ pickupDate: "asc" }, { loadNumber: "asc" }],

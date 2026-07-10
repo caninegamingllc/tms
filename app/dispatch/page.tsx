@@ -2,13 +2,13 @@ import Link from "next/link";
 import { PageHeader } from "@/components/page-header";
 import { StatusBadge } from "@/components/status-badge";
 import { addCheckCall } from "@/lib/actions";
-import { requireUser } from "@/lib/auth";
+import { requireTmsAccess } from "@/lib/permissions";
 import { branchScopedWhere } from "@/lib/scope";
 import { prisma } from "@/lib/db";
 import { formatDateTime, formatMoney } from "@/lib/format";
 
 export default async function DispatchPage() {
-  const user = await requireUser();
+  const user = await requireTmsAccess();
   const loadScope = branchScopedWhere(user);
   const assignments = await prisma.dispatchAssignment.findMany({
     where: { load: loadScope },

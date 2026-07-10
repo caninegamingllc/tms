@@ -12,7 +12,7 @@ import {
   generateRateConfirmation,
   updateLoadStatus
 } from "@/lib/actions";
-import { requireUser } from "@/lib/auth";
+import { requireTmsAccess } from "@/lib/permissions";
 import { canAccessBranchRecord } from "@/lib/scope";
 import { documentTypes, loadStatuses } from "@/lib/constants";
 import { prisma } from "@/lib/db";
@@ -20,7 +20,7 @@ import { formatDate, formatDateTime, formatMoney, humanize, marginPercent } from
 
 export default async function LoadDetailPage({ params }: { params: Promise<{ id: string }> }) {
   const { id } = await params;
-  const user = await requireUser();
+  const user = await requireTmsAccess();
   const [load, carriers] = await Promise.all([
     prisma.load.findUnique({
       where: { id, companyId: user.companyId },

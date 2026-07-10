@@ -1,6 +1,6 @@
 import { PageHeader } from "@/components/page-header";
 import { addDocument } from "@/lib/actions";
-import { requireUser } from "@/lib/auth";
+import { requireTmsAccess } from "@/lib/permissions";
 import { branchScopedWhere } from "@/lib/scope";
 import { documentTypes } from "@/lib/constants";
 import { prisma } from "@/lib/db";
@@ -8,7 +8,7 @@ import { formatDate, humanize } from "@/lib/format";
 import Link from "next/link";
 
 export default async function DocumentsPage() {
-  const user = await requireUser();
+  const user = await requireTmsAccess();
   const loadScope = branchScopedWhere(user);
   const customerScope = branchScopedWhere(user);
   const [documents, loads, customers, carriers] = await Promise.all([

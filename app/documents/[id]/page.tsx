@@ -2,13 +2,13 @@ import Link from "next/link";
 import { notFound } from "next/navigation";
 import { PageHeader } from "@/components/page-header";
 import { PrintButton } from "@/components/print-button";
-import { requireUser } from "@/lib/auth";
+import { requireTmsAccess } from "@/lib/permissions";
 import { prisma } from "@/lib/db";
 import { formatDateTime, humanize } from "@/lib/format";
 
 export default async function DocumentDetailPage({ params }: { params: Promise<{ id: string }> }) {
   const { id } = await params;
-  const user = await requireUser();
+  const user = await requireTmsAccess();
   const document = await prisma.loadDocument.findUnique({
     where: { id, companyId: user.companyId },
     include: {

@@ -1,12 +1,12 @@
 import { MetricCard } from "@/components/metric-card";
 import { PageHeader } from "@/components/page-header";
-import { requireUser } from "@/lib/auth";
+import { requireTmsAccess } from "@/lib/permissions";
 import { branchScopedWhere } from "@/lib/scope";
 import { prisma } from "@/lib/db";
 import { formatDate, formatMoney, marginPercent } from "@/lib/format";
 
 export default async function ReportsPage() {
-  const user = await requireUser();
+  const user = await requireTmsAccess();
   const loadScope = branchScopedWhere(user);
   const customerScope = branchScopedWhere(user);
   const [loads, customers, carriers] = await Promise.all([
