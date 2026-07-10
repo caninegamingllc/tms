@@ -8,14 +8,14 @@ const appVersion = packageJson.version;
 export default async function LoginPage({
   searchParams
 }: {
-  searchParams: Promise<{ error?: string }>;
+  searchParams: Promise<{ error?: string; message?: string }>;
 }) {
   const user = await getCurrentUser();
   if (user) {
     redirect(user.mustChangePassword ? "/change-password" : "/");
   }
 
-  const { error } = await searchParams;
+  const { error, message } = await searchParams;
 
   return (
     <main className="flex min-h-screen items-center justify-center px-5 py-10">
@@ -29,6 +29,12 @@ export default async function LoginPage({
         {error ? (
           <div className="mt-4 rounded-2xl border border-rose-200 bg-rose-50 p-3 text-sm font-semibold text-rose-700">
             {error}
+          </div>
+        ) : null}
+
+        {message ? (
+          <div className="mt-4 rounded-2xl border border-emerald-200 bg-emerald-50 p-3 text-sm font-semibold text-emerald-700">
+            {message}
           </div>
         ) : null}
 
@@ -47,6 +53,11 @@ export default async function LoginPage({
               required
             />
           </label>
+          <div className="flex justify-end">
+            <Link href="/forgot-password" className="text-sm font-semibold text-brand-700">
+              Forgot password?
+            </Link>
+          </div>
           <button className="btn" type="submit">
             Sign In
           </button>

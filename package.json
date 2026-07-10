@@ -1,6 +1,6 @@
 {
   "name": "freight-broker-tms",
-  "version": "0.1.9",
+  "version": "0.2.0",
   "private": true,
   "scripts": {
     "dev": "prisma generate && prisma db push && next dev",
@@ -19,6 +19,7 @@
     "clsx": "latest",
     "lucide-react": "latest",
     "next": "latest",
+    "nodemailer": "^9.0.3",
     "react": "latest",
     "react-dom": "latest",
     "zod": "latest"
@@ -27,6 +28,7 @@
     "@eslint/eslintrc": "latest",
     "@tailwindcss/postcss": "latest",
     "@types/node": "latest",
+    "@types/nodemailer": "^8.0.1",
     "@types/react": "latest",
     "@types/react-dom": "latest",
     "autoprefixer": "latest",

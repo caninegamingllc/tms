@@ -61,6 +61,8 @@ model User {
   lockedAt              DateTime?
   disabledAt            DateTime?
   passwordResetAt       DateTime?
+  passwordResetTokenHash String?       @unique
+  passwordResetExpiresAt DateTime?
   inviteTokenHash       String?        @unique
   inviteExpiresAt       DateTime?
   branchId              String?

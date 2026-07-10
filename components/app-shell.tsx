@@ -45,7 +45,9 @@ export function AppShell({
     pathname === "/login" ||
     pathname === "/register" ||
     pathname === "/change-password" ||
-    pathname === "/accept-invite";
+    pathname === "/accept-invite" ||
+    pathname === "/forgot-password" ||
+    pathname === "/reset-password";
   const visibleNavItems = navItems.filter(
     (item) => !("adminOnly" in item && item.adminOnly) || (currentUser && canManageUsers(currentUser))
   );
