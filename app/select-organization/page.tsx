@@ -13,9 +13,10 @@ export default async function SelectOrganizationPage({
 
   if (user.organizations.length <= 1) {
     return (
-      <main className="flex min-h-screen items-center justify-center px-5">
+      <main className="flex min-h-screen items-center justify-center bg-background px-5">
         <div className="card max-w-md text-center">
-          <h1 className="text-2xl font-bold text-ink">No organizations to select</h1>
+          <p className="text-lg font-bold text-primary">Simple Source</p>
+          <h1 className="mt-3 text-2xl font-bold text-foreground">No organizations to select</h1>
           <Link href="/" className="btn mt-4 inline-flex">
             Continue
           </Link>
@@ -25,33 +26,36 @@ export default async function SelectOrganizationPage({
   }
 
   return (
-    <main className="flex min-h-screen items-center justify-center px-5">
-      <div className="card w-full max-w-lg">
-        <PageHeader
-          title="Select Organization"
-          description="Choose which organization you want to work in."
-        />
+    <main className="flex min-h-screen items-center justify-center bg-background px-5 py-10">
+      <div className="card w-full max-w-lg overflow-hidden p-0">
+        <div className="h-1 bg-primary" />
+        <div className="p-6">
+          <PageHeader
+            title="Select organization"
+            description="Choose which organization you want to work in."
+          />
 
-        {error ? (
-          <p className="mt-4 rounded-xl bg-red-50 px-4 py-3 text-sm text-red-700">{error}</p>
-        ) : null}
+          {error ? (
+            <p className="mt-4 rounded-lg bg-red-50 px-4 py-3 text-sm text-red-700">{error}</p>
+          ) : null}
 
-        <div className="mt-6 grid gap-3">
-          {user.organizations.map((org) => (
-            <form key={org.membershipId} action={selectOrganization}>
-              <input type="hidden" name="membershipId" value={org.membershipId} />
-              <button
-                className="w-full rounded-2xl border border-border p-4 text-left transition hover:border-brand-300 hover:bg-brand-50"
-                type="submit"
-              >
-                <p className="font-semibold text-ink">{org.companyName}</p>
-                <p className="text-sm text-muted">Role: {org.role}</p>
-                <p className="text-sm text-muted">
-                  {org.hasSeat ? "Seat assigned — full TMS access" : "No seat — admin/billing only"}
-                </p>
-              </button>
-            </form>
-          ))}
+          <div className="mt-6 grid gap-3">
+            {user.organizations.map((org) => (
+              <form key={org.membershipId} action={selectOrganization}>
+                <input type="hidden" name="membershipId" value={org.membershipId} />
+                <button
+                  className="w-full rounded-lg border border-border p-4 text-left transition hover:border-primary/30 hover:bg-lightprimary"
+                  type="submit"
+                >
+                  <p className="font-semibold text-foreground">{org.companyName}</p>
+                  <p className="text-sm text-muted-foreground">Role: {org.role}</p>
+                  <p className="text-sm text-muted-foreground">
+                    {org.hasSeat ? "Seat assigned — full TMS access" : "No seat — admin/billing only"}
+                  </p>
+                </button>
+              </form>
+            ))}
+          </div>
         </div>
       </div>
     </main>

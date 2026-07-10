@@ -43,7 +43,7 @@ export default async function DispatchPage() {
             <article key={assignment.id} className="card">
               <div className="flex flex-wrap items-start justify-between gap-4">
                 <div>
-                  <Link href={`/loads/${assignment.load.id}`} className="text-xl font-bold text-brand-700">
+                  <Link href={`/loads/${assignment.load.id}`} className="text-xl font-bold text-primary">
                     {assignment.load.loadNumber}
                   </Link>
                   <p className="muted">
@@ -56,22 +56,22 @@ export default async function DispatchPage() {
               </div>
 
               <div className="mt-5 grid gap-3 md:grid-cols-4">
-                <div className="rounded-2xl bg-soft p-3">
+                <div className="rounded-2xl bg-muted p-3">
                   <p className="label">Carrier</p>
                   <p className="font-semibold">{assignment.carrier.name}</p>
                 </div>
-                <div className="rounded-2xl bg-soft p-3">
+                <div className="rounded-2xl bg-muted p-3">
                   <p className="label">Driver</p>
                   <p className="font-semibold">{assignment.driverName ?? "TBD"}</p>
                   <p className="muted">{assignment.driverPhone ?? "No phone"}</p>
                 </div>
-                <div className="rounded-2xl bg-soft p-3">
+                <div className="rounded-2xl bg-muted p-3">
                   <p className="label">Equipment</p>
                   <p className="font-semibold">
                     {assignment.truckNumber ?? "Truck TBD"} / {assignment.trailerNumber ?? "Trailer TBD"}
                   </p>
                 </div>
-                <div className="rounded-2xl bg-soft p-3">
+                <div className="rounded-2xl bg-muted p-3">
                   <p className="label">Rate</p>
                   <p className="font-semibold">{formatMoney(assignment.rateCents)}</p>
                 </div>
@@ -79,7 +79,7 @@ export default async function DispatchPage() {
 
               <div className="mt-5 grid gap-4 lg:grid-cols-[1fr_0.9fr]">
                 <div>
-                  <h3 className="text-sm font-semibold text-ink">Latest Check Calls</h3>
+                  <h3 className="text-sm font-semibold text-foreground">Latest Check Calls</h3>
                   <div className="mt-3 grid gap-2">
                     {assignment.checkCalls.length ? (
                       assignment.checkCalls.map((call) => (
@@ -97,7 +97,7 @@ export default async function DispatchPage() {
                   </div>
                 </div>
 
-                <form action={addCheckCall} className="grid gap-3 rounded-2xl bg-soft p-4">
+                <form action={addCheckCall} className="grid gap-3 rounded-2xl bg-muted p-4">
                   <input type="hidden" name="assignmentId" value={assignment.id} />
                   <input type="hidden" name="loadId" value={assignment.loadId} />
                   <input name="location" className="input" placeholder="Location" required />
@@ -118,10 +118,10 @@ export default async function DispatchPage() {
           <p className="muted">Open freight that has not been assigned to a carrier.</p>
           <div className="mt-4 grid gap-3">
             {uncoveredLoads.map((load) => (
-              <Link key={load.id} href={`/loads/${load.id}`} className="rounded-2xl border border-border p-4 transition hover:bg-soft">
+              <Link key={load.id} href={`/loads/${load.id}`} className="rounded-2xl border border-border p-4 transition hover:bg-muted">
                 <div className="flex items-start justify-between gap-3">
                   <div>
-                    <p className="font-semibold text-brand-700">{load.loadNumber}</p>
+                    <p className="font-semibold text-primary">{load.loadNumber}</p>
                     <p className="muted">{load.customer.name}</p>
                   </div>
                   <StatusBadge value={load.status} />

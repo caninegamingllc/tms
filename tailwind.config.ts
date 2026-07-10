@@ -8,22 +8,34 @@ const config: Config = {
   ],
   theme: {
     extend: {
+      fontFamily: {
+        sans: ["var(--font-dm-sans)", "system-ui", "sans-serif"]
+      },
       colors: {
-        border: "#dbe3ef",
-        ink: "#102033",
-        muted: "#667085",
-        panel: "#ffffff",
-        soft: "#f5f7fb",
-        brand: {
-          50: "#eef8ff",
-          100: "#d9efff",
-          500: "#1677c8",
-          600: "#0f63aa",
-          700: "#0c4f89"
-        }
+        background: "var(--color-background)",
+        foreground: "var(--color-foreground)",
+        card: "var(--color-card)",
+        border: "var(--color-border)",
+        muted: "var(--color-muted)",
+        "muted-foreground": "var(--color-muted-foreground)",
+        primary: {
+          DEFAULT: "var(--color-primary)",
+          foreground: "var(--color-primary-foreground)"
+        },
+        secondary: "var(--color-secondary)",
+        lightprimary: "var(--color-lightprimary)",
+        lightinfo: "var(--color-lightinfo)",
+        "sidebar-foreground": "var(--color-sidebar-foreground)",
+        success: "var(--color-success)",
+        warning: "var(--color-warning)",
+        error: "var(--color-error)",
+        info: "var(--color-info)"
       },
       boxShadow: {
-        card: "0 10px 30px rgba(15, 35, 55, 0.08)"
+        card: "var(--shadow-card)"
+      },
+      borderRadius: {
+        lg: "var(--radius-lg)"
       }
     }
   },

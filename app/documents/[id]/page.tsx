@@ -43,11 +43,11 @@ export default async function DocumentDetailPage({ params }: { params: Promise<{
 
       <article className="mx-auto max-w-4xl rounded-2xl border border-border bg-white p-8 shadow-card print:border-0 print:p-0 print:shadow-none">
         <header className="border-b border-border pb-5">
-          <p className="text-sm font-semibold uppercase tracking-wide text-brand-600">
-            Freight Broker TMS
+          <p className="text-sm font-semibold uppercase tracking-wide text-primary">
+            Simple Source TMS
           </p>
-          <h1 className="mt-2 text-3xl font-bold text-ink">{document.name}</h1>
-          <div className="mt-3 grid gap-1 text-sm text-muted md:grid-cols-2">
+          <h1 className="mt-2 text-3xl font-bold text-foreground">{document.name}</h1>
+          <div className="mt-3 grid gap-1 text-sm text-muted-foreground md:grid-cols-2">
             <p>Document Type: {humanize(document.type)}</p>
             <p>Document #: {document.documentNumber ?? "Not assigned"}</p>
             <p>Load: {document.load?.loadNumber ?? "Not linked"}</p>
@@ -58,13 +58,13 @@ export default async function DocumentDetailPage({ params }: { params: Promise<{
         </header>
 
         {document.generatedContent ? (
-          <pre className="mt-6 whitespace-pre-wrap font-sans text-sm leading-7 text-ink">
+          <pre className="mt-6 whitespace-pre-wrap font-sans text-sm leading-7 text-foreground">
             {document.generatedContent}
           </pre>
         ) : (
-          <div className="mt-6 rounded-2xl bg-soft p-5">
-            <p className="font-semibold text-ink">Manual Document</p>
-            <p className="mt-2 text-sm text-muted">
+          <div className="mt-6 rounded-2xl bg-muted p-5">
+            <p className="font-semibold text-foreground">Manual Document</p>
+            <p className="mt-2 text-sm text-muted-foreground">
               This document was added manually and does not have generated preview content.
             </p>
             <p className="mt-3 text-sm text-slate-700">Path: {document.filePath ?? "No file path"}</p>

@@ -1,11 +1,18 @@
 import type { Metadata } from "next";
+import { DM_Sans } from "next/font/google";
 import "./globals.css";
 import { AppShell } from "@/components/app-shell";
 import { getCurrentUser } from "@/lib/auth";
 
+const dmSans = DM_Sans({
+  subsets: ["latin"],
+  variable: "--font-dm-sans"
+});
+
 export const metadata: Metadata = {
-  title: "Freight Broker TMS",
-  description: "A beginner-friendly freight broker transportation management system."
+  title: "Simple Source TMS",
+  description:
+    "Transportation management for freight brokers — loads, dispatch, accounting, and carrier operations."
 };
 
 export default async function RootLayout({ children }: { children: React.ReactNode }) {
@@ -13,7 +20,7 @@ export default async function RootLayout({ children }: { children: React.ReactNo
 
   return (
     <html lang="en">
-      <body>
+      <body className={`${dmSans.variable} font-sans antialiased`}>
         <AppShell currentUser={currentUser}>{children}</AppShell>
       </body>
     </html>

@@ -166,7 +166,7 @@ export function CarrierLookupForm({ action }: CarrierLookupFormProps) {
       return (
         <div className="absolute left-0 right-0 top-full z-20 mt-1 overflow-hidden rounded-2xl border border-border bg-white shadow-card">
           {loading ? (
-            <p className="px-4 py-3 text-sm text-muted">Searching carriers...</p>
+            <p className="px-4 py-3 text-sm text-muted-foreground">Searching carriers...</p>
           ) : searchError ? (
             <p className="px-4 py-3 text-sm text-red-600">{searchError}</p>
           ) : (
@@ -174,12 +174,12 @@ export function CarrierLookupForm({ action }: CarrierLookupFormProps) {
               <button
                 key={result.id}
                 type="button"
-                className="block w-full px-4 py-3 text-left text-sm transition hover:bg-soft"
+                className="block w-full px-4 py-3 text-left text-sm transition hover:bg-muted"
                 onClick={() => selectResult(result)}
               >
-                <span className="font-semibold text-ink">{result.name}</span>
-                <span className="block text-xs text-muted">{result.description}</span>
-                <span className="mt-1 block text-[11px] font-semibold uppercase tracking-wide text-brand-700">
+                <span className="font-semibold text-foreground">{result.name}</span>
+                <span className="block text-xs text-muted-foreground">{result.description}</span>
+                <span className="mt-1 block text-[11px] font-semibold uppercase tracking-wide text-primary">
                   {resultLabel(result)}
                 </span>
               </button>
@@ -192,7 +192,7 @@ export function CarrierLookupForm({ action }: CarrierLookupFormProps) {
     if (hasSearched) {
       return (
         <div className="absolute left-0 right-0 top-full z-20 mt-1 overflow-hidden rounded-2xl border border-border bg-white shadow-card">
-          <p className="px-4 py-3 text-sm text-muted">No matches found.</p>
+          <p className="px-4 py-3 text-sm text-muted-foreground">No matches found.</p>
         </div>
       );
     }
@@ -260,13 +260,13 @@ export function CarrierLookupForm({ action }: CarrierLookupFormProps) {
       {selectedLocalCarrierId ? (
         <div className="rounded-2xl border border-amber-200 bg-amber-50 p-4 text-sm text-amber-900">
           This carrier already exists in your TMS.{" "}
-          <Link href={`/carriers/${selectedLocalCarrierId}`} className="font-semibold text-brand-700">
+          <Link href={`/carriers/${selectedLocalCarrierId}`} className="font-semibold text-primary">
             Open existing carrier
           </Link>
         </div>
       ) : null}
 
-      <p className="text-xs text-muted">
+      <p className="text-xs text-muted-foreground">
         {fmcsaAvailable
           ? "Lookup checks your carrier network first, then FMCSA when no local match is found."
           : "Lookup checks your carrier network. Add FMCSA_WEB_KEY to enable federal carrier search."}
@@ -372,8 +372,8 @@ export function CarrierLookupForm({ action }: CarrierLookupFormProps) {
         />
       </div>
 
-      <div className="rounded-2xl bg-soft p-4">
-        <p className="mb-3 text-sm font-semibold text-ink">Primary Dispatch Contact</p>
+      <div className="rounded-2xl bg-muted p-4">
+        <p className="mb-3 text-sm font-semibold text-foreground">Primary Dispatch Contact</p>
         <div className="grid gap-3">
           <input name="contactName" className="input" placeholder="Contact name" />
           <input name="contactTitle" className="input" placeholder="Title" />

@@ -54,7 +54,7 @@ export default async function DocumentsPage() {
                 {documents.map((document) => (
                   <tr key={document.id}>
                     <td>
-                      <p className="font-semibold text-ink">{document.name}</p>
+                      <p className="font-semibold text-foreground">{document.name}</p>
                       <p className="muted">{document.notes ?? "No notes"}</p>
                     </td>
                     <td>{humanize(document.type)}</td>
@@ -67,7 +67,7 @@ export default async function DocumentsPage() {
                     <td>{document.documentNumber ?? document.filePath ?? "No file path"}</td>
                     <td>{formatDate(document.uploadedAt)}</td>
                     <td>
-                      <Link href={`/documents/${document.id}`} className="font-semibold text-brand-700">
+                      <Link href={`/documents/${document.id}`} className="font-semibold text-primary">
                         Open
                       </Link>
                     </td>
@@ -96,8 +96,8 @@ export default async function DocumentsPage() {
             <input name="filePath" className="input" placeholder="/uploads/rate-confirmation.pdf" />
             <textarea name="notes" className="textarea" placeholder="Notes" rows={3} />
 
-            <div className="rounded-2xl bg-soft p-4">
-              <p className="mb-3 text-sm font-semibold text-ink">Optional Links</p>
+            <div className="rounded-2xl bg-muted p-4">
+              <p className="mb-3 text-sm font-semibold text-foreground">Optional Links</p>
               <div className="grid gap-3">
                 <select name="loadId" className="select" defaultValue="">
                   <option value="">No load link</option>

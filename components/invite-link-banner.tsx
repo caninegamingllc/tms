@@ -11,8 +11,8 @@ export function InviteLinkBanner({
   const inviteUrl = `${origin}${invitePath}`;
 
   return (
-    <div className="card mb-6 border-brand-200 bg-brand-50">
-      <h2 className="section-title">{emailSent ? "Invite email sent" : "Invite link ready"}</h2>
+    <div className="card mb-6 border-info/30 bg-lightinfo">
+      <h2 className="section-title text-info">{emailSent ? "Invite email sent" : "Invite link ready"}</h2>
       <p className="muted">
         {emailSent
           ? "The invite email was sent. You can also copy the link below if the user needs it directly."

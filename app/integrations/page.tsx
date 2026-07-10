@@ -32,14 +32,14 @@ export default async function IntegrationsPage() {
           <section key={integration.id} className="card">
             <div className="flex items-start justify-between gap-3">
               <div>
-                <h2 className="text-xl font-bold text-ink">{integration.displayName}</h2>
+                <h2 className="text-xl font-bold text-foreground">{integration.displayName}</h2>
                 <p className="muted">{humanize(integration.provider)}</p>
               </div>
               <span className="badge bg-slate-100 text-slate-700">{integration.status}</span>
             </div>
             <p className="mt-4 text-sm text-slate-700">{integration.notes}</p>
-            <div className="mt-4 rounded-2xl bg-soft p-4">
-              <p className="text-sm font-semibold text-ink">Planned Capabilities</p>
+            <div className="mt-4 rounded-2xl bg-muted p-4">
+              <p className="text-sm font-semibold text-foreground">Planned Capabilities</p>
               <ul className="mt-3 grid gap-2 text-sm text-slate-700">
                 {(capabilities[integration.provider] ?? ["API connection", "Status sync"]).map(
                   (capability) => (
@@ -48,7 +48,7 @@ export default async function IntegrationsPage() {
                 )}
               </ul>
             </div>
-            <p className="mt-4 text-xs text-muted">Updated {formatDate(integration.updatedAt)}</p>
+            <p className="mt-4 text-xs text-muted-foreground">Updated {formatDate(integration.updatedAt)}</p>
           </section>
         ))}
       </div>

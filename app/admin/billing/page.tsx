@@ -34,7 +34,7 @@ export default async function BillingPage({
       />
 
       {params.welcome === "1" ? (
-        <div className="card mb-6 border-brand-200 bg-brand-50 text-sm text-brand-800">
+        <div className="card mb-6 border-primary/20 bg-lightprimary text-sm text-primary">
           Welcome! Purchase at least one seat to start using the TMS. Use promo code{" "}
           <strong>{process.env.STRIPE_DEV_PROMO_CODE ?? "DEV100"}</strong> for 100% off during development.
         </div>
@@ -69,25 +69,25 @@ export default async function BillingPage({
         <section className="card">
           <h2 className="section-title">Seat Summary</h2>
           <div className="mt-4 grid grid-cols-3 gap-3 text-center">
-            <div className="rounded-2xl bg-soft p-4">
-              <p className="text-2xl font-bold text-ink">{seatSummary.purchased}</p>
-              <p className="text-xs text-muted">Purchased</p>
+            <div className="rounded-2xl bg-muted p-4">
+              <p className="text-2xl font-bold text-foreground">{seatSummary.purchased}</p>
+              <p className="text-xs text-muted-foreground">Purchased</p>
             </div>
-            <div className="rounded-2xl bg-soft p-4">
-              <p className="text-2xl font-bold text-ink">{seatSummary.assigned}</p>
-              <p className="text-xs text-muted">Assigned</p>
+            <div className="rounded-2xl bg-muted p-4">
+              <p className="text-2xl font-bold text-foreground">{seatSummary.assigned}</p>
+              <p className="text-xs text-muted-foreground">Assigned</p>
             </div>
-            <div className="rounded-2xl bg-soft p-4">
-              <p className="text-2xl font-bold text-ink">{seatSummary.available}</p>
-              <p className="text-xs text-muted">Available</p>
+            <div className="rounded-2xl bg-muted p-4">
+              <p className="text-2xl font-bold text-foreground">{seatSummary.available}</p>
+              <p className="text-xs text-muted-foreground">Available</p>
             </div>
           </div>
-          <p className="mt-4 text-sm text-muted">
-            Subscription status: <span className="font-semibold text-ink">{seatSummary.subscriptionStatus}</span>
+          <p className="mt-4 text-sm text-muted-foreground">
+            Subscription status: <span className="font-semibold text-foreground">{seatSummary.subscriptionStatus}</span>
           </p>
-          <p className="mt-2 text-sm text-muted">
+          <p className="mt-2 text-sm text-muted-foreground">
             Your seat status:{" "}
-            <span className="font-semibold text-ink">{user.hasSeat ? "Assigned" : "Not assigned"}</span>
+            <span className="font-semibold text-foreground">{user.hasSeat ? "Assigned" : "Not assigned"}</span>
           </p>
         </section>
 
@@ -133,7 +133,7 @@ export default async function BillingPage({
         <h2 className="section-title">Assign Seats</h2>
         <p className="muted">
           After purchasing seats, assign them to team members in the{" "}
-          <Link href="/admin" className="font-semibold text-brand-700 underline">
+          <Link href="/admin" className="font-semibold text-primary underline">
             Admin console
           </Link>
           .

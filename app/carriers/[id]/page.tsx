@@ -110,14 +110,14 @@ export default async function CarrierDetailPage({
             </button>
           </form>
 
-          <div className="mt-6 grid gap-3 rounded-2xl bg-soft p-4 text-sm">
+          <div className="mt-6 grid gap-3 rounded-2xl bg-muted p-4 text-sm">
             <div>
               <p className="label">Insurance Summary</p>
-              <p className="font-semibold text-ink">{formatDate(carrier.insuranceExpiresAt)}</p>
+              <p className="font-semibold text-foreground">{formatDate(carrier.insuranceExpiresAt)}</p>
             </div>
             <div>
               <p className="label">Load History</p>
-              <p className="font-semibold text-ink">
+              <p className="font-semibold text-foreground">
                 {carrier.assignments.length} loads - {formatMoney(totalSpend)} spend
               </p>
             </div>
@@ -170,9 +170,9 @@ export default async function CarrierDetailPage({
             ))}
           </div>
 
-          <form action={createCarrierInsuranceCoverage} className="mt-5 grid gap-3 rounded-2xl bg-soft p-4">
+          <form action={createCarrierInsuranceCoverage} className="mt-5 grid gap-3 rounded-2xl bg-muted p-4">
             <input type="hidden" name="carrierId" value={carrier.id} />
-            <p className="text-sm font-semibold text-ink">Add Coverage</p>
+            <p className="text-sm font-semibold text-foreground">Add Coverage</p>
             <div className="grid gap-3 md:grid-cols-3">
               <select name="coverageType" className="select" defaultValue="AUTO_LIABILITY">
                 {insuranceCoverageTypes.map((type) => (

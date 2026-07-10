@@ -51,7 +51,7 @@ export default async function LoadsPage() {
               {loads.map((load) => (
                 <tr key={load.id}>
                   <td>
-                    <Link href={`/loads/${load.id}`} className="font-semibold text-brand-700">
+                    <Link href={`/loads/${load.id}`} className="font-semibold text-primary">
                       {load.loadNumber}
                     </Link>
                     <p className="muted">{load.title}</p>

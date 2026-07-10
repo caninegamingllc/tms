@@ -61,13 +61,13 @@ function passwordResetContent(resetUrl: string) {
 
   const html = `
     <div style="font-family:Arial,sans-serif;line-height:1.5;color:#0f172a;max-width:560px">
-      <p style="font-size:12px;font-weight:700;letter-spacing:0.08em;text-transform:uppercase;color:#2563eb">
-        Broker OS
+      <p style="font-size:12px;font-weight:700;letter-spacing:0.08em;text-transform:uppercase;color:#5d87ff">
+        Simple Source TMS
       </p>
       <h1 style="font-size:24px;margin:12px 0 8px">Reset your password</h1>
       <p>We received a request to reset your TMS password. Use the button below to choose a new one.</p>
       <p style="margin:24px 0">
-        <a href="${resetUrl}" style="display:inline-block;background:#0f172a;color:#fff;text-decoration:none;padding:12px 18px;border-radius:12px;font-weight:700">
+        <a href="${resetUrl}" style="display:inline-block;background:#5d87ff;color:#fff;text-decoration:none;padding:12px 18px;border-radius:8px;font-weight:700">
           Reset Password
         </a>
       </p>
@@ -99,7 +99,7 @@ function inviteContent(options: InviteEmailOptions) {
   const text = [
     `Hi ${inviteeName},`,
     "",
-    `${inviterName} invited you to join ${companyName} on Broker OS as a ${roleLabel}.`,
+    `${inviterName} invited you to join ${companyName} on Simple Source TMS as a ${roleLabel}.`,
     "Use the link below to set your password and activate your account.",
     `This invite expires in ${expiresInDays} days.`,
     "",
@@ -110,15 +110,15 @@ function inviteContent(options: InviteEmailOptions) {
 
   const html = `
     <div style="font-family:Arial,sans-serif;line-height:1.5;color:#0f172a;max-width:560px">
-      <p style="font-size:12px;font-weight:700;letter-spacing:0.08em;text-transform:uppercase;color:#2563eb">
-        Broker OS
+      <p style="font-size:12px;font-weight:700;letter-spacing:0.08em;text-transform:uppercase;color:#5d87ff">
+        Simple Source TMS
       </p>
       <h1 style="font-size:24px;margin:12px 0 8px">You're invited</h1>
       <p>Hi ${inviteeName},</p>
       <p><strong>${inviterName}</strong> invited you to join <strong>${companyName}</strong> as a <strong>${roleLabel}</strong>.</p>
       <p>Use the button below to set your password and activate your account.</p>
       <p style="margin:24px 0">
-        <a href="${inviteUrl}" style="display:inline-block;background:#0f172a;color:#fff;text-decoration:none;padding:12px 18px;border-radius:12px;font-weight:700">
+        <a href="${inviteUrl}" style="display:inline-block;background:#5d87ff;color:#fff;text-decoration:none;padding:12px 18px;border-radius:8px;font-weight:700">
           Accept Invite
         </a>
       </p>

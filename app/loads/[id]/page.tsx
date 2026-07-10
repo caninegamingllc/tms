@@ -74,33 +74,33 @@ export default async function LoadDetailPage({ params }: { params: Promise<{ id:
             <div className="flex flex-wrap items-start justify-between gap-4">
               <div>
                 <StatusBadge value={load.status} />
-                <h2 className="mt-3 text-2xl font-bold text-ink">{load.title}</h2>
+                <h2 className="mt-3 text-2xl font-bold text-foreground">{load.title}</h2>
                 <p className="muted">
                   {load.equipmentType} - {load.commodity ?? "General freight"} -{" "}
                   {load.weight ? `${load.weight.toLocaleString()} lbs` : "Weight TBD"}
                 </p>
               </div>
               <div className="grid gap-1 text-right">
-                <span className="text-sm text-muted">Gross margin</span>
-                <span className="text-2xl font-bold text-ink">
+                <span className="text-sm text-muted-foreground">Gross margin</span>
+                <span className="text-2xl font-bold text-foreground">
                   {formatMoney(load.revenueCents - load.carrierCostCents)}
                 </span>
-                <span className="text-sm text-muted">
+                <span className="text-sm text-muted-foreground">
                   {marginPercent(load.revenueCents, load.carrierCostCents)}
                 </span>
               </div>
             </div>
 
             <div className="mt-6 grid gap-4 md:grid-cols-3">
-              <div className="rounded-2xl bg-soft p-4">
+              <div className="rounded-2xl bg-muted p-4">
                 <p className="label">Customer Rate</p>
                 <p className="mt-2 text-xl font-semibold">{formatMoney(load.revenueCents)}</p>
               </div>
-              <div className="rounded-2xl bg-soft p-4">
+              <div className="rounded-2xl bg-muted p-4">
                 <p className="label">Carrier Cost</p>
                 <p className="mt-2 text-xl font-semibold">{formatMoney(load.carrierCostCents)}</p>
               </div>
-              <div className="rounded-2xl bg-soft p-4">
+              <div className="rounded-2xl bg-muted p-4">
                 <p className="label">Reference</p>
                 <p className="mt-2 text-xl font-semibold">{load.referenceNumber ?? "None"}</p>
               </div>
@@ -114,17 +114,17 @@ export default async function LoadDetailPage({ params }: { params: Promise<{ id:
                 <div key={stop.id} className="rounded-2xl border border-border p-4">
                   <div className="flex items-start justify-between gap-4">
                     <div>
-                      <p className="font-semibold text-ink">
+                      <p className="font-semibold text-foreground">
                         {stop.sequence}. {humanize(stop.type)} - {stop.facilityName}
                       </p>
                       <p className="muted">
                         {stop.city}, {stop.state}
                       </p>
                     </div>
-                    <span className="text-sm text-muted">{formatDateTime(stop.appointmentAt)}</span>
+                    <span className="text-sm text-muted-foreground">{formatDateTime(stop.appointmentAt)}</span>
                   </div>
                   {stop.instructions ? (
-                    <p className="mt-3 rounded-xl bg-soft p-3 text-sm text-slate-700">
+                    <p className="mt-3 rounded-xl bg-muted p-3 text-sm text-slate-700">
                       {stop.instructions}
                     </p>
                   ) : null}
@@ -164,14 +164,14 @@ export default async function LoadDetailPage({ params }: { params: Promise<{ id:
               {load.documents.map((document) => (
                 <div key={document.id} className="flex items-center justify-between rounded-2xl border border-border p-4">
                   <div>
-                    <p className="font-semibold text-ink">{document.name}</p>
+                    <p className="font-semibold text-foreground">{document.name}</p>
                     <p className="muted">
                       {humanize(document.type)} - {document.documentNumber ?? document.filePath ?? "No file path"}
                     </p>
                   </div>
                   <div className="text-right">
-                    <span className="text-xs text-muted">{formatDate(document.uploadedAt)}</span>
-                    <Link href={`/documents/${document.id}`} className="mt-2 block text-sm font-semibold text-brand-700">
+                    <span className="text-xs text-muted-foreground">{formatDate(document.uploadedAt)}</span>
+                    <Link href={`/documents/${document.id}`} className="mt-2 block text-sm font-semibold text-primary">
                       Preview
                     </Link>
                   </div>
@@ -179,7 +179,7 @@ export default async function LoadDetailPage({ params }: { params: Promise<{ id:
               ))}
             </div>
 
-            <form action={addDocument} className="mt-5 grid gap-3 rounded-2xl bg-soft p-4 md:grid-cols-4">
+            <form action={addDocument} className="mt-5 grid gap-3 rounded-2xl bg-muted p-4 md:grid-cols-4">
               <input type="hidden" name="loadId" value={load.id} />
               <label className="grid gap-2">
                 <span className="label">Type</span>
@@ -266,14 +266,14 @@ export default async function LoadDetailPage({ params }: { params: Promise<{ id:
               <div className="mt-4 grid gap-3">
                 {load.dispatchAssignment.checkCalls.map((call) => (
                   <div key={call.id} className="rounded-2xl border border-border p-3">
-                    <p className="font-semibold text-ink">{call.status}</p>
+                    <p className="font-semibold text-foreground">{call.status}</p>
                     <p className="muted">{call.location}</p>
-                    <p className="text-xs text-muted">{formatDateTime(call.occurredAt)}</p>
+                    <p className="text-xs text-muted-foreground">{formatDateTime(call.occurredAt)}</p>
                     {call.notes ? <p className="mt-2 text-sm text-slate-700">{call.notes}</p> : null}
                   </div>
                 ))}
               </div>
-              <form action={addCheckCall} className="mt-4 grid gap-3 rounded-2xl bg-soft p-4">
+              <form action={addCheckCall} className="mt-4 grid gap-3 rounded-2xl bg-muted p-4">
                 <input type="hidden" name="assignmentId" value={load.dispatchAssignment.id} />
                 <input type="hidden" name="loadId" value={load.id} />
                 <input name="location" className="input" placeholder="Location" required />
@@ -291,7 +291,7 @@ export default async function LoadDetailPage({ params }: { params: Promise<{ id:
             <h2 className="section-title">Accounting</h2>
             <div className="mt-4 grid gap-3">
               {load.invoices.map((invoice) => (
-                <div key={invoice.id} className="rounded-2xl bg-soft p-3">
+                <div key={invoice.id} className="rounded-2xl bg-muted p-3">
                   <p className="font-semibold">{invoice.invoiceNo}</p>
                   <p className="muted">
                     {formatMoney(invoice.totalCents)} - {humanize(invoice.status)}
@@ -299,7 +299,7 @@ export default async function LoadDetailPage({ params }: { params: Promise<{ id:
                 </div>
               ))}
               {load.carrierBills.map((bill) => (
-                <div key={bill.id} className="rounded-2xl bg-soft p-3">
+                <div key={bill.id} className="rounded-2xl bg-muted p-3">
                   <p className="font-semibold">{bill.billNo}</p>
                   <p className="muted">
                     {bill.carrier.name} - {formatMoney(bill.totalCents)} - {humanize(bill.status)}
@@ -314,9 +314,9 @@ export default async function LoadDetailPage({ params }: { params: Promise<{ id:
             <div className="mt-4 grid gap-3">
               {load.activities.map((activity) => (
                 <div key={activity.id} className="rounded-2xl border border-border p-3">
-                  <p className="font-semibold text-ink">{activity.action}</p>
+                  <p className="font-semibold text-foreground">{activity.action}</p>
                   <p className="muted">{activity.details ?? "No details"}</p>
-                  <p className="text-xs text-muted">{formatDateTime(activity.createdAt)}</p>
+                  <p className="text-xs text-muted-foreground">{formatDateTime(activity.createdAt)}</p>
                 </div>
               ))}
             </div>

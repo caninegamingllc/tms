@@ -65,7 +65,7 @@ export default async function CarriersPage({
                   return (
                     <tr key={carrier.id}>
                       <td>
-                        <Link href={`/carriers/${carrier.id}`} className="font-semibold text-brand-700">
+                        <Link href={`/carriers/${carrier.id}`} className="font-semibold text-primary">
                           {carrier.name}
                         </Link>
                         <p className="muted">{carrier.email ?? carrier.phone ?? "No contact info"}</p>

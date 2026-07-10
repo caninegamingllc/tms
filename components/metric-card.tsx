@@ -13,10 +13,10 @@ export function MetricCard({ label, value, detail, icon }: MetricCardProps) {
       <div className="flex items-start justify-between gap-4">
         <div>
           <p className="label">{label}</p>
-          <p className="mt-2 text-3xl font-bold text-ink">{value}</p>
-          {detail ? <p className="mt-2 text-sm text-muted">{detail}</p> : null}
+          <p className="mt-2 text-3xl font-bold text-foreground">{value}</p>
+          {detail ? <p className="mt-2 text-sm text-muted-foreground">{detail}</p> : null}
         </div>
-        {icon ? <div className="rounded-2xl bg-brand-50 p-3 text-brand-700">{icon}</div> : null}
+        {icon ? <div className="rounded-lg bg-lightprimary p-3 text-primary">{icon}</div> : null}
       </div>
     </div>
   );

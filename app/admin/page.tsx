@@ -139,7 +139,7 @@ export default async function AdminPage({
                           </form>
                         </div>
                       ) : membership.status === "INVITED" ? (
-                        <span className="text-sm text-muted">Pending invite</span>
+                        <span className="text-sm text-muted-foreground">Pending invite</span>
                       ) : (
                         <div className="grid gap-2">
                           <span className="text-sm font-semibold text-amber-700">Unassigned</span>
@@ -157,9 +157,9 @@ export default async function AdminPage({
                       )}
                     </td>
                     <td>
-                      <p className="font-semibold text-ink">{user.name}</p>
+                      <p className="font-semibold text-foreground">{user.name}</p>
                       <p className="muted">{user.email}</p>
-                      <p className="text-xs text-muted">Last login: {formatDateTime(user.lastLoginAt)}</p>
+                      <p className="text-xs text-muted-foreground">Last login: {formatDateTime(user.lastLoginAt)}</p>
                     </td>
                     <td>
                       <form action={updateAdminUser} className="grid min-w-64 gap-2">
@@ -259,18 +259,18 @@ export default async function AdminPage({
                               </button>
                             </form>
                           ) : membership.status !== "INVITED" && loadUsageCount > 0 ? (
-                            <p className="text-xs text-muted">
+                            <p className="text-xs text-muted-foreground">
                               In use on {user._count.notes} note{user._count.notes === 1 ? "" : "s"} and{" "}
                               {user._count.activities} activit{user._count.activities === 1 ? "y" : "ies"}.
                             </p>
                           ) : null}
                         </div>
                       )}
-                      <p className="mt-2 text-xs text-muted">
+                      <p className="mt-2 text-xs text-muted-foreground">
                         Joined {formatDate(membership.createdAt)}
                       </p>
                       {user.passwordResetAt ? (
-                        <p className="text-xs text-muted">Password reset {formatDate(user.passwordResetAt)}</p>
+                        <p className="text-xs text-muted-foreground">Password reset {formatDate(user.passwordResetAt)}</p>
                       ) : null}
                     </td>
                   </tr>
@@ -354,7 +354,7 @@ export default async function AdminPage({
       <div className="mt-6 grid gap-6 xl:grid-cols-[0.9fr_1.2fr]">
         <section className="card">
           <h2 className="section-title">Branches And Agents</h2>
-          <form action={createBranch} className="mt-4 grid gap-3 rounded-2xl bg-soft p-4">
+          <form action={createBranch} className="mt-4 grid gap-3 rounded-2xl bg-muted p-4">
             <input name="name" className="input" placeholder="Branch name" required />
             <div className="grid gap-3 md:grid-cols-2">
               <input name="city" className="input" placeholder="City" />
@@ -370,26 +370,26 @@ export default async function AdminPage({
 
               return (
               <div key={branch.id} className="rounded-2xl border border-border p-4">
-                <p className="font-semibold text-ink">{branch.name}</p>
+                <p className="font-semibold text-foreground">{branch.name}</p>
                 <p className="muted">
                   {branch.city}, {branch.state}
                 </p>
                 <div className="mt-3 grid grid-cols-4 gap-2 text-center text-sm">
-                  <div className="rounded-xl bg-soft p-2">
+                  <div className="rounded-xl bg-muted p-2">
                     <p className="font-bold">{branch.memberships.length}</p>
-                    <p className="text-xs text-muted">Users</p>
+                    <p className="text-xs text-muted-foreground">Users</p>
                   </div>
-                  <div className="rounded-xl bg-soft p-2">
+                  <div className="rounded-xl bg-muted p-2">
                     <p className="font-bold">{branch.customers.length}</p>
-                    <p className="text-xs text-muted">Customers</p>
+                    <p className="text-xs text-muted-foreground">Customers</p>
                   </div>
-                  <div className="rounded-xl bg-soft p-2">
+                  <div className="rounded-xl bg-muted p-2">
                     <p className="font-bold">{branch.carriers.length}</p>
-                    <p className="text-xs text-muted">Carriers</p>
+                    <p className="text-xs text-muted-foreground">Carriers</p>
                   </div>
-                  <div className="rounded-xl bg-soft p-2">
+                  <div className="rounded-xl bg-muted p-2">
                     <p className="font-bold">{branch.loads.length}</p>
-                    <p className="text-xs text-muted">Loads</p>
+                    <p className="text-xs text-muted-foreground">Loads</p>
                   </div>
                 </div>
                 {canDeleteBranch ? (
@@ -400,7 +400,7 @@ export default async function AdminPage({
                     </button>
                   </form>
                 ) : (
-                  <p className="mt-3 text-xs text-muted">
+                  <p className="mt-3 text-xs text-muted-foreground">
                     Cannot delete while assigned to{" "}
                     {[
                       branch.loads.length > 0

@@ -18,8 +18,10 @@ export function OrgSwitcher({
   }
 
   return (
-    <div className="mt-4 rounded-2xl border border-border bg-white p-3">
-      <p className="text-xs font-semibold uppercase tracking-wide text-muted">Organization</p>
+    <div className="mt-4 rounded-lg border border-border bg-muted/30 p-3">
+      <p className="text-xs font-semibold uppercase tracking-wide text-muted-foreground">
+        Organization
+      </p>
       <select
         className="select mt-2 w-full"
         value={currentMembershipId}

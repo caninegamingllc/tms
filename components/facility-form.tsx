@@ -213,7 +213,7 @@ export function FacilityForm({ action, customers, facility }: FacilityFormProps)
     return (
       <div className="absolute left-0 right-0 top-full z-20 mt-1 overflow-hidden rounded-2xl border border-border bg-white shadow-card">
         {loading ? (
-          <p className="px-4 py-3 text-sm text-muted">
+          <p className="px-4 py-3 text-sm text-muted-foreground">
             {field === "name" ? "Searching businesses..." : "Searching places..."}
           </p>
         ) : searchError ? (
@@ -223,13 +223,13 @@ export function FacilityForm({ action, customers, facility }: FacilityFormProps)
             <button
               key={result.id}
               type="button"
-              className="block w-full px-4 py-3 text-left text-sm transition hover:bg-soft"
+              className="block w-full px-4 py-3 text-left text-sm transition hover:bg-muted"
               onMouseDown={(event) => event.preventDefault()}
               onClick={() => selectResult(result, field)}
             >
-              <span className="font-semibold text-ink">{result.name}</span>
+              <span className="font-semibold text-foreground">{result.name}</span>
               {formatSuggestionLine(result) ? (
-                <span className="block text-xs text-muted">{formatSuggestionLine(result)}</span>
+                <span className="block text-xs text-muted-foreground">{formatSuggestionLine(result)}</span>
               ) : null}
             </button>
           ))
@@ -324,7 +324,7 @@ export function FacilityForm({ action, customers, facility }: FacilityFormProps)
       </div>
 
       {!isEdit ? (
-        <p className="text-xs text-muted">
+        <p className="text-xs text-muted-foreground">
           Type a business name, then add a city to narrow results (e.g. &quot;Acme Warehouse, Dallas&quot;). Address
           search returns matching businesses with phone numbers when available.
         </p>

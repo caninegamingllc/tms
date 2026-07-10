@@ -42,12 +42,12 @@ export default async function LocationsPage() {
               <div key={facility.id}>
                 <div className="mb-3 flex flex-wrap items-start justify-between gap-3 px-1">
                   <div>
-                    <p className="font-semibold text-ink">{facility.name}</p>
+                    <p className="font-semibold text-foreground">{facility.name}</p>
                     <p className="muted">
                       {facility.address ? `${facility.address}, ` : ""}
                       {facility.city}, {facility.state} {facility.postalCode ?? ""}
                     </p>
-                    <p className="text-xs text-muted">
+                    <p className="text-xs text-muted-foreground">
                       {humanize(facility.type)} - {facility.customer?.name ?? "No customer link"} -{" "}
                       {facility.loadStops.length} stops - Updated {formatDate(facility.updatedAt)}
                     </p>

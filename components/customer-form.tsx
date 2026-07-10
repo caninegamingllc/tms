@@ -140,7 +140,7 @@ export function CustomerForm({ action, branches = [], showBranchPicker = false }
         {trimmedName.length >= 3 && (results.length > 0 || loading || searchError) ? (
           <div className="absolute left-0 right-0 top-full z-20 mt-1 overflow-hidden rounded-2xl border border-border bg-white shadow-card">
             {loading ? (
-              <p className="px-4 py-3 text-sm text-muted">Searching businesses...</p>
+              <p className="px-4 py-3 text-sm text-muted-foreground">Searching businesses...</p>
             ) : searchError ? (
               <p className="px-4 py-3 text-sm text-red-600">{searchError}</p>
             ) : (
@@ -148,19 +148,19 @@ export function CustomerForm({ action, branches = [], showBranchPicker = false }
                 <button
                   key={result.id}
                   type="button"
-                  className="block w-full px-4 py-3 text-left text-sm transition hover:bg-soft"
+                  className="block w-full px-4 py-3 text-left text-sm transition hover:bg-muted"
                   onClick={() => selectResult(result)}
                 >
-                  <span className="font-semibold text-ink">{result.name}</span>
+                  <span className="font-semibold text-foreground">{result.name}</span>
                   {result.description ? (
-                    <span className="block text-xs text-muted">{result.description}</span>
+                    <span className="block text-xs text-muted-foreground">{result.description}</span>
                   ) : null}
                 </button>
               ))
             )}
           </div>
         ) : null}
-        <p className="text-xs text-muted">Business suggestions powered by Google.</p>
+        <p className="text-xs text-muted-foreground">Business suggestions powered by Google.</p>
       </label>
       <input
         name="address"
@@ -223,8 +223,8 @@ export function CustomerForm({ action, branches = [], showBranchPicker = false }
         <input name="creditLimit" className="input" placeholder="Credit limit" />
         <input name="paymentTerms" className="input" defaultValue="Net 30" />
       </div>
-      <div className="rounded-2xl bg-soft p-4">
-        <p className="mb-3 text-sm font-semibold text-ink">Primary Contact</p>
+      <div className="rounded-2xl bg-muted p-4">
+        <p className="mb-3 text-sm font-semibold text-foreground">Primary Contact</p>
         <div className="grid gap-3">
           <input name="contactName" className="input" placeholder="Contact name" />
           <input name="contactTitle" className="input" placeholder="Title" />

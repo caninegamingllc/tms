@@ -75,7 +75,7 @@ export default async function DashboardPage() {
                 {data.loads.map((load) => (
                   <tr key={load.id}>
                     <td>
-                      <Link href={`/loads/${load.id}`} className="font-semibold text-brand-700">
+                      <Link href={`/loads/${load.id}`} className="font-semibold text-primary">
                         {load.loadNumber}
                       </Link>
                       <p className="muted">{load.equipmentType}</p>
@@ -107,16 +107,16 @@ export default async function DashboardPage() {
           <p className="muted">Latest driver and carrier updates.</p>
           <div className="mt-4 grid gap-3">
             {data.checkCalls.map((call) => (
-              <div key={call.id} className="rounded-2xl border border-border bg-soft p-4">
+              <div key={call.id} className="rounded-2xl border border-border bg-muted p-4">
                 <div className="flex items-start justify-between gap-3">
                   <div>
-                    <p className="font-semibold text-ink">{call.assignment.load.loadNumber}</p>
+                    <p className="font-semibold text-foreground">{call.assignment.load.loadNumber}</p>
                     <p className="muted">{call.assignment.carrier.name}</p>
                   </div>
-                  <span className="text-xs text-muted">{formatDateTime(call.occurredAt)}</span>
+                  <span className="text-xs text-muted-foreground">{formatDateTime(call.occurredAt)}</span>
                 </div>
-                <p className="mt-2 text-sm font-semibold text-ink">{call.status}</p>
-                <p className="text-sm text-muted">{call.location}</p>
+                <p className="mt-2 text-sm font-semibold text-foreground">{call.status}</p>
+                <p className="text-sm text-muted-foreground">{call.location}</p>
                 {call.notes ? <p className="mt-2 text-sm text-slate-600">{call.notes}</p> : null}
               </div>
             ))}

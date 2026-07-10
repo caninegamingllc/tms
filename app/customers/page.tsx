@@ -60,7 +60,7 @@ export default async function CustomersPage() {
                   return (
                     <tr key={customer.id}>
                       <td>
-                        <p className="font-semibold text-ink">{customer.name}</p>
+                        <p className="font-semibold text-foreground">{customer.name}</p>
                         <p className="muted">
                           {customer.city ?? "No city"}, {customer.state ?? "No state"}
                         </p>

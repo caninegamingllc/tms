@@ -65,19 +65,21 @@ export function SearchCombobox({
         required={required && !selectedId}
       />
       {query && filtered.length ? (
-        <div className="absolute left-0 right-0 top-full z-20 mt-1 overflow-hidden rounded-2xl border border-border bg-white shadow-card">
+        <div className="absolute left-0 right-0 top-full z-20 mt-1 overflow-hidden rounded-lg border border-border bg-card shadow-card">
           {filtered.map((option) => (
             <button
               key={option.id}
               type="button"
-              className="block w-full px-4 py-3 text-left text-sm transition hover:bg-soft"
+              className="block w-full px-4 py-3 text-left text-sm transition hover:bg-muted"
               onClick={() => {
                 setQuery(option.label);
                 setSelectedId(option.id);
               }}
             >
-              <span className="font-semibold text-ink">{option.label}</span>
-              {option.description ? <span className="block text-xs text-muted">{option.description}</span> : null}
+              <span className="font-semibold text-foreground">{option.label}</span>
+              {option.description ? (
+                <span className="block text-xs text-muted-foreground">{option.description}</span>
+              ) : null}
             </button>
           ))}
         </div>
@@ -137,8 +139,8 @@ export function FacilityCombobox({
   }
 
   return (
-    <fieldset className="grid gap-4 rounded-2xl border border-border p-4">
-      <legend className="px-2 text-sm font-semibold text-ink">{legend}</legend>
+    <fieldset className="grid gap-4 rounded-lg border border-border p-4">
+      <legend className="px-2 text-sm font-semibold text-foreground">{legend}</legend>
       <input type="hidden" name={`${prefix}FacilityId`} value={facilityId} />
       <label className="relative grid gap-2">
         <span className="label">Facility</span>
@@ -154,16 +156,16 @@ export function FacilityCombobox({
           required
         />
         {facilityName && filtered.length ? (
-          <div className="absolute left-0 right-0 top-full z-20 mt-1 overflow-hidden rounded-2xl border border-border bg-white shadow-card">
+          <div className="absolute left-0 right-0 top-full z-20 mt-1 overflow-hidden rounded-lg border border-border bg-card shadow-card">
             {filtered.map((facility) => (
               <button
                 key={facility.id}
                 type="button"
-                className="block w-full px-4 py-3 text-left text-sm transition hover:bg-soft"
+                className="block w-full px-4 py-3 text-left text-sm transition hover:bg-muted"
                 onClick={() => selectFacility(facility)}
               >
-                <span className="font-semibold text-ink">{facility.label}</span>
-                <span className="block text-xs text-muted">
+                <span className="font-semibold text-foreground">{facility.label}</span>
+                <span className="block text-xs text-muted-foreground">
                   {facility.address ? `${facility.address}, ` : ""}
                   {facility.city}, {facility.state} {facility.postalCode ?? ""}
                 </span>
