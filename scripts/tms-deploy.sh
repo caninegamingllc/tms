@@ -24,7 +24,7 @@ npm ci --include=dev
 npx prisma generate
 python3 prisma/production-membership-migrate.py 2>/dev/null || true
 npx prisma db push --accept-data-loss
-NODE_ENV=production NODE_OPTIONS="--max-old-space-size=4096" npm run build
+NODE_ENV=production NODE_OPTIONS="--max-old-space-size=768" NEXT_DISABLE_TURBOPACK=1 npm run build
 pm2 start "$PM2_APP" 2>/dev/null || pm2 restart "$PM2_APP"
 
 echo "=== Deploy finished $(date) ==="
