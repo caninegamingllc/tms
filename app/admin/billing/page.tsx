@@ -1,6 +1,10 @@
 import Link from "next/link";
 import { PageHeader } from "@/components/page-header";
-import { createBillingPortalSession, createSeatCheckoutSession } from "@/lib/billing-actions";
+import {
+  createBillingPortalSession,
+  createSeatCheckoutSession,
+  refreshSeatSubscriptionFromStripe
+} from "@/lib/billing-actions";
 import { requireAdmin } from "@/lib/auth";
 import { getSeatSummary } from "@/lib/seats";
 import { isStripeConfigured } from "@/lib/stripe";
@@ -18,6 +22,7 @@ export default async function BillingPage({
 }) {
   const user = await requireAdmin();
   const params = await searchParams;
+  await refreshSeatSubscriptionFromStripe(user.companyId, { force: params.success === "1" });
   const seatSummary = await getSeatSummary(user.companyId);
   const stripeReady = isStripeConfigured();
 

@@ -17,6 +17,7 @@ import {
   updateLoadNumberSettings
 } from "@/lib/admin-actions";
 import { InviteLinkBanner } from "@/components/invite-link-banner";
+import { refreshSeatSubscriptionFromStripe } from "@/lib/billing-actions";
 import { requireAdmin } from "@/lib/auth";
 import { userRoles, userStatuses } from "@/lib/constants";
 import { prisma } from "@/lib/db";
@@ -31,6 +32,7 @@ export default async function AdminPage({
 }) {
   const currentUser = await requireAdmin();
   const { invite, emailSent, error } = await searchParams;
+  await refreshSeatSubscriptionFromStripe(currentUser.companyId);
   const [company, memberships, branches, auditLogs, seatSummary] = await Promise.all([
     prisma.company.findUniqueOrThrow({ where: { id: currentUser.companyId } }),
     prisma.companyMembership.findMany({

@@ -124,8 +124,30 @@ export async function createBillingPortalSession() {
   redirect(portalSession.url);
 }
 
-export async function syncSeatSubscriptionFromStripe(subscription: Stripe.Subscription) {
-  const companyId = subscription.metadata?.companyId;
+export async function syncSeatSubscriptionFromStripe(
+  subscription: Stripe.Subscription,
+  companyIdOverride?: string
+) {
+  const customerId =
+    typeof subscription.customer === "string" ? subscription.customer : subscription.customer?.id ?? null;
+
+  let companyId = companyIdOverride ?? subscription.metadata?.companyId ?? null;
+
+  if (!companyId && customerId) {
+    const match = await prisma.seatSubscription.findFirst({
+      where: { stripeCustomerId: customerId },
+      select: { companyId: true }
+    });
+    companyId = match?.companyId ?? null;
+  }
+
+  if (!companyId) {
+    const match = await prisma.seatSubscription.findFirst({
+      where: { stripeSubscriptionId: subscription.id },
+      select: { companyId: true }
+    });
+    companyId = match?.companyId ?? null;
+  }
 
   if (!companyId) {
     return;
@@ -135,11 +157,10 @@ export async function syncSeatSubscriptionFromStripe(subscription: Stripe.Subscr
   const price = firstItem?.price;
   const priceId = typeof price === "string" ? price : price?.id ?? null;
   const quantity = firstItem?.quantity ?? 0;
-  const currentPeriodEnd = firstItem?.current_period_end
-    ? new Date(firstItem.current_period_end * 1000)
-    : null;
-  const customerId =
-    typeof subscription.customer === "string" ? subscription.customer : subscription.customer?.id ?? null;
+  const periodEndSeconds =
+    (subscription as Stripe.Subscription & { current_period_end?: number }).current_period_end ??
+    (firstItem as { current_period_end?: number } | undefined)?.current_period_end;
+  const currentPeriodEnd = periodEndSeconds ? new Date(periodEndSeconds * 1000) : null;
 
   const statusMap: Record<string, string> = {
     active: "ACTIVE",
@@ -181,4 +202,87 @@ export async function syncSeatSubscriptionFromStripe(subscription: Stripe.Subscr
   if (ownerMembership) {
     await autoAssignOwnerOnPurchase(companyId, ownerMembership.id);
   }
+}
+
+export async function syncSeatSubscriptionForCompany(companyId: string) {
+  if (!isStripeConfigured()) {
+    return false;
+  }
+
+  const local = await prisma.seatSubscription.findUnique({
+    where: { companyId }
+  });
+
+  if (!local?.stripeCustomerId && !local?.stripeSubscriptionId) {
+    return false;
+  }
+
+  const stripe = getStripe();
+  let subscription: Stripe.Subscription | null = null;
+
+  if (local.stripeSubscriptionId) {
+    try {
+      subscription = await stripe.subscriptions.retrieve(local.stripeSubscriptionId, {
+        expand: ["items.data.price"]
+      });
+    } catch {
+      // Subscription id may be stale after a new checkout.
+    }
+  }
+
+  if (!subscription && local.stripeCustomerId) {
+    const subscriptions = await stripe.subscriptions.list({
+      customer: local.stripeCustomerId,
+      status: "all",
+      limit: 20,
+      expand: ["data.items.data.price"]
+    });
+
+    const activeSubscriptions = subscriptions.data.filter(
+      (item) => item.status === "active" || item.status === "trialing"
+    );
+
+    subscription =
+      activeSubscriptions.sort((left, right) => right.created - left.created)[0] ??
+      subscriptions.data.sort((left, right) => right.created - left.created)[0] ??
+      null;
+  }
+
+  if (!subscription) {
+    return false;
+  }
+
+  await syncSeatSubscriptionFromStripe(subscription, companyId);
+  return true;
+}
+
+export async function refreshSeatSubscriptionFromStripe(
+  companyId: string,
+  options?: { force?: boolean }
+) {
+  if (!isStripeConfigured()) {
+    return;
+  }
+
+  const local = await prisma.seatSubscription.findUnique({
+    where: { companyId }
+  });
+
+  if (!local?.stripeCustomerId && !local?.stripeSubscriptionId) {
+    return;
+  }
+
+  if (!options?.force) {
+    const assigned = await prisma.companyMembership.count({
+      where: { companyId, seatAssignedAt: { not: null }, status: { not: "INVITED" } }
+    });
+    const purchased = local.seatQuantity ?? 0;
+    const needsSync = purchased === 0 || assigned > purchased || local.status === "NONE";
+
+    if (!needsSync) {
+      return;
+    }
+  }
+
+  await syncSeatSubscriptionForCompany(companyId);
 }
