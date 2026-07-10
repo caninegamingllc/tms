@@ -103,6 +103,10 @@ function redirectAfterInvite(token: string, delivered: boolean) {
   redirect(`/admin?${params.toString()}`);
 }
 
+function redirectWithAdminError(message: string) {
+  redirect(`/admin?error=${encodeURIComponent(message)}`);
+}
+
 export async function inviteUser(formData: FormData) {
   const actor = await requireAdmin();
   const email = requiredString(formData, "email").toLowerCase();
@@ -110,7 +114,7 @@ export async function inviteUser(formData: FormData) {
   const role = requiredString(formData, "role");
 
   if (role === "OWNER" && actor.role !== "OWNER") {
-    throw new Error("Only an owner can invite another owner.");
+    redirectWithAdminError("Only an owner can invite another owner.");
   }
 
   if (branchId) {
@@ -119,7 +123,13 @@ export async function inviteUser(formData: FormData) {
 
   const existing = await prisma.user.findUnique({ where: { email } });
   if (existing) {
-    throw new Error("An account already exists for that email.");
+    if (existing.companyId === actor.companyId && existing.status === "INVITED") {
+      redirectWithAdminError(
+        "This user already has a pending invite. Use Resend Invite in the users table."
+      );
+    }
+
+    redirectWithAdminError("An account already exists for that email.");
   }
 
   const token = randomBytes(32).toString("base64url");

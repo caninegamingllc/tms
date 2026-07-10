@@ -23,10 +23,10 @@ import { formatDate, formatDateTime, humanize } from "@/lib/format";
 export default async function AdminPage({
   searchParams
 }: {
-  searchParams: Promise<{ invite?: string; emailSent?: string }>;
+  searchParams: Promise<{ invite?: string; emailSent?: string; error?: string }>;
 }) {
   const currentUser = await requireAdmin();
-  const { invite, emailSent } = await searchParams;
+  const { invite, emailSent, error } = await searchParams;
   const [company, users, branches, auditLogs] = await Promise.all([
     prisma.company.findUniqueOrThrow({ where: { id: currentUser.companyId } }),
     prisma.user.findMany({
@@ -59,6 +59,12 @@ export default async function AdminPage({
         title="Admin Console"
         description="Invite users, manage roles and branches, disable accounts, and review audit history."
       />
+
+      {error ? (
+        <div className="card mb-6 border-rose-200 bg-rose-50 text-sm font-semibold text-rose-700">
+          {error}
+        </div>
+      ) : null}
 
       {invite ? <InviteLinkBanner invitePath={invite} emailSent={emailSent === "1"} /> : null}
 
