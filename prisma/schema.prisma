@@ -61,6 +61,8 @@ model User {
   lockedAt              DateTime?
   disabledAt            DateTime?
   passwordResetAt       DateTime?
+  inviteTokenHash       String?        @unique
+  inviteExpiresAt       DateTime?
   branchId              String?
   branch                Branch?        @relation(fields: [branchId], references: [id])
   notes                 LoadNote[]

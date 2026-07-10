@@ -3,13 +3,15 @@ import { PageHeader } from "@/components/page-header";
 import { StatusBadge } from "@/components/status-badge";
 import { addCheckCall } from "@/lib/actions";
 import { requireUser } from "@/lib/auth";
+import { branchScopedWhere } from "@/lib/scope";
 import { prisma } from "@/lib/db";
 import { formatDateTime, formatMoney } from "@/lib/format";
 
 export default async function DispatchPage() {
   const user = await requireUser();
+  const loadScope = branchScopedWhere(user);
   const assignments = await prisma.dispatchAssignment.findMany({
-    where: { load: { companyId: user.companyId } },
+    where: { load: loadScope },
     orderBy: { assignedAt: "desc" },
     include: {
       carrier: true,
@@ -20,7 +22,7 @@ export default async function DispatchPage() {
 
   const uncoveredLoads = await prisma.load.findMany({
     where: {
-      companyId: user.companyId,
+      ...loadScope,
       dispatchAssignment: null,
       status: { in: ["AVAILABLE", "COVERED", "QUOTE"] }
     },

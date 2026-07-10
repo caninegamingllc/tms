@@ -17,6 +17,7 @@ import {
   Truck
 } from "lucide-react";
 import type { CurrentUser } from "@/lib/auth";
+import { canManageUsers } from "@/lib/scope";
 
 const navItems = [
   { href: "/", label: "Dashboard", icon: LayoutDashboard },
@@ -28,9 +29,9 @@ const navItems = [
   { href: "/documents", label: "Documents", icon: FileText },
   { href: "/accounting", label: "Accounting", icon: Landmark },
   { href: "/reports", label: "Reports", icon: BarChart3 },
-  { href: "/admin", label: "Admin", icon: Settings },
+  { href: "/admin", label: "Admin", icon: Settings, adminOnly: true },
   { href: "/integrations", label: "Integrations", icon: Plug }
-];
+] as const;
 
 export function AppShell({
   children,
@@ -40,7 +41,14 @@ export function AppShell({
   currentUser: CurrentUser | null;
 }) {
   const pathname = usePathname();
-  const publicPage = pathname === "/login" || pathname === "/register" || pathname === "/change-password";
+  const publicPage =
+    pathname === "/login" ||
+    pathname === "/register" ||
+    pathname === "/change-password" ||
+    pathname === "/accept-invite";
+  const visibleNavItems = navItems.filter(
+    (item) => !("adminOnly" in item && item.adminOnly) || (currentUser && canManageUsers(currentUser))
+  );
 
   if (publicPage) {
     return <>{children}</>;
@@ -72,7 +80,7 @@ export function AppShell({
         </Link>
 
         <nav className="mt-6 grid gap-1">
-          {navItems.map((item) => {
+          {visibleNavItems.map((item) => {
             const Icon = item.icon;
             const active =
               item.href === "/" ? pathname === "/" : pathname.startsWith(item.href);
@@ -99,6 +107,7 @@ export function AppShell({
           <p className="text-sm font-semibold text-ink">{currentUser?.name ?? "Not signed in"}</p>
           <p className="text-xs text-muted">{currentUser?.email ?? "Please sign in"}</p>
           {currentUser ? <p className="text-xs text-muted">{currentUser.companyName}</p> : null}
+          {currentUser ? <p className="text-xs text-muted">Role: {currentUser.role}</p> : null}
           {currentUser ? (
             <form action="/logout" method="post" className="mt-3">
               <button className="btn-secondary w-full" type="submit">

@@ -1,8 +1,16 @@
 "use server";
 
+import { randomBytes, createHash } from "crypto";
+import { redirect } from "next/navigation";
 import { revalidatePath } from "next/cache";
 import { prisma } from "@/lib/db";
 import { hashPassword, requireAdmin } from "@/lib/auth";
+
+const inviteDays = 7;
+
+function hashInviteToken(token: string) {
+  return createHash("sha256").update(token).digest("hex");
+}
 
 function requiredString(formData: FormData, key: string) {
   const value = String(formData.get(key) ?? "").trim();
@@ -40,6 +48,112 @@ async function audit(
   });
 }
 
+function assertCanManageTarget(actorRole: string, targetRole: string, targetId: string, actorId: string) {
+  if (targetId === actorId && targetRole !== actorRole) {
+    throw new Error("You cannot change your own role.");
+  }
+
+  if (targetRole === "OWNER" && actorRole !== "OWNER") {
+    throw new Error("Only an owner can manage owner accounts.");
+  }
+
+  const nextRole = targetRole;
+  if (nextRole === "OWNER" && actorRole !== "OWNER") {
+    throw new Error("Only an owner can assign the owner role.");
+  }
+}
+
+export async function inviteUser(formData: FormData) {
+  const actor = await requireAdmin();
+  const email = requiredString(formData, "email").toLowerCase();
+  const branchId = requiredString(formData, "branchId");
+  const role = requiredString(formData, "role");
+
+  if (role === "OWNER" && actor.role !== "OWNER") {
+    throw new Error("Only an owner can invite another owner.");
+  }
+
+  if (branchId) {
+    await prisma.branch.findUniqueOrThrow({ where: { id: branchId, companyId: actor.companyId } });
+  }
+
+  const existing = await prisma.user.findUnique({ where: { email } });
+  if (existing) {
+    throw new Error("An account already exists for that email.");
+  }
+
+  const token = randomBytes(32).toString("base64url");
+  const inviteExpiresAt = new Date();
+  inviteExpiresAt.setDate(inviteExpiresAt.getDate() + inviteDays);
+
+  const user = await prisma.user.create({
+    data: {
+      companyId: actor.companyId,
+      name: requiredString(formData, "name"),
+      email,
+      role,
+      status: "INVITED",
+      branchId,
+      inviteTokenHash: hashInviteToken(token),
+      inviteExpiresAt
+    }
+  });
+
+  await audit(
+    actor.companyId,
+    actor.id,
+    "INVITE_USER",
+    "User",
+    user.id,
+    `Invited ${user.email} as ${user.role}.`,
+    user.id
+  );
+  revalidatePath("/admin");
+
+  redirect(`/admin?invite=${encodeURIComponent(`/accept-invite?token=${token}`)}`);
+}
+
+export async function resendInvite(formData: FormData) {
+  const actor = await requireAdmin();
+  const userId = requiredString(formData, "userId");
+  const user = await prisma.user.findUniqueOrThrow({ where: { id: userId, companyId: actor.companyId } });
+
+  if (user.status !== "INVITED") {
+    throw new Error("Only invited users can be re-invited.");
+  }
+
+  const token = randomBytes(32).toString("base64url");
+  const inviteExpiresAt = new Date();
+  inviteExpiresAt.setDate(inviteExpiresAt.getDate() + inviteDays);
+
+  await prisma.user.update({
+    where: { id: userId },
+    data: {
+      inviteTokenHash: hashInviteToken(token),
+      inviteExpiresAt
+    }
+  });
+
+  await audit(actor.companyId, actor.id, "RESEND_INVITE", "User", user.id, `Re-sent invite to ${user.email}.`, user.id);
+  revalidatePath("/admin");
+
+  redirect(`/admin?invite=${encodeURIComponent(`/accept-invite?token=${token}`)}`);
+}
+
+export async function cancelInvite(formData: FormData) {
+  const actor = await requireAdmin();
+  const userId = requiredString(formData, "userId");
+  const user = await prisma.user.findUniqueOrThrow({ where: { id: userId, companyId: actor.companyId } });
+
+  if (user.status !== "INVITED") {
+    throw new Error("Only invited users can have their invite canceled.");
+  }
+
+  await prisma.user.delete({ where: { id: userId } });
+  await audit(actor.companyId, actor.id, "CANCEL_INVITE", "User", userId, `Canceled invite for ${user.email}.`, userId);
+  revalidatePath("/admin");
+}
+
 export async function createAdminUser(formData: FormData) {
   const actor = await requireAdmin();
   const email = requiredString(formData, "email").toLowerCase();
@@ -72,7 +186,18 @@ export async function updateAdminUser(formData: FormData) {
   const actor = await requireAdmin();
   const userId = requiredString(formData, "userId");
   const branchId = optionalString(formData, "branchId");
-  await prisma.user.findUniqueOrThrow({ where: { id: userId, companyId: actor.companyId } });
+  const role = requiredString(formData, "role");
+  const target = await prisma.user.findUniqueOrThrow({ where: { id: userId, companyId: actor.companyId } });
+
+  if (userId === actor.id && role !== target.role) {
+    throw new Error("You cannot change your own role.");
+  }
+
+  assertCanManageTarget(actor.role, target.role, userId, actor.id);
+
+  if (role === "OWNER" && actor.role !== "OWNER") {
+    throw new Error("Only an owner can assign the owner role.");
+  }
 
   if (branchId) {
     await prisma.branch.findUniqueOrThrow({ where: { id: branchId, companyId: actor.companyId } });
@@ -82,7 +207,7 @@ export async function updateAdminUser(formData: FormData) {
     where: { id: userId },
     data: {
       name: requiredString(formData, "name"),
-      role: requiredString(formData, "role"),
+      role,
       branchId,
       status: requiredString(formData, "status")
     }
@@ -148,7 +273,11 @@ export async function setUserDisabled(formData: FormData) {
   const userId = requiredString(formData, "userId");
   const mode = requiredString(formData, "mode");
   const disabled = mode === "disable";
-  await prisma.user.findUniqueOrThrow({ where: { id: userId, companyId: actor.companyId } });
+  const target = await prisma.user.findUniqueOrThrow({ where: { id: userId, companyId: actor.companyId } });
+
+  if (target.role === "OWNER" && actor.role !== "OWNER") {
+    throw new Error("Only an owner can disable owner accounts.");
+  }
 
   if (actor.id === userId && disabled) {
     throw new Error("You cannot disable your own account.");

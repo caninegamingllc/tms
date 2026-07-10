@@ -2,23 +2,28 @@ import { PageHeader } from "@/components/page-header";
 import { FacilityCombobox, SearchCombobox } from "@/components/search-combobox";
 import { createLoad } from "@/lib/actions";
 import { requireUser } from "@/lib/auth";
+import { branchScopedWhere, canSeeAllBranches } from "@/lib/scope";
 import { equipmentTypes, loadStatuses } from "@/lib/constants";
 import { prisma } from "@/lib/db";
 import { humanize } from "@/lib/format";
 
 export default async function NewLoadPage() {
   const user = await requireUser();
-  const [company, customers, facilities] = await Promise.all([
+  const customerScope = branchScopedWhere(user);
+  const [company, customers, facilities, branches] = await Promise.all([
     prisma.company.findUniqueOrThrow({ where: { id: user.companyId } }),
     prisma.customer.findMany({
-      where: { companyId: user.companyId },
+      where: customerScope,
       orderBy: { name: "asc" }
     }),
     prisma.facility.findMany({
       where: { companyId: user.companyId, status: "Active" },
       include: { customer: true },
       orderBy: [{ name: "asc" }, { city: "asc" }]
-    })
+    }),
+    canSeeAllBranches(user)
+      ? prisma.branch.findMany({ where: { companyId: user.companyId }, orderBy: { name: "asc" } })
+      : Promise.resolve([])
   ]);
 
   const customerOptions = customers.map((customer) => ({
@@ -68,6 +73,20 @@ export default async function NewLoadPage() {
             </select>
           </label>
         </div>
+
+        {canSeeAllBranches(user) ? (
+          <label className="grid gap-2 md:max-w-sm">
+            <span className="label">Branch</span>
+            <select name="branchId" className="select" defaultValue="">
+              <option value="">Default to your branch</option>
+              {branches.map((branch) => (
+                <option key={branch.id} value={branch.id}>
+                  {branch.name}
+                </option>
+              ))}
+            </select>
+          </label>
+        ) : null}
 
         <div className="grid gap-4 md:grid-cols-3">
           <label className="grid gap-2 md:col-span-2">

@@ -3,8 +3,12 @@
 import { useEffect, useMemo, useRef, useState } from "react";
 import type { BusinessSearchResult } from "@/lib/business-search";
 
+type BranchOption = { id: string; name: string };
+
 type CustomerFormProps = {
   action: (formData: FormData) => void | Promise<void>;
+  branches?: BranchOption[];
+  showBranchPicker?: boolean;
 };
 
 function createSessionToken() {
@@ -15,7 +19,7 @@ function createSessionToken() {
   return `${Date.now()}-${Math.random().toString(36).slice(2)}`;
 }
 
-export function CustomerForm({ action }: CustomerFormProps) {
+export function CustomerForm({ action, branches = [], showBranchPicker = false }: CustomerFormProps) {
   const [name, setName] = useState("");
   const [address, setAddress] = useState("");
   const [city, setCity] = useState("");
@@ -202,6 +206,19 @@ export function CustomerForm({ action }: CustomerFormProps) {
           <option>Inactive</option>
         </select>
       </div>
+      {showBranchPicker ? (
+        <label className="grid gap-2">
+          <span className="label">Branch</span>
+          <select name="branchId" className="select" defaultValue="">
+            <option value="">Default to your branch</option>
+            {branches.map((branch) => (
+              <option key={branch.id} value={branch.id}>
+                {branch.name}
+              </option>
+            ))}
+          </select>
+        </label>
+      ) : null}
       <div className="grid gap-3 md:grid-cols-2">
         <input name="creditLimit" className="input" placeholder="Credit limit" />
         <input name="paymentTerms" className="input" defaultValue="Net 30" />

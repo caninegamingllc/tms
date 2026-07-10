@@ -1,12 +1,14 @@
 import { prisma } from "@/lib/db";
 import { requireUser } from "@/lib/auth";
+import { branchScopedWhere } from "@/lib/scope";
 
 export async function getDashboardData() {
   const user = await requireUser();
+  const loadScope = branchScopedWhere(user);
 
   const [loads, customers, carriers, invoices, carrierBills, checkCalls] = await Promise.all([
     prisma.load.findMany({
-      where: { companyId: user.companyId },
+      where: loadScope,
       orderBy: { pickupDate: "asc" },
       include: {
         customer: true,
@@ -14,20 +16,26 @@ export async function getDashboardData() {
       },
       take: 8
     }),
-    prisma.customer.count({ where: { companyId: user.companyId } }),
+    prisma.customer.count({ where: branchScopedWhere(user) }),
     prisma.carrier.count({ where: { companyId: user.companyId } }),
     prisma.invoice.findMany({
-      where: { companyId: user.companyId },
+      where: {
+        companyId: user.companyId,
+        load: loadScope
+      },
       include: { customer: true, load: true }
     }),
     prisma.carrierBill.findMany({
-      where: { companyId: user.companyId },
+      where: {
+        companyId: user.companyId,
+        load: loadScope
+      },
       include: { carrier: true, load: true }
     }),
     prisma.checkCall.findMany({
       where: {
         assignment: {
-          load: { companyId: user.companyId }
+          load: loadScope
         }
       },
       orderBy: { occurredAt: "desc" },
@@ -76,7 +84,7 @@ export async function getDashboardData() {
 export async function getLoadOptions() {
   const user = await requireUser();
   const [customers, carriers] = await Promise.all([
-    prisma.customer.findMany({ where: { companyId: user.companyId }, orderBy: { name: "asc" } }),
+    prisma.customer.findMany({ where: branchScopedWhere(user), orderBy: { name: "asc" } }),
     prisma.carrier.findMany({ where: { companyId: user.companyId }, orderBy: { name: "asc" } })
   ]);
 

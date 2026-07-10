@@ -13,6 +13,7 @@ import {
   updateLoadStatus
 } from "@/lib/actions";
 import { requireUser } from "@/lib/auth";
+import { canAccessBranchRecord } from "@/lib/scope";
 import { documentTypes, loadStatuses } from "@/lib/constants";
 import { prisma } from "@/lib/db";
 import { formatDate, formatDateTime, formatMoney, humanize, marginPercent } from "@/lib/format";
@@ -43,7 +44,7 @@ export default async function LoadDetailPage({ params }: { params: Promise<{ id:
     prisma.carrier.findMany({ where: { companyId: user.companyId }, orderBy: { name: "asc" } })
   ]);
 
-  if (!load) {
+  if (!load || !canAccessBranchRecord(user, load.branchId)) {
     notFound();
   }
 

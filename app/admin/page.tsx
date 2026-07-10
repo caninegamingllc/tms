@@ -1,22 +1,30 @@
 import { PageHeader } from "@/components/page-header";
 import { StatusBadge } from "@/components/status-badge";
 import {
-  createAdminUser,
+  cancelInvite,
   createBranch,
   forcePasswordChange,
+  inviteUser,
+  resendInvite,
   resetUserPassword,
   setUserDisabled,
   setUserLock,
   updateAdminUser,
   updateLoadNumberSettings
 } from "@/lib/admin-actions";
+import { InviteLinkBanner } from "@/components/invite-link-banner";
 import { requireAdmin } from "@/lib/auth";
 import { userRoles, userStatuses } from "@/lib/constants";
 import { prisma } from "@/lib/db";
 import { formatDate, formatDateTime, humanize } from "@/lib/format";
 
-export default async function AdminPage() {
+export default async function AdminPage({
+  searchParams
+}: {
+  searchParams: Promise<{ invite?: string }>;
+}) {
   const currentUser = await requireAdmin();
+  const { invite } = await searchParams;
   const [company, users, branches, auditLogs] = await Promise.all([
     prisma.company.findUniqueOrThrow({ where: { id: currentUser.companyId } }),
     prisma.user.findMany({
@@ -40,8 +48,10 @@ export default async function AdminPage() {
     <>
       <PageHeader
         title="Admin Console"
-        description="Manage users, roles, branches, password resets, account locks, and audit history."
+        description="Invite users, manage roles and branches, disable accounts, and review audit history."
       />
+
+      {invite ? <InviteLinkBanner invitePath={invite} /> : null}
 
       <div className="grid gap-6 2xl:grid-cols-[1.4fr_0.8fr]">
         <section className="card overflow-hidden p-0">
@@ -73,7 +83,9 @@ export default async function AdminPage() {
                         <input type="hidden" name="userId" value={user.id} />
                         <input name="name" className="input" defaultValue={user.name} />
                         <select name="role" className="select" defaultValue={user.role}>
-                          {userRoles.map((role) => (
+                          {userRoles
+                            .filter((role) => currentUser.role === "OWNER" || role !== "OWNER")
+                            .map((role) => (
                             <option key={role} value={role}>
                               {humanize(role)}
                             </option>
@@ -132,13 +144,30 @@ export default async function AdminPage() {
                       </div>
                     </td>
                     <td>
-                      <form action={setUserDisabled}>
-                        <input type="hidden" name="userId" value={user.id} />
-                        <input type="hidden" name="mode" value={user.disabledAt ? "enable" : "disable"} />
-                        <button className="btn-secondary" type="submit" disabled={currentUser.id === user.id && !user.disabledAt}>
-                          {user.disabledAt ? "Enable Account" : "Disable Account"}
-                        </button>
-                      </form>
+                      {user.status === "INVITED" ? (
+                        <div className="grid gap-2">
+                          <form action={resendInvite}>
+                            <input type="hidden" name="userId" value={user.id} />
+                            <button className="btn-secondary w-full" type="submit">
+                              Resend Invite
+                            </button>
+                          </form>
+                          <form action={cancelInvite}>
+                            <input type="hidden" name="userId" value={user.id} />
+                            <button className="btn-secondary w-full" type="submit">
+                              Cancel Invite
+                            </button>
+                          </form>
+                        </div>
+                      ) : (
+                        <form action={setUserDisabled}>
+                          <input type="hidden" name="userId" value={user.id} />
+                          <input type="hidden" name="mode" value={user.disabledAt ? "enable" : "disable"} />
+                          <button className="btn-secondary" type="submit" disabled={currentUser.id === user.id && !user.disabledAt}>
+                            {user.disabledAt ? "Enable Account" : "Disable Account"}
+                          </button>
+                        </form>
+                      )}
                       <p className="mt-2 text-xs text-muted">
                         Created {formatDate(user.createdAt)}
                       </p>
@@ -154,41 +183,32 @@ export default async function AdminPage() {
         </section>
 
         <section className="card">
-          <h2 className="section-title">Add User</h2>
-          <form action={createAdminUser} className="mt-4 grid gap-3">
+          <h2 className="section-title">Invite User</h2>
+          <p className="muted">Send an invite link so the user can set their own password and join your organization.</p>
+          <form action={inviteUser} className="mt-4 grid gap-3">
             <input name="name" className="input" placeholder="Full name" required />
             <input name="email" className="input" type="email" placeholder="Email" required />
-            <input name="password" className="input" type="password" placeholder="Temporary password" minLength={8} required />
             <div className="grid gap-3 md:grid-cols-2">
               <select name="role" className="select" defaultValue="BROKER">
-                {userRoles.map((role) => (
+                {userRoles
+                  .filter((role) => currentUser.role === "OWNER" || role !== "OWNER")
+                  .map((role) => (
                   <option key={role} value={role}>
                     {humanize(role)}
                   </option>
                 ))}
               </select>
-              <select name="status" className="select" defaultValue="ACTIVE">
-                {userStatuses.map((status) => (
-                  <option key={status} value={status}>
-                    {humanize(status)}
+              <select name="branchId" className="select" defaultValue="" required>
+                <option value="">Select branch</option>
+                {branches.map((branch) => (
+                  <option key={branch.id} value={branch.id}>
+                    {branch.name}
                   </option>
                 ))}
               </select>
             </div>
-            <select name="branchId" className="select" defaultValue="">
-              <option value="">No branch</option>
-              {branches.map((branch) => (
-                <option key={branch.id} value={branch.id}>
-                  {branch.name}
-                </option>
-              ))}
-            </select>
-            <label className="flex items-center gap-2 text-sm text-slate-700">
-              <input name="mustChangePassword" type="checkbox" defaultChecked />
-              Force password change at next login
-            </label>
             <button type="submit" className="btn">
-              Create User
+              Send Invite
             </button>
           </form>
         </section>

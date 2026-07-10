@@ -1,14 +1,17 @@
 import { MetricCard } from "@/components/metric-card";
 import { PageHeader } from "@/components/page-header";
 import { requireUser } from "@/lib/auth";
+import { branchScopedWhere } from "@/lib/scope";
 import { prisma } from "@/lib/db";
 import { formatDate, formatMoney, marginPercent } from "@/lib/format";
 
 export default async function ReportsPage() {
   const user = await requireUser();
+  const loadScope = branchScopedWhere(user);
+  const customerScope = branchScopedWhere(user);
   const [loads, customers, carriers] = await Promise.all([
     prisma.load.findMany({
-      where: { companyId: user.companyId },
+      where: loadScope,
       include: {
         customer: true,
         dispatchAssignment: { include: { carrier: true } },
@@ -18,7 +21,7 @@ export default async function ReportsPage() {
       orderBy: { pickupDate: "desc" }
     }),
     prisma.customer.findMany({
-      where: { companyId: user.companyId },
+      where: customerScope,
       include: { loads: true, invoices: true }
     }),
     prisma.carrier.findMany({

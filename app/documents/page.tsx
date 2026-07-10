@@ -1,6 +1,7 @@
 import { PageHeader } from "@/components/page-header";
 import { addDocument } from "@/lib/actions";
 import { requireUser } from "@/lib/auth";
+import { branchScopedWhere } from "@/lib/scope";
 import { documentTypes } from "@/lib/constants";
 import { prisma } from "@/lib/db";
 import { formatDate, humanize } from "@/lib/format";
@@ -8,14 +9,19 @@ import Link from "next/link";
 
 export default async function DocumentsPage() {
   const user = await requireUser();
+  const loadScope = branchScopedWhere(user);
+  const customerScope = branchScopedWhere(user);
   const [documents, loads, customers, carriers] = await Promise.all([
     prisma.loadDocument.findMany({
-      where: { companyId: user.companyId },
+      where: {
+        companyId: user.companyId,
+        OR: [{ load: loadScope }, { customer: customerScope }, { carrier: { companyId: user.companyId } }]
+      },
       orderBy: { uploadedAt: "desc" },
       include: { load: true, customer: true, carrier: true }
     }),
-    prisma.load.findMany({ where: { companyId: user.companyId }, orderBy: { loadNumber: "desc" } }),
-    prisma.customer.findMany({ where: { companyId: user.companyId }, orderBy: { name: "asc" } }),
+    prisma.load.findMany({ where: loadScope, orderBy: { loadNumber: "desc" } }),
+    prisma.customer.findMany({ where: customerScope, orderBy: { name: "asc" } }),
     prisma.carrier.findMany({ where: { companyId: user.companyId }, orderBy: { name: "asc" } })
   ]);
 

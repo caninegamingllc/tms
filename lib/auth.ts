@@ -2,6 +2,7 @@ import { randomBytes, scryptSync, timingSafeEqual, createHash } from "crypto";
 import { cookies } from "next/headers";
 import { redirect } from "next/navigation";
 import { prisma } from "@/lib/db";
+import type { SessionUser } from "@/lib/types";
 
 export const sessionCookieName = "tms_session";
 const sessionDays = 7;
@@ -18,17 +19,7 @@ function shouldUseSecureCookies() {
   return process.env.NODE_ENV === "production";
 }
 
-export type CurrentUser = {
-  id: string;
-  companyId: string;
-  companyName: string;
-  name: string;
-  email: string;
-  role: string;
-  status: string;
-  mustChangePassword: boolean;
-  branchId: string | null;
-};
+export type CurrentUser = SessionUser;
 
 const starterIntegrations = [
   ["DAT", "DAT Load Board", "Future posting and truck search integration."],
@@ -206,6 +197,62 @@ export async function login(formData: FormData) {
     redirect("/change-password");
   }
 
+  redirect("/");
+}
+
+export async function acceptInvite(formData: FormData) {
+  "use server";
+
+  const token = String(formData.get("token") ?? "").trim();
+  const password = String(formData.get("password") ?? "");
+  const confirmPassword = String(formData.get("confirmPassword") ?? "");
+
+  if (!token) {
+    redirect("/login?error=Invalid%20invite%20link");
+  }
+
+  if (password.length < 8 || password !== confirmPassword) {
+    redirect(`/accept-invite?token=${encodeURIComponent(token)}&error=Password%20must%20match%20and%20be%20at%20least%208%20characters`);
+  }
+
+  const user = await prisma.user.findUnique({
+    where: { inviteTokenHash: hashToken(token) },
+    include: { company: true }
+  });
+
+  if (!user || user.status !== "INVITED" || !user.inviteExpiresAt || user.inviteExpiresAt < new Date()) {
+    redirect("/login?error=This%20invite%20link%20is%20invalid%20or%20expired");
+  }
+
+  if (user.company.status !== "ACTIVE") {
+    redirect("/login?error=This%20organization%20is%20not%20active");
+  }
+
+  await prisma.user.update({
+    where: { id: user.id },
+    data: {
+      passwordHash: await hashPassword(password),
+      status: "ACTIVE",
+      mustChangePassword: false,
+      inviteTokenHash: null,
+      inviteExpiresAt: null,
+      lastLoginAt: new Date()
+    }
+  });
+
+  await prisma.auditLog.create({
+    data: {
+      companyId: user.companyId,
+      actorUserId: user.id,
+      targetUserId: user.id,
+      action: "ACCEPT_INVITE",
+      entityType: "User",
+      entityId: user.id,
+      details: `${user.email} accepted their invite.`
+    }
+  });
+
+  await createSession(user.id);
   redirect("/");
 }
 

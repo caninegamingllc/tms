@@ -2,20 +2,27 @@ import { PageHeader } from "@/components/page-header";
 import { CustomerForm } from "@/components/customer-form";
 import { createCustomer } from "@/lib/actions";
 import { requireUser } from "@/lib/auth";
+import { branchScopedWhere, canSeeAllBranches } from "@/lib/scope";
 import { prisma } from "@/lib/db";
 import { formatMoney } from "@/lib/format";
 
 export default async function CustomersPage() {
   const user = await requireUser();
-  const customers = await prisma.customer.findMany({
-    where: { companyId: user.companyId },
-    orderBy: { name: "asc" },
-    include: {
-      contacts: true,
-      loads: true,
-      invoices: true
-    }
-  });
+  const [customers, branches] = await Promise.all([
+    prisma.customer.findMany({
+      where: branchScopedWhere(user),
+      orderBy: { name: "asc" },
+      include: {
+        contacts: true,
+        loads: true,
+        invoices: true,
+        branch: true
+      }
+    }),
+    canSeeAllBranches(user)
+      ? prisma.branch.findMany({ where: { companyId: user.companyId }, orderBy: { name: "asc" } })
+      : Promise.resolve([])
+  ]);
 
   return (
     <>
@@ -35,6 +42,7 @@ export default async function CustomersPage() {
               <thead>
                 <tr>
                   <th>Name</th>
+                  <th>Branch</th>
                   <th>Primary Contact</th>
                   <th>Terms</th>
                   <th>Credit</th>
@@ -57,6 +65,7 @@ export default async function CustomersPage() {
                           {customer.city ?? "No city"}, {customer.state ?? "No state"}
                         </p>
                       </td>
+                      <td>{customer.branch?.name ?? "Unassigned"}</td>
                       <td>
                         <p>{primary?.name ?? "No contact"}</p>
                         <p className="muted">{primary?.email ?? customer.email ?? "No email"}</p>
@@ -75,7 +84,7 @@ export default async function CustomersPage() {
 
         <section className="card">
           <h2 className="section-title">Add Customer</h2>
-          <CustomerForm action={createCustomer} />
+          <CustomerForm action={createCustomer} branches={branches} showBranchPicker={canSeeAllBranches(user)} />
         </section>
       </div>
     </>

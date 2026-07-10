@@ -3,25 +3,27 @@ import { PageHeader } from "@/components/page-header";
 import { StatusBadge } from "@/components/status-badge";
 import { createCarrierBill, createInvoice, generateCustomerInvoice } from "@/lib/actions";
 import { requireUser } from "@/lib/auth";
+import { branchScopedWhere } from "@/lib/scope";
 import { paymentStatuses } from "@/lib/constants";
 import { prisma } from "@/lib/db";
 import { formatDate, formatMoney, humanize } from "@/lib/format";
 
 export default async function AccountingPage() {
   const user = await requireUser();
+  const loadScope = branchScopedWhere(user);
   const [loads, invoices, carrierBills, carriers] = await Promise.all([
     prisma.load.findMany({
-      where: { companyId: user.companyId },
+      where: loadScope,
       orderBy: { loadNumber: "desc" },
       include: { customer: true, dispatchAssignment: true }
     }),
     prisma.invoice.findMany({
-      where: { companyId: user.companyId },
+      where: { companyId: user.companyId, load: loadScope },
       orderBy: { createdAt: "desc" },
       include: { customer: true, load: true }
     }),
     prisma.carrierBill.findMany({
-      where: { companyId: user.companyId },
+      where: { companyId: user.companyId, load: loadScope },
       orderBy: { createdAt: "desc" },
       include: { carrier: true, load: true }
     }),
