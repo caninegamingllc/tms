@@ -135,6 +135,9 @@ export async function syncSeatSubscriptionFromStripe(subscription: Stripe.Subscr
   const price = firstItem?.price;
   const priceId = typeof price === "string" ? price : price?.id ?? null;
   const quantity = firstItem?.quantity ?? 0;
+  const currentPeriodEnd = firstItem?.current_period_end
+    ? new Date(firstItem.current_period_end * 1000)
+    : null;
   const customerId =
     typeof subscription.customer === "string" ? subscription.customer : subscription.customer?.id ?? null;
 
@@ -158,7 +161,7 @@ export async function syncSeatSubscriptionFromStripe(subscription: Stripe.Subscr
       stripePriceId: priceId,
       seatQuantity: quantity,
       status: statusMap[subscription.status] ?? "NONE",
-      currentPeriodEnd: new Date(subscription.current_period_end * 1000)
+      currentPeriodEnd
     },
     update: {
       stripeCustomerId: customerId ?? undefined,
@@ -166,7 +169,7 @@ export async function syncSeatSubscriptionFromStripe(subscription: Stripe.Subscr
       stripePriceId: priceId,
       seatQuantity: quantity,
       status: statusMap[subscription.status] ?? "NONE",
-      currentPeriodEnd: new Date(subscription.current_period_end * 1000)
+      currentPeriodEnd
     }
   });
 
