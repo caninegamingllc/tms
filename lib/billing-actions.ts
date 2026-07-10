@@ -131,7 +131,7 @@ export async function syncSeatSubscriptionFromStripe(
   const customerId =
     typeof subscription.customer === "string" ? subscription.customer : subscription.customer?.id ?? null;
 
-  let companyId = companyIdOverride ?? subscription.metadata?.companyId ?? null;
+  let companyId: string | null = companyIdOverride ?? subscription.metadata?.companyId ?? null;
 
   if (!companyId && customerId) {
     const match = await prisma.seatSubscription.findFirst({
