@@ -1,5 +1,5 @@
 import Link from "next/link";
-import { resetPassword } from "@/lib/auth";
+import { resetPassword } from "@/lib/password-reset-actions";
 
 export default async function ResetPasswordPage({
   searchParams

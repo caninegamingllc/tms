@@ -1,12 +1,12 @@
 import Link from "next/link";
-import { requestPasswordReset } from "@/lib/auth";
+import { requestPasswordReset } from "@/lib/password-reset-actions";
 
 export default async function ForgotPasswordPage({
   searchParams
 }: {
-  searchParams: Promise<{ sent?: string; reset?: string; error?: string }>;
+  searchParams: Promise<{ sent?: string; devToken?: string; error?: string }>;
 }) {
-  const { sent, reset, error } = await searchParams;
+  const { sent, devToken, error } = await searchParams;
 
   return (
     <main className="flex min-h-screen items-center justify-center px-5 py-10">
@@ -30,11 +30,14 @@ export default async function ForgotPasswordPage({
               If an account exists for that address, a reset link has been sent. It expires in 1
               hour.
             </p>
-            {reset ? (
+            {devToken ? (
               <div className="rounded-xl bg-white p-3 text-slate-700">
                 <p className="font-semibold text-ink">Development reset link</p>
-                <Link href={reset} className="mt-2 block break-all font-semibold text-brand-700">
-                  {reset}
+                <Link
+                  href={`/reset-password?token=${encodeURIComponent(devToken)}`}
+                  className="mt-2 block break-all font-semibold text-brand-700"
+                >
+                  /reset-password?token={devToken.slice(0, 8)}...
                 </Link>
               </div>
             ) : null}

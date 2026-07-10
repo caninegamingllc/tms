@@ -3,13 +3,10 @@ import { cookies } from "next/headers";
 import { redirect } from "next/navigation";
 import { prisma } from "@/lib/db";
 import type { SessionUser } from "@/lib/types";
-import { appBaseUrl } from "@/lib/app-url";
-import { isSmtpConfigured, sendPasswordResetEmail } from "@/lib/mail";
 
 export const sessionCookieName = "tms_session";
 const sessionDays = 7;
 const passwordKeyLength = 64;
-const passwordResetHours = 1;
 
 function shouldUseSecureCookies() {
   if (process.env.COOKIE_SECURE === "true") {
@@ -257,120 +254,6 @@ export async function acceptInvite(formData: FormData) {
 
   await createSession(user.id);
   redirect("/");
-}
-
-export async function requestPasswordReset(formData: FormData) {
-  "use server";
-
-  const email = String(formData.get("email") ?? "").trim().toLowerCase();
-  const user = email ? await prisma.user.findUnique({ where: { email } }) : null;
-  let devResetUrl: string | undefined;
-
-  if (
-    user &&
-    user.status === "ACTIVE" &&
-    !user.lockedAt &&
-    !user.disabledAt &&
-    user.passwordHash
-  ) {
-    const token = randomBytes(32).toString("base64url");
-    const passwordResetExpiresAt = new Date();
-    passwordResetExpiresAt.setHours(passwordResetExpiresAt.getHours() + passwordResetHours);
-
-    await prisma.user.update({
-      where: { id: user.id },
-      data: {
-        passwordResetTokenHash: hashToken(token),
-        passwordResetExpiresAt
-      }
-    });
-
-    const resetUrl = `${appBaseUrl()}/reset-password?token=${encodeURIComponent(token)}`;
-    await sendPasswordResetEmail(user.email, resetUrl);
-
-    if (process.env.NODE_ENV === "development" && !isSmtpConfigured()) {
-      devResetUrl = resetUrl;
-    }
-
-    await prisma.auditLog.create({
-      data: {
-        companyId: user.companyId,
-        actorUserId: user.id,
-        targetUserId: user.id,
-        action: "REQUEST_PASSWORD_RESET",
-        entityType: "User",
-        entityId: user.id,
-        details: `Password reset requested for ${user.email}.`
-      }
-    });
-  }
-
-  const params = new URLSearchParams({ sent: "1" });
-  if (devResetUrl) {
-    params.set("reset", devResetUrl);
-  }
-
-  redirect(`/forgot-password?${params.toString()}`);
-}
-
-export async function resetPassword(formData: FormData) {
-  "use server";
-
-  const token = String(formData.get("token") ?? "").trim();
-  const password = String(formData.get("password") ?? "");
-  const confirmPassword = String(formData.get("confirmPassword") ?? "");
-
-  if (!token) {
-    redirect("/login?error=Invalid%20password%20reset%20link");
-  }
-
-  if (password.length < 8 || password !== confirmPassword) {
-    redirect(
-      `/reset-password?token=${encodeURIComponent(token)}&error=Password%20must%20match%20and%20be%20at%20least%208%20characters`
-    );
-  }
-
-  const user = await prisma.user.findUnique({
-    where: { passwordResetTokenHash: hashToken(token) }
-  });
-
-  if (
-    !user ||
-    user.status !== "ACTIVE" ||
-    user.lockedAt ||
-    user.disabledAt ||
-    !user.passwordResetExpiresAt ||
-    user.passwordResetExpiresAt < new Date()
-  ) {
-    redirect("/login?error=This%20password%20reset%20link%20is%20invalid%20or%20expired");
-  }
-
-  await prisma.user.update({
-    where: { id: user.id },
-    data: {
-      passwordHash: await hashPassword(password),
-      mustChangePassword: false,
-      passwordResetAt: new Date(),
-      passwordResetTokenHash: null,
-      passwordResetExpiresAt: null
-    }
-  });
-
-  await prisma.session.deleteMany({ where: { userId: user.id } });
-
-  await prisma.auditLog.create({
-    data: {
-      companyId: user.companyId,
-      actorUserId: user.id,
-      targetUserId: user.id,
-      action: "RESET_PASSWORD",
-      entityType: "User",
-      entityId: user.id,
-      details: `${user.email} reset their password.`
-    }
-  });
-
-  redirect("/login?message=Password%20updated.%20Sign%20in%20with%20your%20new%20password.");
 }
 
 function slugify(value: string) {
