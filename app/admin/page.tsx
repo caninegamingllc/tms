@@ -23,10 +23,10 @@ import { formatDate, formatDateTime, humanize } from "@/lib/format";
 export default async function AdminPage({
   searchParams
 }: {
-  searchParams: Promise<{ invite?: string }>;
+  searchParams: Promise<{ invite?: string; emailSent?: string }>;
 }) {
   const currentUser = await requireAdmin();
-  const { invite } = await searchParams;
+  const { invite, emailSent } = await searchParams;
   const [company, users, branches, auditLogs] = await Promise.all([
     prisma.company.findUniqueOrThrow({ where: { id: currentUser.companyId } }),
     prisma.user.findMany({
@@ -60,7 +60,7 @@ export default async function AdminPage({
         description="Invite users, manage roles and branches, disable accounts, and review audit history."
       />
 
-      {invite ? <InviteLinkBanner invitePath={invite} /> : null}
+      {invite ? <InviteLinkBanner invitePath={invite} emailSent={emailSent === "1"} /> : null}
 
       <div className="grid gap-6 2xl:grid-cols-[1.4fr_0.8fr]">
         <section className="card overflow-hidden p-0">
@@ -218,7 +218,7 @@ export default async function AdminPage({
 
         <section className="card">
           <h2 className="section-title">Invite User</h2>
-          <p className="muted">Send an invite link so the user can set their own password and join your organization.</p>
+          <p className="muted">Send an invite email so the user can set their own password and join your organization.</p>
           <form action={inviteUser} className="mt-4 grid gap-3">
             <input name="name" className="input" placeholder="Full name" required />
             <input name="email" className="input" type="email" placeholder="Email" required />

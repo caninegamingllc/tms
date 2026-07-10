@@ -3,8 +3,10 @@
 import { randomBytes, createHash } from "crypto";
 import { redirect } from "next/navigation";
 import { revalidatePath } from "next/cache";
+import { appBaseUrl } from "@/lib/app-url";
 import { prisma } from "@/lib/db";
 import { hashPassword, requireAdmin } from "@/lib/auth";
+import { sendInviteEmail } from "@/lib/mail";
 
 const inviteDays = 7;
 
@@ -63,6 +65,44 @@ function assertCanManageTarget(actorRole: string, targetRole: string, targetId: 
   }
 }
 
+async function deliverInviteEmail(params: {
+  companyId: string;
+  inviterName: string;
+  inviteeName: string;
+  email: string;
+  role: string;
+  token: string;
+}) {
+  const company = await prisma.company.findUniqueOrThrow({ where: { id: params.companyId } });
+  const inviteUrl = `${appBaseUrl()}/accept-invite?token=${encodeURIComponent(params.token)}`;
+
+  try {
+    return await sendInviteEmail(params.email, {
+      inviteUrl,
+      companyName: company.name,
+      inviterName: params.inviterName,
+      inviteeName: params.inviteeName,
+      role: params.role,
+      expiresInDays: inviteDays
+    });
+  } catch (error) {
+    console.error("[invite] email delivery failed:", error);
+    return { delivered: false };
+  }
+}
+
+function redirectAfterInvite(token: string, delivered: boolean) {
+  const params = new URLSearchParams({
+    invite: `/accept-invite?token=${token}`
+  });
+
+  if (delivered) {
+    params.set("emailSent", "1");
+  }
+
+  redirect(`/admin?${params.toString()}`);
+}
+
 export async function inviteUser(formData: FormData) {
   const actor = await requireAdmin();
   const email = requiredString(formData, "email").toLowerCase();
@@ -110,7 +150,16 @@ export async function inviteUser(formData: FormData) {
   );
   revalidatePath("/admin");
 
-  redirect(`/admin?invite=${encodeURIComponent(`/accept-invite?token=${token}`)}`);
+  const emailResult = await deliverInviteEmail({
+    companyId: actor.companyId,
+    inviterName: actor.name,
+    inviteeName: user.name,
+    email: user.email,
+    role: user.role,
+    token
+  });
+
+  redirectAfterInvite(token, emailResult.delivered);
 }
 
 export async function resendInvite(formData: FormData) {
@@ -137,7 +186,16 @@ export async function resendInvite(formData: FormData) {
   await audit(actor.companyId, actor.id, "RESEND_INVITE", "User", user.id, `Re-sent invite to ${user.email}.`, user.id);
   revalidatePath("/admin");
 
-  redirect(`/admin?invite=${encodeURIComponent(`/accept-invite?token=${token}`)}`);
+  const emailResult = await deliverInviteEmail({
+    companyId: actor.companyId,
+    inviterName: actor.name,
+    inviteeName: user.name,
+    email: user.email,
+    role: user.role,
+    token
+  });
+
+  redirectAfterInvite(token, emailResult.delivered);
 }
 
 export async function cancelInvite(formData: FormData) {
