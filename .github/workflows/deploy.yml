@@ -1,0 +1,27 @@
+name: Deploy
+
+on:
+  push:
+    branches: [main]
+
+jobs:
+  deploy:
+    runs-on: ubuntu-latest
+    steps:
+      - name: Trigger production deploy
+        env:
+          DEPLOY_WEBHOOK_SECRET: ${{ secrets.DEPLOY_WEBHOOK_SECRET }}
+        run: |
+          if [ -z "$DEPLOY_WEBHOOK_SECRET" ]; then
+            echo "DEPLOY_WEBHOOK_SECRET is not configured. See scripts/setup-auto-deploy.md"
+            exit 1
+          fi
+
+          payload='{"ref":"refs/heads/main"}'
+          signature=$(printf '%s' "$payload" | openssl dgst -sha256 -hmac "$DEPLOY_WEBHOOK_SECRET" | awk '{print $2}')
+
+          curl -fsS -X POST \
+            -H "Content-Type: application/json" \
+            -H "X-Hub-Signature-256: sha256=${signature}" \
+            -d "$payload" \
+            "https://www.tms.simple-source.com/hooks/tms-deploy"

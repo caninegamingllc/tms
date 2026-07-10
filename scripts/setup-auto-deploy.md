@@ -10,6 +10,22 @@ Pushes to `main` deploy automatically to `https://www.tms.simple-source.com`.
 
 ## One-time GitHub setup
 
+Choose **one** of these options. Do not enable both or every push will deploy twice.
+
+### Option A: GitHub Actions (recommended)
+
+Add this repository secret:
+
+**Settings → Secrets and variables → Actions → New repository secret**
+
+| Name | Value |
+|------|-------|
+| `DEPLOY_WEBHOOK_SECRET` | The webhook secret from `/etc/webhook.conf` on the server |
+
+After the secret is saved, every push to `main` runs the deploy workflow.
+
+### Option B: GitHub repository webhook
+
 In the GitHub repo, go to **Settings → Webhooks → Add webhook**:
 
 | Field | Value |
