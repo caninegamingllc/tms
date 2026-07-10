@@ -51,7 +51,7 @@ export async function createSeatCheckoutSession(formData: FormData) {
     });
   }
 
-  const sessionParams: Parameters<typeof stripe.checkout.sessions.create>[0] = {
+  const sessionParams: Stripe.Checkout.SessionCreateParams = {
     mode: "subscription",
     customer: customerId,
     line_items: [{ price: priceId, quantity }],
