@@ -23,9 +23,14 @@ export default async function LoadsPage() {
         title="Load Management"
         description="Create, search, cover, dispatch, and track customer loads through the full brokerage lifecycle."
         action={
-          <Link href="/loads/new" className="btn">
-            New Load
-          </Link>
+          <div className="flex flex-wrap gap-2">
+            <Link href="/search" className="btn-secondary">
+              Advanced Search
+            </Link>
+            <Link href="/loads/new" className="btn">
+              New Load
+            </Link>
+          </div>
         }
       />
 
@@ -43,6 +48,8 @@ export default async function LoadsPage() {
                 <th>Customer</th>
                 <th>Lane</th>
                 <th>Pickup</th>
+                <th>Equipment</th>
+                <th>Commodity</th>
                 <th>Carrier</th>
                 <th>Financials</th>
               </tr>
@@ -65,6 +72,8 @@ export default async function LoadsPage() {
                     {load.deliveryState}
                   </td>
                   <td>{formatDate(load.pickupDate)}</td>
+                  <td>{load.equipmentType}</td>
+                  <td>{load.commodity ?? "General freight"}</td>
                   <td>{load.dispatchAssignment?.carrier.name ?? "Uncovered"}</td>
                   <td>
                     <p className="font-semibold">{formatMoney(load.revenueCents)}</p>

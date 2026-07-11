@@ -14,6 +14,7 @@ import {
   MapPin,
   Menu,
   Plug,
+  Search,
   Settings,
   ShieldCheck,
   Truck,
@@ -27,6 +28,7 @@ import { OrgSwitcher } from "@/components/org-switcher";
 const navItems = [
   { href: "/", label: "Dashboard", icon: LayoutDashboard },
   { href: "/loads", label: "Loads", icon: Truck },
+  { href: "/search", label: "Search", icon: Search },
   { href: "/customers", label: "Customers", icon: Building2 },
   { href: "/locations", label: "Locations", icon: MapPin },
   { href: "/carriers", label: "Carriers", icon: ShieldCheck },
