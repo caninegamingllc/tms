@@ -26,24 +26,28 @@ model Company {
   carrierBills         CarrierBill[]
   integrationAccounts  IntegrationAccount[]
   auditLogs            AuditLog[]
+  commissionProfiles   CommissionProfile[]
   createdAt            DateTime               @default(now())
   updatedAt            DateTime               @updatedAt
 }
 
 model Branch {
-  id        String     @id @default(cuid())
-  companyId String
-  company   Company    @relation(fields: [companyId], references: [id], onDelete: Cascade)
-  name      String
-  city      String?
-  state     String?
-  memberships CompanyMembership[]
-  customers Customer[]
-  carriers  Carrier[]
-  facilities Facility[]
-  loads     Load[]
-  createdAt DateTime   @default(now())
-  updatedAt DateTime   @updatedAt
+  id                   String             @id @default(cuid())
+  companyId            String
+  company              Company            @relation(fields: [companyId], references: [id], onDelete: Cascade)
+  name                 String
+  city                 String?
+  state                String?
+  commissionProfileId  String?
+  commissionProfile    CommissionProfile? @relation(fields: [commissionProfileId], references: [id])
+  memberships          CompanyMembership[]
+  customers            Customer[]
+  carriers             Carrier[]
+  facilities           Facility[]
+  loads                Load[]
+  loadCommissions      LoadCommission[]
+  createdAt            DateTime           @default(now())
+  updatedAt            DateTime           @updatedAt
 
   @@index([companyId])
 }
@@ -64,6 +68,7 @@ model User {
   sessions               Session[]
   auditLogs              AuditLog[]          @relation("AuditActor")
   targetAuditLogs        AuditLog[]          @relation("AuditTargetUser")
+  settledCommissions     LoadCommission[]
   createdAt              DateTime            @default(now())
   updatedAt              DateTime            @updatedAt
 }
@@ -297,18 +302,23 @@ model Load {
   deliveryState     String
   pickupDate        DateTime
   deliveryDate      DateTime
-  revenueCents      Int                 @default(0)
-  carrierCostCents  Int                 @default(0)
-  stops             LoadStop[]
-  charges           LoadCharge[]
-  documents         LoadDocument[]
-  notes             LoadNote[]
-  activities        LoadActivity[]
-  dispatchAssignment DispatchAssignment?
-  invoices          Invoice[]
-  carrierBills      CarrierBill[]
-  createdAt         DateTime            @default(now())
-  updatedAt         DateTime            @updatedAt
+  revenueCents         Int                 @default(0)
+  carrierCostCents     Int                 @default(0)
+  isCommissionable     Boolean             @default(true)
+  commissionProfileId  String?
+  commissionProfile    CommissionProfile?  @relation(fields: [commissionProfileId], references: [id])
+  stops                LoadStop[]
+  charges              LoadCharge[]
+  expenses             LoadExpense[]
+  documents            LoadDocument[]
+  notes                LoadNote[]
+  activities           LoadActivity[]
+  dispatchAssignment   DispatchAssignment?
+  invoices             Invoice[]
+  carrierBills         CarrierBill[]
+  commission           LoadCommission?
+  createdAt            DateTime            @default(now())
+  updatedAt            DateTime            @updatedAt
 
   @@unique([companyId, loadNumber])
   @@index([companyId])
@@ -339,6 +349,68 @@ model LoadCharge {
   label       String
   chargeType  String   @default("Linehaul")
   amountCents Int
+}
+
+model LoadExpense {
+  id          String   @id @default(cuid())
+  loadId      String
+  load        Load     @relation(fields: [loadId], references: [id], onDelete: Cascade)
+  label       String
+  expenseType String   @default("Other")
+  amountCents Int
+}
+
+model CommissionProfile {
+  id        String                  @id @default(cuid())
+  companyId String
+  company   Company                 @relation(fields: [companyId], references: [id], onDelete: Cascade)
+  name      String
+  isDefault Boolean                 @default(false)
+  rule      CommissionProfileRule?
+  branches  Branch[]
+  loads     Load[]
+  commissions LoadCommission[]
+  createdAt DateTime                @default(now())
+  updatedAt DateTime                @updatedAt
+
+  @@index([companyId])
+}
+
+model CommissionProfileRule {
+  id                          String            @id @default(cuid())
+  profileId                   String            @unique
+  profile                     CommissionProfile @relation(fields: [profileId], references: [id], onDelete: Cascade)
+  branchSharePercent          Int               @default(60)
+  companySharePercent         Int               @default(40)
+  companyMinimumExpensePercent Int              @default(10)
+}
+
+model LoadCommission {
+  id                 String            @id @default(cuid())
+  loadId             String            @unique
+  load               Load              @relation(fields: [loadId], references: [id], onDelete: Cascade)
+  branchId           String?
+  branch             Branch?           @relation(fields: [branchId], references: [id])
+  profileId          String?
+  profile            CommissionProfile? @relation(fields: [profileId], references: [id])
+  profileName        String
+  isCommissionable   Boolean           @default(true)
+  revenueCents       Int               @default(0)
+  grossExpenseCents  Int               @default(0)
+  grossProfitCents   Int               @default(0)
+  branchShareCents   Int               @default(0)
+  companyShareCents  Int               @default(0)
+  calculationMethod  String            @default("STANDARD_SPLIT")
+  status             String            @default("PENDING")
+  payableAt          DateTime?
+  settledAt          DateTime?
+  settledByUserId    String?
+  settledByUser      User?             @relation(fields: [settledByUserId], references: [id])
+  createdAt          DateTime          @default(now())
+  updatedAt          DateTime          @updatedAt
+
+  @@index([branchId])
+  @@index([status])
 }
 
 model DispatchAssignment {

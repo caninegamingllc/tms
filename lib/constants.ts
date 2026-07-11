@@ -40,6 +40,20 @@ export const paymentStatuses = [
   "VOID"
 ] as const;
 
+export const commissionStatuses = ["PENDING", "PAYABLE", "SETTLED", "INELIGIBLE"] as const;
+
+export const commissionCalculationMethods = [
+  "STANDARD_SPLIT",
+  "EXPENSE_FLOOR",
+  "INELIGIBLE",
+  "NO_PROFIT"
+] as const;
+
+export const expenseTypes = ["Lumper", "Detention", "TONU", "Other"] as const;
+
+export type CommissionStatus = (typeof commissionStatuses)[number];
+export type CommissionCalculationMethod = (typeof commissionCalculationMethods)[number];
+
 export const userRoles = ["OWNER", "ADMIN", "BROKER", "DISPATCHER", "ACCOUNTING", "VIEWER"] as const;
 
 export const userStatuses = ["ACTIVE", "LOCKED", "DISABLED", "INVITED"] as const;

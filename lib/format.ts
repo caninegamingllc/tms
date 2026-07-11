@@ -55,3 +55,18 @@ export function humanize(value: string) {
     .map((part) => part.charAt(0).toUpperCase() + part.slice(1))
     .join(" ");
 }
+
+export function commissionMethodLabel(method: string) {
+  switch (method) {
+    case "STANDARD_SPLIT":
+      return "Standard split";
+    case "EXPENSE_FLOOR":
+      return "Expense floor";
+    case "INELIGIBLE":
+      return "Ineligible";
+    case "NO_PROFIT":
+      return "No profit";
+    default:
+      return humanize(method);
+  }
+}

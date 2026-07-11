@@ -487,6 +487,21 @@ export async function registerCompany(formData: FormData) {
       }))
     });
 
+    await tx.commissionProfile.create({
+      data: {
+        companyId: company.id,
+        name: "Standard 60/40",
+        isDefault: true,
+        rule: {
+          create: {
+            branchSharePercent: 60,
+            companySharePercent: 40,
+            companyMinimumExpensePercent: 10
+          }
+        }
+      }
+    });
+
     await tx.auditLog.create({
       data: {
         companyId: company.id,

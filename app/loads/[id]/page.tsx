@@ -12,22 +12,33 @@ import {
   generateRateConfirmation,
   updateLoadStatus
 } from "@/lib/actions";
+import {
+  addLoadExpense,
+  assignLoadCommissionProfile,
+  removeLoadExpense,
+  settleLoadCommission,
+  updateLoadCommissionable
+} from "@/lib/commission-actions";
+import { recalculateLoadCommission } from "@/lib/commission";
 import { requireTmsAccess } from "@/lib/permissions";
-import { canAccessBranchRecord } from "@/lib/scope";
-import { documentTypes, loadStatuses } from "@/lib/constants";
+import { canAccessBranchRecord, canManageUsers, canSettleCommission } from "@/lib/scope";
+import { documentTypes, expenseTypes, loadStatuses } from "@/lib/constants";
 import { prisma } from "@/lib/db";
-import { formatDate, formatDateTime, formatMoney, humanize, marginPercent } from "@/lib/format";
+import { commissionMethodLabel, formatDate, formatDateTime, formatMoney, humanize, marginPercent } from "@/lib/format";
 
 export default async function LoadDetailPage({ params }: { params: Promise<{ id: string }> }) {
   const { id } = await params;
   const user = await requireTmsAccess();
-  const [load, carriers] = await Promise.all([
+  const [load, carriers, commissionProfiles] = await Promise.all([
     prisma.load.findUnique({
       where: { id, companyId: user.companyId },
       include: {
         customer: true,
+        branch: true,
         stops: { orderBy: { sequence: "asc" } },
         charges: true,
+        expenses: true,
+        commission: true,
         documents: true,
         notes: { orderBy: { createdAt: "desc" }, include: { user: true } },
         activities: { orderBy: { createdAt: "desc" }, include: { user: true } },
@@ -41,11 +52,31 @@ export default async function LoadDetailPage({ params }: { params: Promise<{ id:
         carrierBills: { include: { carrier: true } }
       }
     }),
-    prisma.carrier.findMany({ where: { companyId: user.companyId }, orderBy: { name: "asc" } })
+    prisma.carrier.findMany({ where: { companyId: user.companyId }, orderBy: { name: "asc" } }),
+    canManageUsers(user)
+      ? prisma.commissionProfile.findMany({
+          where: { companyId: user.companyId },
+          orderBy: { name: "asc" }
+        })
+      : Promise.resolve([])
   ]);
 
   if (!load || !canAccessBranchRecord(user, load.branchId)) {
     notFound();
+  }
+
+  if (!load.commission) {
+    await recalculateLoadCommission(load.id);
+    const refreshed = await prisma.load.findUnique({
+      where: { id },
+      include: { commission: true, expenses: true }
+    });
+    if (refreshed?.commission) {
+      load.commission = refreshed.commission;
+    }
+    if (refreshed?.expenses) {
+      load.expenses = refreshed.expenses;
+    }
   }
 
   const carrierOptions = carriers.map((carrier) => ({
@@ -286,6 +317,112 @@ export default async function LoadDetailPage({ params }: { params: Promise<{ id:
               </form>
             </section>
           ) : null}
+
+          <section className="card">
+            <h2 className="section-title">Commission</h2>
+            <p className="muted">
+              Branch: {load.branch?.name ?? "Unassigned"} — payable once the customer has paid.
+            </p>
+
+            <form action={updateLoadCommissionable} className="mt-4 flex items-center gap-2">
+              <input type="hidden" name="loadId" value={load.id} />
+              <input type="hidden" name="isCommissionable" value={load.isCommissionable ? "false" : "true"} />
+              <button type="submit" className="btn-secondary">
+                Mark {load.isCommissionable ? "Non-Commissionable" : "Commissionable"}
+              </button>
+              <span className="text-sm text-muted-foreground">
+                Currently {load.isCommissionable ? "commissionable" : "non-commissionable"}
+              </span>
+            </form>
+
+            {canManageUsers(user) ? (
+              <form action={assignLoadCommissionProfile} className="mt-4 grid gap-3">
+                <input type="hidden" name="loadId" value={load.id} />
+                <label className="grid gap-2">
+                  <span className="label">Commission Profile Override</span>
+                  <select name="profileId" className="select" defaultValue={load.commissionProfileId ?? ""}>
+                    <option value="">Use branch/company default</option>
+                    {commissionProfiles.map((profile) => (
+                      <option key={profile.id} value={profile.id}>
+                        {profile.name}
+                      </option>
+                    ))}
+                  </select>
+                </label>
+                <button type="submit" className="btn-secondary">
+                  Save Profile
+                </button>
+              </form>
+            ) : null}
+
+            {load.commission ? (
+              <div className="mt-4 grid gap-3 rounded-2xl bg-muted p-4 text-sm">
+                <div className="flex flex-wrap items-center justify-between gap-2">
+                  <p className="font-semibold text-foreground">Calculation Breakdown</p>
+                  <StatusBadge value={load.commission.status} />
+                </div>
+                <div className="grid gap-2 md:grid-cols-2">
+                  <p>Revenue: {formatMoney(load.commission.revenueCents)}</p>
+                  <p>Gross expenses: {formatMoney(load.commission.grossExpenseCents)}</p>
+                  <p>Gross profit: {formatMoney(load.commission.grossProfitCents)}</p>
+                  <p>Profile: {load.commission.profileName}</p>
+                  <p>Branch commission: {formatMoney(load.commission.branchShareCents)}</p>
+                  <p>Company share: {formatMoney(load.commission.companyShareCents)}</p>
+                  <p>Method: {commissionMethodLabel(load.commission.calculationMethod)}</p>
+                  <p>Carrier cost: {formatMoney(load.carrierCostCents)}</p>
+                  <p>
+                    Other expenses:{" "}
+                    {formatMoney(load.commission.grossExpenseCents - load.carrierCostCents)}
+                  </p>
+                </div>
+                {load.commission.status === "PAYABLE" && canSettleCommission(user) ? (
+                  <form action={settleLoadCommission}>
+                    <input type="hidden" name="loadId" value={load.id} />
+                    <button type="submit" className="btn">
+                      Mark Commission Settled
+                    </button>
+                  </form>
+                ) : null}
+              </div>
+            ) : null}
+
+            <div className="mt-4 grid gap-3">
+              <h3 className="font-semibold text-foreground">Load Expenses</h3>
+              {load.expenses.map((expense) => (
+                <div key={expense.id} className="flex items-center justify-between rounded-2xl border border-border p-3">
+                  <div>
+                    <p className="font-semibold">{expense.label}</p>
+                    <p className="muted">
+                      {expense.expenseType} - {formatMoney(expense.amountCents)}
+                    </p>
+                  </div>
+                  <form action={removeLoadExpense}>
+                    <input type="hidden" name="expenseId" value={expense.id} />
+                    <input type="hidden" name="loadId" value={load.id} />
+                    <button type="submit" className="btn-secondary">
+                      Remove
+                    </button>
+                  </form>
+                </div>
+              ))}
+            </div>
+
+            <form action={addLoadExpense} className="mt-4 grid gap-3 rounded-2xl bg-muted p-4">
+              <input type="hidden" name="loadId" value={load.id} />
+              <input name="label" className="input" placeholder="Expense label" required />
+              <select name="expenseType" className="select" defaultValue="Other">
+                {expenseTypes.map((type) => (
+                  <option key={type} value={type}>
+                    {type}
+                  </option>
+                ))}
+              </select>
+              <input name="amount" className="input" placeholder="Amount" required />
+              <button type="submit" className="btn">
+                Add Expense
+              </button>
+            </form>
+          </section>
 
           <section className="card">
             <h2 className="section-title">Accounting</h2>

@@ -1,7 +1,9 @@
+import Link from "next/link";
 import { MetricCard } from "@/components/metric-card";
 import { PageHeader } from "@/components/page-header";
 import { StatusBadge } from "@/components/status-badge";
 import { createCarrierBill, createInvoice, generateCustomerInvoice } from "@/lib/actions";
+import { markInvoicePaid } from "@/lib/commission-actions";
 import { requireTmsAccess } from "@/lib/permissions";
 import { branchScopedWhere } from "@/lib/scope";
 import { paymentStatuses } from "@/lib/constants";
@@ -20,7 +22,10 @@ export default async function AccountingPage() {
     prisma.invoice.findMany({
       where: { companyId: user.companyId, load: loadScope },
       orderBy: { createdAt: "desc" },
-      include: { customer: true, load: true }
+      include: {
+        customer: true,
+        load: { include: { commission: true } }
+      }
     }),
     prisma.carrierBill.findMany({
       where: { companyId: user.companyId, load: loadScope },
@@ -70,19 +75,41 @@ export default async function AccountingPage() {
                   <th>Status</th>
                   <th>Total</th>
                   <th>Due</th>
+                  <th>Actions</th>
                 </tr>
               </thead>
               <tbody>
                 {invoices.map((invoice) => (
                   <tr key={invoice.id}>
                     <td className="font-semibold">{invoice.invoiceNo}</td>
-                    <td>{invoice.load.loadNumber}</td>
+                    <td>
+                      <Link href={`/loads/${invoice.loadId}`} className="text-primary">
+                        {invoice.load.loadNumber}
+                      </Link>
+                    </td>
                     <td>{invoice.customer.name}</td>
                     <td>
                       <StatusBadge value={invoice.status} />
                     </td>
                     <td>{formatMoney(invoice.totalCents)}</td>
                     <td>{formatDate(invoice.dueAt)}</td>
+                    <td>
+                      <div className="grid gap-2">
+                        {invoice.status !== "PAID" && invoice.status !== "VOID" ? (
+                          <form action={markInvoicePaid}>
+                            <input type="hidden" name="invoiceId" value={invoice.id} />
+                            <button type="submit" className="btn-secondary">
+                              Mark Paid
+                            </button>
+                          </form>
+                        ) : null}
+                        {invoice.load.commission ? (
+                          <Link href="/commissions" className="text-sm font-semibold text-primary">
+                            Commission {formatMoney(invoice.load.commission.branchShareCents)}
+                          </Link>
+                        ) : null}
+                      </div>
+                    </td>
                   </tr>
                 ))}
               </tbody>

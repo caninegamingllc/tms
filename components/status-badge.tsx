@@ -16,7 +16,11 @@ const tones: Record<string, string> = {
   SENT: "bg-blue-100 text-blue-700",
   DRAFT: "bg-slate-100 text-slate-700",
   PARTIAL: "bg-amber-100 text-amber-800",
-  VOID: "bg-zinc-100 text-zinc-700"
+  VOID: "bg-zinc-100 text-zinc-700",
+  PENDING: "bg-amber-100 text-amber-800",
+  PAYABLE: "bg-blue-100 text-blue-700",
+  SETTLED: "bg-green-100 text-green-700",
+  INELIGIBLE: "bg-zinc-100 text-zinc-700"
 };
 
 export function StatusBadge({ value }: { value: string }) {

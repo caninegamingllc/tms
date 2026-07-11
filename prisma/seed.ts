@@ -23,6 +23,8 @@ async function main() {
   await prisma.seatSubscription.deleteMany();
   await prisma.checkCall.deleteMany();
   await prisma.dispatchAssignment.deleteMany();
+  await prisma.loadCommission.deleteMany();
+  await prisma.loadExpense.deleteMany();
   await prisma.carrierBill.deleteMany();
   await prisma.invoice.deleteMany();
   await prisma.loadActivity.deleteMany();
@@ -41,6 +43,8 @@ async function main() {
   await prisma.customer.deleteMany();
   await prisma.user.deleteMany();
   await prisma.branch.deleteMany();
+  await prisma.commissionProfileRule.deleteMany();
+  await prisma.commissionProfile.deleteMany();
   await prisma.company.deleteMany();
 
   const company = await prisma.company.create({
@@ -60,6 +64,26 @@ async function main() {
       city: "Detroit",
       state: "MI"
     }
+  });
+
+  const commissionProfile = await prisma.commissionProfile.create({
+    data: {
+      companyId: company.id,
+      name: "Standard 60/40",
+      isDefault: true,
+      rule: {
+        create: {
+          branchSharePercent: 60,
+          companySharePercent: 40,
+          companyMinimumExpensePercent: 10
+        }
+      }
+    }
+  });
+
+  await prisma.branch.update({
+    where: { id: branch.id },
+    data: { commissionProfileId: commissionProfile.id }
   });
 
   const owner = await prisma.user.create({
@@ -478,6 +502,9 @@ async function main() {
             dueAt: daysFromNow(9)
           }
         ]
+      },
+      expenses: {
+        create: [{ label: "Lumper fee", expenseType: "Lumper", amountCents: 5000 }]
       }
     }
   });
@@ -552,6 +579,78 @@ async function main() {
       }
     }
   });
+
+  await prisma.load.create({
+    data: {
+      companyId: company.id,
+      loadNumber: "GLB-1003",
+      title: "Paper goods to Indianapolis",
+      status: "PAID",
+      customerId: customer.id,
+      branchId: branch.id,
+      equipmentType: "Dry Van",
+      commodity: "Paper products",
+      weight: 41000,
+      pickupCity: "Detroit",
+      pickupState: "MI",
+      deliveryCity: "Indianapolis",
+      deliveryState: "IN",
+      pickupDate: daysFromNow(-5),
+      deliveryDate: daysFromNow(-4),
+      revenueCents: 100000,
+      carrierCostCents: 70000,
+      stops: {
+        create: [
+          {
+            type: "PICKUP",
+            sequence: 1,
+            facilityName: "Detroit Warehouse",
+            city: "Detroit",
+            state: "MI",
+            appointmentAt: daysFromNow(-5)
+          },
+          {
+            type: "DELIVERY",
+            sequence: 2,
+            facilityName: "Indianapolis DC",
+            city: "Indianapolis",
+            state: "IN",
+            appointmentAt: daysFromNow(-4)
+          }
+        ]
+      },
+      charges: {
+        create: [{ label: "Linehaul", chargeType: "Linehaul", amountCents: 100000 }]
+      },
+      invoices: {
+        create: [
+          {
+            companyId: company.id,
+            invoiceNo: "INV-1003",
+            customerId: customer.id,
+            status: "PAID",
+            totalCents: 100000,
+            issuedAt: daysFromNow(-4),
+            dueAt: daysFromNow(26),
+            paidAt: daysFromNow(-2)
+          }
+        ]
+      },
+      dispatchAssignment: {
+        create: {
+          carrierId: carrier.id,
+          driverName: "Pat Lee",
+          rateCents: 70000
+        }
+      }
+    }
+  });
+
+  const { recalculateLoadCommission } = await import("../lib/commission");
+  const seededLoads = await prisma.load.findMany({ where: { companyId: company.id }, select: { id: true } });
+  for (const load of seededLoads) {
+    await recalculateLoadCommission(load.id);
+  }
 
   await prisma.integrationAccount.createMany({
     data: [

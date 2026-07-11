@@ -14,6 +14,7 @@ import {
 } from "@/lib/document-templates";
 import { normalizeCarrierNumber } from "@/lib/carrier-numbers";
 import { parseMoneyToCents } from "@/lib/format";
+import { recalculateLoadCommission } from "@/lib/commission";
 
 function requiredString(formData: FormData, key: string) {
   const value = String(formData.get(key) ?? "").trim();
@@ -526,7 +527,10 @@ export async function createLoad(formData: FormData) {
     return createdLoad;
   });
 
+  await recalculateLoadCommission(load.id);
+
   revalidatePath("/loads");
+  revalidatePath("/commissions");
   redirect(`/loads/${load.id}`);
 }
 
@@ -550,7 +554,10 @@ export async function updateLoadStatus(formData: FormData) {
     }
   });
 
+  await recalculateLoadCommission(loadId);
+
   revalidatePath("/loads");
+  revalidatePath("/commissions");
   revalidatePath(`/loads/${loadId}`);
 }
 
@@ -597,8 +604,11 @@ export async function assignCarrier(formData: FormData) {
     }
   });
 
+  await recalculateLoadCommission(loadId);
+
   revalidatePath("/dispatch");
   revalidatePath("/loads");
+  revalidatePath("/commissions");
   revalidatePath(`/loads/${loadId}`);
 }
 

@@ -12,6 +12,10 @@ export function canManageUsers(user: Pick<SessionUser, "role">) {
   return isAdminRole(user.role);
 }
 
+export function canSettleCommission(user: Pick<SessionUser, "role">) {
+  return user.role === "OWNER" || user.role === "ADMIN" || user.role === "ACCOUNTING";
+}
+
 export function canWrite(user: Pick<SessionUser, "role">) {
   return user.role !== "VIEWER";
 }

@@ -5,15 +5,18 @@ import { requireTmsAccess } from "@/lib/permissions";
 import { branchScopedWhere } from "@/lib/scope";
 import { prisma } from "@/lib/db";
 import { formatDate, formatMoney, marginPercent } from "@/lib/format";
+import { syncMissingCommissions } from "@/lib/commission";
 
 export default async function LoadsPage() {
   const user = await requireTmsAccess();
+  await syncMissingCommissions(user.companyId);
   const loads = await prisma.load.findMany({
     where: branchScopedWhere(user),
     orderBy: [{ pickupDate: "asc" }, { loadNumber: "asc" }],
     include: {
       customer: true,
-      dispatchAssignment: { include: { carrier: true } }
+      dispatchAssignment: { include: { carrier: true } },
+      commission: true
     }
   });
 
@@ -81,6 +84,12 @@ export default async function LoadsPage() {
                       Margin {formatMoney(load.revenueCents - load.carrierCostCents)} (
                       {marginPercent(load.revenueCents, load.carrierCostCents)})
                     </p>
+                    {load.commission ? (
+                      <p className="mt-1 text-sm">
+                        Commission {formatMoney(load.commission.branchShareCents)}{" "}
+                        <StatusBadge value={load.commission.status} />
+                      </p>
+                    ) : null}
                   </td>
                 </tr>
               ))}
