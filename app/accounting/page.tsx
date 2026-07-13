@@ -2,15 +2,15 @@ import { CarrierBillsTable, InvoicesTable } from "@/components/accounting-tables
 import { MetricCard } from "@/components/metric-card";
 import { PageHeader } from "@/components/page-header";
 import { createCarrierBill, createInvoice, generateCustomerInvoice } from "@/lib/actions";
+import { getBranchScope } from "@/lib/branch-filter-server";
 import { requireTmsAccess } from "@/lib/permissions";
-import { branchScopedWhere } from "@/lib/scope";
 import { paymentStatuses } from "@/lib/constants";
 import { prisma } from "@/lib/db";
 import { formatMoney, humanize } from "@/lib/format";
 
 export default async function AccountingPage() {
   const user = await requireTmsAccess();
-  const loadScope = branchScopedWhere(user);
+  const loadScope = await getBranchScope(user);
   const [loads, invoices, carrierBills, carriers] = await Promise.all([
     prisma.load.findMany({
       where: loadScope,
@@ -30,7 +30,7 @@ export default async function AccountingPage() {
       orderBy: { createdAt: "desc" },
       include: { carrier: true, load: true }
     }),
-    prisma.carrier.findMany({ where: { companyId: user.companyId }, orderBy: { name: "asc" } })
+    prisma.carrier.findMany({ where: loadScope, orderBy: { name: "asc" } })
   ]);
 
   const openAr = invoices

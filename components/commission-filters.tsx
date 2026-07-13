@@ -7,25 +7,13 @@ import { buildCommissionQueryString } from "@/lib/commission-search";
 import { commissionStatuses } from "@/lib/constants";
 import { humanize } from "@/lib/format";
 
-type BranchOption = {
-  id: string;
-  name: string;
-};
-
-export function CommissionFilters({
-  filters,
-  branches
-}: {
-  filters: CommissionFilters;
-  branches: BranchOption[];
-}) {
+export function CommissionFilters({ filters }: { filters: CommissionFilters }) {
   const router = useRouter();
 
   function handleSubmit(event: FormEvent<HTMLFormElement>) {
     event.preventDefault();
     const formData = new FormData(event.currentTarget);
     const nextFilters: CommissionFilters = {
-      branchId: String(formData.get("branchId") ?? ""),
       status: String(formData.get("status") ?? "") as CommissionFilters["status"],
       commissionable: String(formData.get("commissionable") ?? "") as CommissionFilters["commissionable"],
       dateFrom: String(formData.get("dateFrom") ?? ""),
@@ -44,23 +32,11 @@ export function CommissionFilters({
     <section className="card p-5">
       <div className="mb-4">
         <h2 className="section-title">Filters</h2>
-        <p className="muted">Filter by branch, settlement status, commissionable flag, and pickup date.</p>
+        <p className="muted">Filter by settlement status, commissionable flag, and pickup date.</p>
       </div>
 
       <form className="grid gap-4" onSubmit={handleSubmit}>
-        <div className="grid gap-4 md:grid-cols-2 xl:grid-cols-5">
-          <label className="grid gap-2">
-            <span className="label">Branch</span>
-            <select name="branchId" className="select" defaultValue={filters.branchId ?? ""}>
-              <option value="">All branches</option>
-              {branches.map((branch) => (
-                <option key={branch.id} value={branch.id}>
-                  {branch.name}
-                </option>
-              ))}
-            </select>
-          </label>
-
+        <div className="grid gap-4 md:grid-cols-2 xl:grid-cols-4">
           <label className="grid gap-2">
             <span className="label">Settlement Status</span>
             <select name="status" className="select" defaultValue={filters.status ?? ""}>

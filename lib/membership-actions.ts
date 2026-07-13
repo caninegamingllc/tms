@@ -3,6 +3,7 @@
 import { revalidatePath } from "next/cache";
 import { redirect } from "next/navigation";
 import { createSession, requireUser } from "@/lib/auth";
+import { clearBranchFilterCookie } from "@/lib/branch-filter-actions";
 import { prisma } from "@/lib/db";
 
 export async function switchOrganization(formData: FormData) {
@@ -29,6 +30,7 @@ export async function switchOrganization(formData: FormData) {
   }
 
   await prisma.session.deleteMany({ where: { userId: user.id } });
+  await clearBranchFilterCookie();
   await createSession(user.id, membershipId);
 
   revalidatePath("/", "layout");
@@ -60,6 +62,7 @@ export async function selectOrganization(formData: FormData) {
   }
 
   await prisma.session.deleteMany({ where: { userId: user.id } });
+  await clearBranchFilterCookie();
   await createSession(user.id, membershipId);
 
   await prisma.auditLog.create({

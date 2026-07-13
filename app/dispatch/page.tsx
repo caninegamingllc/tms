@@ -1,8 +1,8 @@
 import { DispatchBoard } from "@/components/dispatch-board";
 import { PageHeader } from "@/components/page-header";
 import { parseDispatchBoardParams, serializeDispatchBoardRow } from "@/lib/dispatch-board";
+import { getBranchScope } from "@/lib/branch-filter-server";
 import { requireTmsAccess } from "@/lib/permissions";
-import { branchScopedWhere } from "@/lib/scope";
 import { prisma } from "@/lib/db";
 
 export default async function DispatchPage({
@@ -11,7 +11,7 @@ export default async function DispatchPage({
   searchParams: Promise<Record<string, string | string[] | undefined>>;
 }) {
   const user = await requireTmsAccess();
-  const loadScope = branchScopedWhere(user);
+  const loadScope = await getBranchScope(user);
   const params = await searchParams;
   const { stage } = parseDispatchBoardParams(params);
 

@@ -1,19 +1,19 @@
 import Link from "next/link";
 import { PageHeader } from "@/components/page-header";
 import { DocumentsTable } from "@/components/documents-table";
-import { requireTmsAccess } from "@/lib/permissions";
-import { branchScopedWhere } from "@/lib/scope";
+import { getBranchScope } from "@/lib/branch-filter-server";
 import { toDocumentTableRows } from "@/lib/document-rows";
+import { requireTmsAccess } from "@/lib/permissions";
 import { prisma } from "@/lib/db";
 
 export default async function DocumentsPage() {
   const user = await requireTmsAccess();
-  const loadScope = branchScopedWhere(user);
-  const customerScope = branchScopedWhere(user);
+  const loadScope = await getBranchScope(user);
+  const customerScope = loadScope;
   const documents = await prisma.loadDocument.findMany({
     where: {
       companyId: user.companyId,
-      OR: [{ load: loadScope }, { customer: customerScope }, { carrier: { companyId: user.companyId } }]
+      OR: [{ load: loadScope }, { customer: customerScope }, { carrier: loadScope }]
     },
     orderBy: { uploadedAt: "desc" },
     include: {

@@ -3,8 +3,8 @@ import { notFound } from "next/navigation";
 import { DocumentMetadataForm } from "@/components/document-metadata-form";
 import { PageHeader } from "@/components/page-header";
 import { PrintButton } from "@/components/print-button";
+import { getBranchScope } from "@/lib/branch-filter-server";
 import { requireTmsAccess } from "@/lib/permissions";
-import { branchScopedWhere } from "@/lib/scope";
 import { isPreviewableMimeType } from "@/lib/document-storage";
 import { parseDocumentTypes } from "@/lib/document-types";
 import { prisma } from "@/lib/db";
@@ -13,8 +13,7 @@ import { formatDateTime, humanize } from "@/lib/format";
 export default async function DocumentDetailPage({ params }: { params: Promise<{ id: string }> }) {
   const { id } = await params;
   const user = await requireTmsAccess();
-  const loadScope = branchScopedWhere(user);
-  const customerScope = branchScopedWhere(user);
+  const scope = await getBranchScope(user);
 
   const [document, loads, customers, carriers, documentIds] = await Promise.all([
     prisma.loadDocument.findUnique({
@@ -27,17 +26,17 @@ export default async function DocumentDetailPage({ params }: { params: Promise<{
       }
     }),
     prisma.load.findMany({
-      where: loadScope,
+      where: scope,
       orderBy: { loadNumber: "desc" },
       select: { id: true, loadNumber: true, title: true }
     }),
     prisma.customer.findMany({
-      where: customerScope,
+      where: scope,
       orderBy: { name: "asc" },
       select: { id: true, name: true, city: true, state: true }
     }),
     prisma.carrier.findMany({
-      where: { companyId: user.companyId },
+      where: scope,
       orderBy: { name: "asc" },
       select: { id: true, name: true, mcNumber: true }
     }),

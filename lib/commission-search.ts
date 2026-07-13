@@ -1,11 +1,8 @@
 import { z } from "zod";
 import type { Prisma } from "@prisma/client";
-import type { SessionUser } from "@/lib/types";
-import { branchScopedWhere } from "@/lib/scope";
 import { commissionStatuses } from "@/lib/constants";
 
 export const commissionFiltersSchema = z.object({
-  branchId: z.string().optional(),
   status: z.enum(commissionStatuses).optional(),
   commissionable: z.enum(["yes", "no"]).optional(),
   dateFrom: z.string().optional(),
@@ -16,7 +13,6 @@ export type CommissionFilters = z.infer<typeof commissionFiltersSchema>;
 
 export function parseCommissionSearchParams(searchParams: Record<string, string | string[] | undefined>) {
   const raw = {
-    branchId: typeof searchParams.branchId === "string" && searchParams.branchId ? searchParams.branchId : undefined,
     status:
       typeof searchParams.status === "string" && searchParams.status
         ? searchParams.status
@@ -33,17 +29,12 @@ export function parseCommissionSearchParams(searchParams: Record<string, string 
 }
 
 export function buildCommissionWhere(
-  user: Pick<SessionUser, "companyId" | "role" | "branchId">,
+  loadScope: Prisma.LoadWhereInput,
   filters: CommissionFilters
 ): Prisma.LoadCommissionWhereInput {
-  const loadScope = branchScopedWhere(user);
   const where: Prisma.LoadCommissionWhereInput = {
     load: loadScope
   };
-
-  if (filters.branchId) {
-    where.branchId = filters.branchId;
-  }
 
   if (filters.status) {
     where.status = filters.status;

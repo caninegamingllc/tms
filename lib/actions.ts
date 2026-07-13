@@ -4,7 +4,8 @@ import { revalidatePath } from "next/cache";
 import { redirect } from "next/navigation";
 import { prisma } from "@/lib/db";
 import type { SessionUser } from "@/lib/types";
-import { canAccessBranchRecord, resolveBranchId } from "@/lib/scope";
+import { canAccessRecord } from "@/lib/branch-filter-server";
+import { resolveBranchId } from "@/lib/scope";
 import { requireWriteUser } from "@/lib/permissions";
 import {
   buildBillOfLading,
@@ -57,7 +58,7 @@ async function loadForDocument(loadId: string, user: SessionUser) {
     }
   });
 
-  if (!canAccessBranchRecord(user, load.branchId)) {
+  if (!(await canAccessRecord(user, load.branchId))) {
     throw new Error("Load not found.");
   }
 
@@ -79,7 +80,7 @@ async function nextInvoiceNumber(companyId: string) {
 async function requireCompanyLoad(loadId: string, user: SessionUser) {
   const load = await prisma.load.findUniqueOrThrow({ where: { id: loadId, companyId: user.companyId } });
 
-  if (!canAccessBranchRecord(user, load.branchId)) {
+  if (!(await canAccessRecord(user, load.branchId))) {
     throw new Error("Load not found.");
   }
 
@@ -152,7 +153,7 @@ async function requireCompanyCustomer(customerId: string, user: SessionUser) {
     where: { id: customerId, companyId: user.companyId }
   });
 
-  if (!canAccessBranchRecord(user, customer.branchId)) {
+  if (!(await canAccessRecord(user, customer.branchId))) {
     throw new Error("Customer not found.");
   }
 

@@ -1,28 +1,35 @@
 import { PageHeader } from "@/components/page-header";
 import { FacilityCombobox, SearchCombobox } from "@/components/search-combobox";
 import { createLoad } from "@/lib/actions";
+import { getBranchScope } from "@/lib/branch-filter-server";
 import { requireTmsAccess } from "@/lib/permissions";
-import { branchScopedWhere, canSeeAllBranches } from "@/lib/scope";
+import { canPickBranch, isAdminRole } from "@/lib/scope";
 import { equipmentTypes, loadStatuses } from "@/lib/constants";
 import { prisma } from "@/lib/db";
 import { humanize } from "@/lib/format";
 
 export default async function NewLoadPage() {
   const user = await requireTmsAccess();
-  const customerScope = branchScopedWhere(user);
+  const scope = await getBranchScope(user);
   const [company, customers, facilities, branches] = await Promise.all([
     prisma.company.findUniqueOrThrow({ where: { id: user.companyId } }),
     prisma.customer.findMany({
-      where: customerScope,
+      where: scope,
       orderBy: { name: "asc" }
     }),
     prisma.facility.findMany({
-      where: { companyId: user.companyId, status: "Active" },
+      where: { ...scope, status: "Active" },
       include: { customer: true },
       orderBy: [{ name: "asc" }, { city: "asc" }]
     }),
-    canSeeAllBranches(user)
-      ? prisma.branch.findMany({ where: { companyId: user.companyId }, orderBy: { name: "asc" } })
+    canPickBranch(user)
+      ? prisma.branch.findMany({
+          where: {
+            companyId: user.companyId,
+            ...(isAdminRole(user.role) ? {} : { id: { in: user.branchIds } })
+          },
+          orderBy: { name: "asc" }
+        })
       : Promise.resolve([])
   ]);
 
@@ -74,7 +81,7 @@ export default async function NewLoadPage() {
           </label>
         </div>
 
-        {canSeeAllBranches(user) ? (
+        {canPickBranch(user) ? (
           <label className="grid gap-2 md:max-w-sm">
             <span className="label">Branch</span>
             <select name="branchId" className="select" defaultValue="">

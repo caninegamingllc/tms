@@ -8,6 +8,7 @@ import { prisma } from "@/lib/db";
 import { hashPassword, requireAdmin } from "@/lib/auth";
 import { sendInviteEmail } from "@/lib/mail";
 import { assignSeat, unassignSeat } from "@/lib/seats";
+import { setMembershipBranches } from "@/lib/membership-branches";
 
 const inviteDays = 7;
 
@@ -27,6 +28,17 @@ function requiredString(formData: FormData, key: string) {
 function optionalString(formData: FormData, key: string) {
   const value = String(formData.get(key) ?? "").trim();
   return value || undefined;
+}
+
+function parseBranchIdsFromForm(formData: FormData) {
+  return [
+    ...new Set(
+      formData
+        .getAll("branchIds")
+        .map((value) => String(value).trim())
+        .filter(Boolean)
+    )
+  ];
 }
 
 async function audit(
@@ -110,7 +122,8 @@ function redirectWithAdminError(message: string) {
 export async function inviteUser(formData: FormData) {
   const actor = await requireAdmin();
   const email = requiredString(formData, "email").toLowerCase();
-  const branchId = requiredString(formData, "branchId");
+  const branchIds = parseBranchIdsFromForm(formData);
+  const primaryBranchId = optionalString(formData, "primaryBranchId");
   const role = requiredString(formData, "role");
   const name = requiredString(formData, "name");
 
@@ -118,9 +131,16 @@ export async function inviteUser(formData: FormData) {
     redirectWithAdminError("Only an owner can invite another owner.");
   }
 
-  if (branchId) {
+  if (branchIds.length === 0 && role !== "OWNER" && role !== "ADMIN") {
+    redirectWithAdminError("Select at least one branch for this user.");
+  }
+
+  for (const branchId of branchIds) {
     await prisma.branch.findUniqueOrThrow({ where: { id: branchId, companyId: actor.companyId } });
   }
+
+  const resolvedPrimary =
+    primaryBranchId && branchIds.includes(primaryBranchId) ? primaryBranchId : branchIds[0] ?? null;
 
   let user = await prisma.user.findUnique({ where: { email } });
 
@@ -154,9 +174,16 @@ export async function inviteUser(formData: FormData) {
       companyId: actor.companyId,
       role,
       status: "INVITED",
-      branchId,
+      branchId: resolvedPrimary,
       inviteTokenHash: hashInviteToken(token),
-      inviteExpiresAt
+      inviteExpiresAt,
+      ...(branchIds.length > 0
+        ? {
+            assignedBranches: {
+              create: branchIds.map((branchId) => ({ branchId }))
+            }
+          }
+        : {})
     }
   });
 
@@ -319,7 +346,8 @@ export async function createAdminUser(formData: FormData) {
 export async function updateAdminUser(formData: FormData) {
   const actor = await requireAdmin();
   const membershipId = requiredString(formData, "membershipId");
-  const branchId = optionalString(formData, "branchId");
+  const branchIds = parseBranchIdsFromForm(formData);
+  const primaryBranchId = optionalString(formData, "primaryBranchId");
   const role = requiredString(formData, "role");
   const status = requiredString(formData, "status");
   const name = requiredString(formData, "name");
@@ -339,8 +367,8 @@ export async function updateAdminUser(formData: FormData) {
     throw new Error("Only an owner can assign the owner role.");
   }
 
-  if (branchId) {
-    await prisma.branch.findUniqueOrThrow({ where: { id: branchId, companyId: actor.companyId } });
+  if (branchIds.length === 0 && role !== "OWNER" && role !== "ADMIN") {
+    throw new Error("Select at least one branch for this user.");
   }
 
   await prisma.user.update({
@@ -348,9 +376,11 @@ export async function updateAdminUser(formData: FormData) {
     data: { name }
   });
 
+  await setMembershipBranches(membershipId, actor.companyId, branchIds, primaryBranchId);
+
   const membership = await prisma.companyMembership.update({
     where: { id: membershipId },
-    data: { role, branchId, status }
+    data: { role, status }
   });
 
   await audit(
@@ -590,6 +620,7 @@ export async function deleteBranch(formData: FormData) {
   await assertBranchCanBeDeleted(actor.companyId, branchId);
 
   await prisma.$transaction([
+    prisma.membershipBranch.deleteMany({ where: { branchId } }),
     prisma.companyMembership.updateMany({ where: { branchId }, data: { branchId: null } }),
     prisma.carrier.updateMany({ where: { branchId }, data: { branchId: null } }),
     prisma.facility.updateMany({ where: { branchId }, data: { branchId: null } }),

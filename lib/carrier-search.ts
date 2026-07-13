@@ -1,6 +1,6 @@
 import { z } from "zod";
 import type { Prisma } from "@prisma/client";
-import type { SessionUser } from "@/lib/types";
+import type { BranchScope } from "@/lib/scope";
 import { prisma } from "@/lib/db";
 
 export const carrierFiltersSchema = z.object({
@@ -32,10 +32,10 @@ export function hasActiveCarrierFilters(filters: CarrierFilters) {
 }
 
 export function buildCarrierSearchWhere(
-  user: Pick<SessionUser, "companyId">,
+  scope: BranchScope,
   filters: CarrierFilters
 ): Prisma.CarrierWhereInput {
-  const where: Prisma.CarrierWhereInput = { companyId: user.companyId };
+  const where: Prisma.CarrierWhereInput = { ...scope };
 
   const complianceStatus = normalizeOptional(filters.complianceStatus);
   if (complianceStatus) {
@@ -73,12 +73,9 @@ export function buildCarrierQueryString(filters: CarrierFilters) {
   return params.toString();
 }
 
-export async function searchCarriers(
-  user: Pick<SessionUser, "companyId">,
-  filters: CarrierFilters
-) {
+export async function searchCarriers(scope: BranchScope, filters: CarrierFilters) {
   return prisma.carrier.findMany({
-    where: buildCarrierSearchWhere(user, filters),
+    where: buildCarrierSearchWhere(scope, filters),
     orderBy: { name: "asc" },
     include: {
       contacts: true,

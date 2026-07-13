@@ -8,6 +8,7 @@ import {
   parseCarrierSearchParams,
   searchCarriers
 } from "@/lib/carrier-search";
+import { getBranchScope } from "@/lib/branch-filter-server";
 import { isSearchSubmitted } from "@/lib/list-search";
 import { requireTmsAccess } from "@/lib/permissions";
 
@@ -22,7 +23,8 @@ export default async function CarriersPage({
   const filters = parseCarrierSearchParams(filterParams);
   const showResults = isSearchSubmitted(params);
 
-  const carriers = showResults ? await searchCarriers(user, filters) : [];
+  const scope = await getBranchScope(user);
+  const carriers = showResults ? await searchCarriers(scope, filters) : [];
 
   const rows = carriers.map((carrier) => {
     const totalSpend = carrier.assignments.reduce((sum, assignment) => sum + assignment.rateCents, 0);

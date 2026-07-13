@@ -17,6 +17,7 @@ export type SessionUser = {
   status: string;
   mustChangePassword: boolean;
   branchId: string | null;
+  branchIds: string[];
   hasSeat: boolean;
   organizations: OrganizationSummary[];
 };

@@ -94,6 +94,7 @@ export function resolveCommissionStatus(input: {
   isCommissionable: boolean;
   branchShareCents: number;
   currentStatus?: string;
+  customerPaid?: boolean;
 }): CommissionStatus {
   if (!input.isCommissionable) {
     return "INELIGIBLE";
@@ -103,7 +104,9 @@ export function resolveCommissionStatus(input: {
     return "SETTLED";
   }
 
-  if (input.loadStatus === "PAID" && input.branchShareCents > 0) {
+  const customerPaid = input.customerPaid ?? input.loadStatus === "PAID";
+
+  if (customerPaid && input.branchShareCents > 0) {
     return "PAYABLE";
   }
 
@@ -190,6 +193,7 @@ export async function recalculateLoadCommission(loadId: string) {
     include: {
       expenses: true,
       commission: true,
+      invoices: { where: { paidAt: { not: null } }, take: 1 },
       branch: {
         include: {
           commissionProfile: { include: { rule: true } }
@@ -215,11 +219,13 @@ export async function recalculateLoadCommission(loadId: string) {
     companyMinimumExpensePercent: profile.rule.companyMinimumExpensePercent
   });
 
+  const customerPaid = load.status === "PAID" || load.invoices.length > 0;
   const status = resolveCommissionStatus({
     loadStatus: load.status,
     isCommissionable: load.isCommissionable,
     branchShareCents: result.branchShareCents,
-    currentStatus: load.commission?.status
+    currentStatus: load.commission?.status,
+    customerPaid
   });
 
   const now = new Date();
@@ -270,5 +276,23 @@ export async function syncMissingCommissions(companyId: string) {
 
   for (const load of loads) {
     await recalculateLoadCommission(load.id);
+  }
+}
+
+export async function syncStalePayableCommissions(companyId: string) {
+  const stale = await prisma.loadCommission.findMany({
+    where: {
+      status: "PENDING",
+      branchShareCents: { gt: 0 },
+      load: {
+        companyId,
+        OR: [{ status: "PAID" }, { invoices: { some: { paidAt: { not: null } } } }]
+      }
+    },
+    select: { loadId: true }
+  });
+
+  for (const { loadId } of stale) {
+    await recalculateLoadCommission(loadId);
   }
 }

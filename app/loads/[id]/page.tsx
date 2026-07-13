@@ -24,7 +24,8 @@ import {
 import { recalculateLoadCommission } from "@/lib/commission";
 import { toDocumentTableRows } from "@/lib/document-rows";
 import { requireTmsAccess } from "@/lib/permissions";
-import { canAccessBranchRecord, canManageUsers, canSettleCommission, canWrite } from "@/lib/scope";
+import { canAccessRecord, getBranchScope } from "@/lib/branch-filter-server";
+import { canManageUsers, canSettleCommission, canWrite } from "@/lib/scope";
 import { expenseTypes, loadStatuses } from "@/lib/constants";
 import { prisma } from "@/lib/db";
 import { commissionMethodLabel, formatDate, formatDateTime, formatMoney, humanize, marginPercent } from "@/lib/format";
@@ -55,7 +56,7 @@ export default async function LoadDetailPage({ params }: { params: Promise<{ id:
         carrierBills: { include: { carrier: true } }
       }
     }),
-    prisma.carrier.findMany({ where: { companyId: user.companyId }, orderBy: { name: "asc" } }),
+    prisma.carrier.findMany({ where: await getBranchScope(user), orderBy: { name: "asc" } }),
     canManageUsers(user)
       ? prisma.commissionProfile.findMany({
           where: { companyId: user.companyId },
@@ -64,7 +65,7 @@ export default async function LoadDetailPage({ params }: { params: Promise<{ id:
       : Promise.resolve([])
   ]);
 
-  if (!load || !canAccessBranchRecord(user, load.branchId)) {
+  if (!load || !(await canAccessRecord(user, load.branchId))) {
     notFound();
   }
 

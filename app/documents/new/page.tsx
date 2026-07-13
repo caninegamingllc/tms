@@ -1,27 +1,26 @@
 import Link from "next/link";
 import { DocumentUploadForm } from "@/components/document-upload-form";
 import { PageHeader } from "@/components/page-header";
+import { getBranchScope } from "@/lib/branch-filter-server";
 import { requireTmsAccess } from "@/lib/permissions";
-import { branchScopedWhere } from "@/lib/scope";
 import { prisma } from "@/lib/db";
 
 export default async function NewDocumentPage() {
   const user = await requireTmsAccess();
-  const loadScope = branchScopedWhere(user);
-  const customerScope = branchScopedWhere(user);
+  const scope = await getBranchScope(user);
   const [loads, customers, carriers] = await Promise.all([
     prisma.load.findMany({
-      where: loadScope,
+      where: scope,
       orderBy: { loadNumber: "desc" },
       select: { id: true, loadNumber: true, title: true }
     }),
     prisma.customer.findMany({
-      where: customerScope,
+      where: scope,
       orderBy: { name: "asc" },
       select: { id: true, name: true, city: true, state: true }
     }),
     prisma.carrier.findMany({
-      where: { companyId: user.companyId },
+      where: scope,
       orderBy: { name: "asc" },
       select: { id: true, name: true, mcNumber: true }
     })

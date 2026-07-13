@@ -3,8 +3,8 @@ import { notFound } from "next/navigation";
 import { DocumentUploadForm } from "@/components/document-upload-form";
 import { DocumentsTable } from "@/components/documents-table";
 import { PageHeader } from "@/components/page-header";
+import { canAccessRecord } from "@/lib/branch-filter-server";
 import { requireTmsAccess } from "@/lib/permissions";
-import { canAccessBranchRecord } from "@/lib/scope";
 import { toDocumentTableRows } from "@/lib/document-rows";
 import { prisma } from "@/lib/db";
 import { formatMoney } from "@/lib/format";
@@ -23,7 +23,7 @@ export default async function CustomerDetailPage({ params }: { params: Promise<{
     }
   });
 
-  if (!customer || !canAccessBranchRecord(user, customer.branchId)) {
+  if (!customer || !(await canAccessRecord(user, customer.branchId))) {
     notFound();
   }
 

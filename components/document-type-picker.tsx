@@ -14,6 +14,7 @@ export function DocumentTypePicker({
 }) {
   const [selectedTypes, setSelectedTypes] = useState<string[]>(defaultTypes);
   const [query, setQuery] = useState("");
+  const [isOpen, setIsOpen] = useState(false);
 
   const suggestions = useMemo(() => {
     const normalized = query.trim().toLowerCase();
@@ -54,32 +55,40 @@ export function DocumentTypePicker({
           </button>
         ))}
       </div>
-      <input
-        className="input"
-        value={query}
-        placeholder="Select or type a document type and press Enter"
-        onChange={(event) => setQuery(event.target.value)}
-        onKeyDown={(event) => {
-          if (event.key === "Enter") {
-            event.preventDefault();
-            addType(query);
-          }
-        }}
-      />
-      {suggestions.length ? (
-        <div className="rounded-2xl border border-border bg-white p-2 shadow-card">
-          {suggestions.map((type) => (
-            <button
-              key={type}
-              type="button"
-              className="block w-full rounded-xl px-3 py-2 text-left text-sm hover:bg-muted"
-              onClick={() => addType(type)}
-            >
-              {formatDocumentTypeLabel(type)}
-            </button>
-          ))}
-        </div>
-      ) : null}
+      <div className="relative">
+        <input
+          className="input"
+          value={query}
+          placeholder="Select or type a document type and press Enter"
+          onChange={(event) => setQuery(event.target.value)}
+          onFocus={() => setIsOpen(true)}
+          onBlur={() => setTimeout(() => setIsOpen(false), 150)}
+          onKeyDown={(event) => {
+            if (event.key === "Enter") {
+              event.preventDefault();
+              addType(query);
+            }
+            if (event.key === "Escape") {
+              setIsOpen(false);
+            }
+          }}
+        />
+        {isOpen && suggestions.length ? (
+          <div className="absolute left-0 right-0 top-full z-20 mt-1 overflow-hidden rounded-lg border border-border bg-card p-2 shadow-card">
+            {suggestions.map((type) => (
+              <button
+                key={type}
+                type="button"
+                className="block w-full rounded-xl px-3 py-2 text-left text-sm hover:bg-muted"
+                onMouseDown={(event) => event.preventDefault()}
+                onClick={() => addType(type)}
+              >
+                {formatDocumentTypeLabel(type)}
+              </button>
+            ))}
+          </div>
+        ) : null}
+      </div>
       <p className="muted">
         Enter the general type of document this is related to. Add custom doc types by typing the name
         and pressing Enter.

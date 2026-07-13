@@ -3,10 +3,11 @@ import { CommissionFilters } from "@/components/commission-filters";
 import { CommissionSettleTable } from "@/components/commission-settle-table";
 import { MetricCard } from "@/components/metric-card";
 import { PageHeader } from "@/components/page-header";
-import { syncMissingCommissions } from "@/lib/commission";
+import { syncMissingCommissions, syncStalePayableCommissions } from "@/lib/commission";
+import { getBranchScope } from "@/lib/branch-filter-server";
 import { buildCommissionWhere, parseCommissionSearchParams } from "@/lib/commission-search";
 import { requireTmsAccess } from "@/lib/permissions";
-import { canManageUsers, canSeeAllBranches, canSettleCommission } from "@/lib/scope";
+import { canManageUsers, canSettleCommission } from "@/lib/scope";
 import { prisma } from "@/lib/db";
 import { commissionMethodLabel, formatDate, formatMoney, humanize } from "@/lib/format";
 
@@ -20,10 +21,12 @@ export default async function CommissionsPage({
   const filters = parseCommissionSearchParams(params);
 
   await syncMissingCommissions(user.companyId);
+  await syncStalePayableCommissions(user.companyId);
 
-  const where = buildCommissionWhere(user, filters);
+  const loadScope = await getBranchScope(user);
+  const where = buildCommissionWhere(loadScope, filters);
 
-  const [commissions, branches, profileCount] = await Promise.all([
+  const [commissions, profileCount] = await Promise.all([
     prisma.loadCommission.findMany({
       where,
       orderBy: [{ load: { pickupDate: "desc" } }, { load: { loadNumber: "desc" } }],
@@ -37,12 +40,6 @@ export default async function CommissionsPage({
         }
       }
     }),
-    canSeeAllBranches(user)
-      ? prisma.branch.findMany({
-          where: { companyId: user.companyId },
-          orderBy: { name: "asc" }
-        })
-      : Promise.resolve([]),
     canManageUsers(user)
       ? prisma.commissionProfile.count({ where: { companyId: user.companyId } })
       : Promise.resolve(0)
@@ -123,7 +120,7 @@ export default async function CommissionsPage({
       ) : null}
 
       <div className="mt-6 grid gap-6">
-        <CommissionFilters filters={filters} branches={branches} />
+        <CommissionFilters filters={filters} />
         <CommissionSettleTable rows={rows} canSettle={canSettleCommission(user)} />
       </div>
     </>

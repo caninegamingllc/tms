@@ -25,6 +25,8 @@ import type { CurrentUser } from "@/lib/auth";
 import { canManageUsers } from "@/lib/scope";
 import { canAccessAdmin } from "@/lib/seats";
 import { OrgSwitcher } from "@/components/org-switcher";
+import { BranchSwitcher } from "@/components/branch-switcher";
+import type { BranchSwitcherData } from "@/lib/branch-filter";
 
 const navItems = [
   { href: "/", label: "Dashboard", icon: LayoutDashboard },
@@ -125,10 +127,12 @@ function SidebarContent({
 
 export function AppShell({
   children,
-  currentUser
+  currentUser,
+  branchSwitcher
 }: {
   children: React.ReactNode;
   currentUser: CurrentUser | null;
+  branchSwitcher: BranchSwitcherData | null;
 }) {
   const pathname = usePathname();
   const [mobileNavOpen, setMobileNavOpen] = useState(false);
@@ -198,18 +202,31 @@ export function AppShell({
       </aside>
 
       <div className="flex min-w-0 flex-col">
-        <header className="flex items-center gap-3 border-b border-border bg-card px-5 py-3 lg:hidden">
-          <button
-            type="button"
-            aria-label="Open navigation"
-            className="rounded-lg p-2 text-muted-foreground hover:bg-muted"
-            onClick={() => setMobileNavOpen(true)}
-          >
-            <Menu className="h-5 w-5" />
-          </button>
-          <div>
+        <header className="flex items-center justify-between gap-3 border-b border-border bg-card px-5 py-3">
+          <div className="lg:hidden">
+            <button
+              type="button"
+              aria-label="Open navigation"
+              className="rounded-lg p-2 text-muted-foreground hover:bg-muted"
+              onClick={() => setMobileNavOpen(true)}
+            >
+              <Menu className="h-5 w-5" />
+            </button>
+          </div>
+
+          <div className="lg:hidden">
             <p className="text-sm font-bold text-primary">Simple Source</p>
             <p className="text-xs text-muted-foreground">TMS</p>
+          </div>
+
+          <div className="ml-auto flex items-center gap-3">
+            {branchSwitcher ? (
+              <BranchSwitcher
+                branches={branchSwitcher.branches}
+                selectedBranchIds={branchSwitcher.selectedBranchIds}
+                allSelected={branchSwitcher.allSelected}
+              />
+            ) : null}
           </div>
         </header>
 

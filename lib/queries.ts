@@ -1,10 +1,11 @@
 import { prisma } from "@/lib/db";
 import { requireTmsAccess } from "@/lib/permissions";
-import { branchScopedWhere } from "@/lib/scope";
+import { getBranchScope } from "@/lib/branch-filter-server";
 
 export async function getDashboardData() {
   const user = await requireTmsAccess();
-  const loadScope = branchScopedWhere(user);
+  const loadScope = await getBranchScope(user);
+  const customerScope = loadScope;
 
   const [loads, customers, carriers, invoices, carrierBills, checkCalls] = await Promise.all([
     prisma.load.findMany({
@@ -16,8 +17,8 @@ export async function getDashboardData() {
       },
       take: 8
     }),
-    prisma.customer.count({ where: branchScopedWhere(user) }),
-    prisma.carrier.count({ where: { companyId: user.companyId } }),
+    prisma.customer.count({ where: customerScope }),
+    prisma.carrier.count({ where: loadScope }),
     prisma.invoice.findMany({
       where: {
         companyId: user.companyId,
@@ -83,9 +84,10 @@ export async function getDashboardData() {
 
 export async function getLoadOptions() {
   const user = await requireTmsAccess();
+  const scope = await getBranchScope(user);
   const [customers, carriers] = await Promise.all([
-    prisma.customer.findMany({ where: branchScopedWhere(user), orderBy: { name: "asc" } }),
-    prisma.carrier.findMany({ where: { companyId: user.companyId }, orderBy: { name: "asc" } })
+    prisma.customer.findMany({ where: scope, orderBy: { name: "asc" } }),
+    prisma.carrier.findMany({ where: scope, orderBy: { name: "asc" } })
   ]);
 
   return { customers, carriers };

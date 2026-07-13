@@ -4,6 +4,7 @@ import { LoadSearchResults } from "@/components/load-search-results";
 import { PageHeader } from "@/components/page-header";
 import { RevenueReportPanel, SearchViewToggle } from "@/components/revenue-report-panel";
 import { SearchPrompt } from "@/components/search-prompt";
+import { getBranchScope } from "@/lib/branch-filter-server";
 import { requireTmsAccess } from "@/lib/permissions";
 import { isSearchSubmitted } from "@/lib/list-search";
 import {
@@ -26,9 +27,10 @@ export default async function SearchPage({ searchParams }: SearchPageProps) {
   const view = filters.view ?? "loads";
   const showResults = isSearchSubmitted(resolvedSearchParams);
 
+  const scope = await getBranchScope(user);
   const [loads, options] = await Promise.all([
-    showResults ? searchLoads(user, filters) : Promise.resolve([]),
-    getLoadSearchOptions(user)
+    showResults ? searchLoads(scope, filters) : Promise.resolve([]),
+    getLoadSearchOptions(scope)
   ]);
 
   const customerName = filters.customerId

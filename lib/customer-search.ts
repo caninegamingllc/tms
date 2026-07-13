@@ -1,12 +1,10 @@
 import { z } from "zod";
 import type { Prisma } from "@prisma/client";
-import type { SessionUser } from "@/lib/types";
-import { branchScopedWhere } from "@/lib/scope";
+import type { BranchScope } from "@/lib/scope";
 import { prisma } from "@/lib/db";
 
 export const customerFiltersSchema = z.object({
-  q: z.string().optional(),
-  branchId: z.string().optional()
+  q: z.string().optional()
 });
 
 export type CustomerFilters = z.infer<typeof customerFiltersSchema>;
@@ -18,8 +16,7 @@ function normalizeOptional(value?: string) {
 
 export function parseCustomerSearchParams(searchParams: Record<string, string | string[] | undefined>) {
   const raw = {
-    q: typeof searchParams.q === "string" ? searchParams.q : undefined,
-    branchId: typeof searchParams.branchId === "string" ? searchParams.branchId : undefined
+    q: typeof searchParams.q === "string" ? searchParams.q : undefined
   };
 
   const parsed = customerFiltersSchema.safeParse(raw);
@@ -27,19 +24,14 @@ export function parseCustomerSearchParams(searchParams: Record<string, string | 
 }
 
 export function hasActiveCustomerFilters(filters: CustomerFilters) {
-  return Boolean(filters.q?.trim() || filters.branchId?.trim());
+  return Boolean(filters.q?.trim());
 }
 
 export function buildCustomerSearchWhere(
-  user: Pick<SessionUser, "companyId" | "role" | "branchId">,
+  scope: BranchScope,
   filters: CustomerFilters
 ): Prisma.CustomerWhereInput {
-  const where: Prisma.CustomerWhereInput = { ...branchScopedWhere(user) };
-
-  const branchId = normalizeOptional(filters.branchId);
-  if (branchId) {
-    where.branchId = branchId;
-  }
+  const where: Prisma.CustomerWhereInput = { ...scope };
 
   const q = normalizeOptional(filters.q);
   if (q) {
@@ -67,12 +59,9 @@ export function buildCustomerQueryString(filters: CustomerFilters) {
   return params.toString();
 }
 
-export async function searchCustomers(
-  user: Pick<SessionUser, "companyId" | "role" | "branchId">,
-  filters: CustomerFilters
-) {
+export async function searchCustomers(scope: BranchScope, filters: CustomerFilters) {
   return prisma.customer.findMany({
-    where: buildCustomerSearchWhere(user, filters),
+    where: buildCustomerSearchWhere(scope, filters),
     orderBy: { name: "asc" },
     include: {
       contacts: true,

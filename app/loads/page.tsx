@@ -3,6 +3,7 @@ import { LoadSearchFilters } from "@/components/load-search-filters";
 import { LoadsTable } from "@/components/loads-table";
 import { PageHeader } from "@/components/page-header";
 import { SearchPrompt } from "@/components/search-prompt";
+import { getBranchScope } from "@/lib/branch-filter-server";
 import { requireTmsAccess } from "@/lib/permissions";
 import { syncMissingCommissions } from "@/lib/commission";
 import {
@@ -24,9 +25,10 @@ export default async function LoadsPage({
 
   await syncMissingCommissions(user.companyId);
 
+  const scope = await getBranchScope(user);
   const [loads, options] = await Promise.all([
-    showResults ? searchLoads(user, filters) : Promise.resolve([]),
-    getLoadSearchOptions(user)
+    showResults ? searchLoads(scope, filters) : Promise.resolve([]),
+    getLoadSearchOptions(scope)
   ]);
 
   const rows = loads.map((load) => ({

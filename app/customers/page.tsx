@@ -8,9 +8,10 @@ import {
   parseCustomerSearchParams,
   searchCustomers
 } from "@/lib/customer-search";
+import { getBranchScope } from "@/lib/branch-filter-server";
 import { isSearchSubmitted } from "@/lib/list-search";
 import { requireTmsAccess } from "@/lib/permissions";
-import { canSeeAllBranches } from "@/lib/scope";
+import { canPickBranch, isAdminRole } from "@/lib/scope";
 import { prisma } from "@/lib/db";
 
 export default async function CustomersPage({
@@ -23,10 +24,17 @@ export default async function CustomersPage({
   const filters = parseCustomerSearchParams(params);
   const showResults = isSearchSubmitted(params);
 
+  const scope = await getBranchScope(user);
   const [customers, branches] = await Promise.all([
-    showResults ? searchCustomers(user, filters) : Promise.resolve([]),
-    canSeeAllBranches(user)
-      ? prisma.branch.findMany({ where: { companyId: user.companyId }, orderBy: { name: "asc" } })
+    showResults ? searchCustomers(scope, filters) : Promise.resolve([]),
+    canPickBranch(user)
+      ? prisma.branch.findMany({
+          where: {
+            companyId: user.companyId,
+            ...(isAdminRole(user.role) ? {} : { id: { in: user.branchIds } })
+          },
+          orderBy: { name: "asc" }
+        })
       : Promise.resolve([])
   ]);
 
@@ -60,11 +68,7 @@ export default async function CustomersPage({
 
       <div className="grid gap-6 xl:grid-cols-[1.3fr_0.8fr]">
         <div className="grid gap-6">
-          <CustomerSearchFilters
-            filters={filters}
-            branches={branches}
-            showBranchPicker={canSeeAllBranches(user)}
-          />
+          <CustomerSearchFilters filters={filters} />
 
           {showResults ? (
             <section className="card overflow-hidden p-0">
@@ -85,7 +89,7 @@ export default async function CustomersPage({
 
         <section className="card">
           <h2 className="section-title">Add Customer</h2>
-          <CustomerForm action={createCustomer} branches={branches} showBranchPicker={canSeeAllBranches(user)} />
+          <CustomerForm action={createCustomer} branches={branches} showBranchPicker={canPickBranch(user)} />
         </section>
       </div>
     </>

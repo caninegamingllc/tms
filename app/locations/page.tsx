@@ -7,6 +7,7 @@ import {
   parseLocationSearchParams,
   searchLocations
 } from "@/lib/location-search";
+import { getBranchScope } from "@/lib/branch-filter-server";
 import { isSearchSubmitted } from "@/lib/list-search";
 import { requireTmsAccess } from "@/lib/permissions";
 import { prisma } from "@/lib/db";
@@ -22,10 +23,11 @@ export default async function LocationsPage({
   const filters = parseLocationSearchParams(params);
   const showResults = isSearchSubmitted(params);
 
+  const scope = await getBranchScope(user);
   const [facilities, customers] = await Promise.all([
-    showResults ? searchLocations(user, filters) : Promise.resolve([]),
+    showResults ? searchLocations(scope, filters) : Promise.resolve([]),
     prisma.customer.findMany({
-      where: { companyId: user.companyId },
+      where: scope,
       orderBy: { name: "asc" }
     })
   ]);

@@ -2,7 +2,7 @@ import { NextRequest, NextResponse } from "next/server";
 import { getCurrentUser } from "@/lib/auth";
 import { prisma } from "@/lib/db";
 import { getLoadRoute } from "@/lib/load-route";
-import { canAccessBranchRecord } from "@/lib/scope";
+import { canAccessRecord } from "@/lib/branch-filter-server";
 
 const RATE_LIMIT_WINDOW_MS = 60_000;
 const RATE_LIMIT_MAX_REQUESTS = 20;
@@ -39,7 +39,7 @@ export async function GET(
     select: { id: true, branchId: true }
   });
 
-  if (!load || !canAccessBranchRecord(user, load.branchId)) {
+  if (!load || !(await canAccessRecord(user, load.branchId))) {
     return NextResponse.json({ error: "Load not found." }, { status: 404 });
   }
 

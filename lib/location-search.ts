@@ -1,6 +1,6 @@
 import { z } from "zod";
 import type { Prisma } from "@prisma/client";
-import type { SessionUser } from "@/lib/types";
+import type { BranchScope } from "@/lib/scope";
 import { facilityTypes } from "@/lib/constants";
 import { prisma } from "@/lib/db";
 
@@ -33,10 +33,10 @@ export function hasActiveLocationFilters(filters: LocationFilters) {
 }
 
 export function buildLocationSearchWhere(
-  user: Pick<SessionUser, "companyId">,
+  scope: BranchScope,
   filters: LocationFilters
 ): Prisma.FacilityWhereInput {
-  const where: Prisma.FacilityWhereInput = { companyId: user.companyId };
+  const where: Prisma.FacilityWhereInput = { ...scope };
 
   const type = normalizeOptional(filters.type);
   if (type) {
@@ -74,12 +74,9 @@ export function buildLocationQueryString(filters: LocationFilters) {
   return params.toString();
 }
 
-export async function searchLocations(
-  user: Pick<SessionUser, "companyId">,
-  filters: LocationFilters
-) {
+export async function searchLocations(scope: BranchScope, filters: LocationFilters) {
   return prisma.facility.findMany({
-    where: buildLocationSearchWhere(user, filters),
+    where: buildLocationSearchWhere(scope, filters),
     orderBy: [{ name: "asc" }, { city: "asc" }],
     include: { customer: true, loadStops: true }
   });

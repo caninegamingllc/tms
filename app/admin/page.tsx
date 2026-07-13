@@ -1,23 +1,24 @@
-import { AdminUsersTable } from "@/components/admin-users-table";
+import { AdminBranchesTable } from "@/components/admin-branches-table";
+import { AdminConsole } from "@/components/admin-console";
 import { AuditLogTable } from "@/components/audit-log-table";
 import { PageHeader } from "@/components/page-header";
-import { createBranch, deleteBranch, inviteUser, updateLoadNumberSettings } from "@/lib/admin-actions";
+import { createBranch, updateLoadNumberSettings } from "@/lib/admin-actions";
 import { InviteLinkBanner } from "@/components/invite-link-banner";
 import { refreshSeatSubscriptionFromStripe } from "@/lib/billing-actions";
 import { requireAdmin } from "@/lib/auth";
-import { userRoles } from "@/lib/constants";
 import { prisma } from "@/lib/db";
-import { humanize } from "@/lib/format";
 import { getSeatSummary } from "@/lib/seats";
 import Link from "next/link";
 
 export default async function AdminPage({
   searchParams
 }: {
-  searchParams: Promise<{ invite?: string; emailSent?: string; error?: string }>;
+  searchParams: Promise<{ invite?: string; emailSent?: string; error?: string; tab?: string }>;
 }) {
   const currentUser = await requireAdmin();
-  const { invite, emailSent, error } = await searchParams;
+  const { invite, emailSent, error, tab } = await searchParams;
+  const activeTab = tab === "branches" || tab === "settings" || tab === "audit" ? tab : "users";
+
   await refreshSeatSubscriptionFromStripe(currentUser.companyId);
   const [company, memberships, branches, auditLogs, seatSummary] = await Promise.all([
     prisma.company.findUniqueOrThrow({ where: { id: currentUser.companyId } }),
@@ -31,13 +32,20 @@ export default async function AdminPage({
             }
           }
         },
-        branch: true
+        branch: true,
+        assignedBranches: { include: { branch: true } }
       },
       orderBy: { user: { name: "asc" } }
     }),
     prisma.branch.findMany({
       where: { companyId: currentUser.companyId },
-      include: { memberships: true, customers: true, carriers: true, loads: true }
+      include: {
+        memberships: true,
+        membershipBranches: true,
+        customers: true,
+        carriers: true,
+        loads: true
+      }
     }),
     prisma.auditLog.findMany({
       where: { companyId: currentUser.companyId },
@@ -48,6 +56,7 @@ export default async function AdminPage({
     getSeatSummary(currentUser.companyId)
   ]);
 
+  const branchNameById = new Map(branches.map((branch) => [branch.id, branch.name]));
   const ownerCount = memberships.filter(
     (membership) => membership.role === "OWNER" && membership.status !== "INVITED"
   ).length;
@@ -55,6 +64,12 @@ export default async function AdminPage({
   const userRows = memberships.map((membership) => {
     const user = membership.user;
     const loadUsageCount = user._count.notes + user._count.activities;
+    const branchIds =
+      membership.assignedBranches.length > 0
+        ? membership.assignedBranches.map((row) => row.branchId)
+        : membership.branchId
+          ? [membership.branchId]
+          : [];
 
     return {
       membershipId: membership.id,
@@ -64,7 +79,8 @@ export default async function AdminPage({
       lastLoginAt: user.lastLoginAt?.toISOString() ?? null,
       role: membership.role,
       branchId: membership.branchId,
-      branchName: membership.branch?.name ?? null,
+      branchIds,
+      branchNames: branchIds.map((id) => branchNameById.get(id) ?? "Unknown"),
       status: membership.status,
       seatAssigned: Boolean(membership.seatAssignedAt),
       seatAssignedAt: membership.seatAssignedAt?.toISOString() ?? null,
@@ -95,11 +111,33 @@ export default async function AdminPage({
 
   const branchOptions = branches.map((branch) => ({ id: branch.id, name: branch.name }));
 
+  const branchRows = branches.map((branch) => ({
+    id: branch.id,
+    name: branch.name,
+    city: branch.city,
+    state: branch.state,
+    userCount: new Set([
+      ...branch.memberships.map((membership) => membership.id),
+      ...branch.membershipBranches.map((row) => row.membershipId)
+    ]).size,
+    customerCount: branch.customers.length,
+    carrierCount: branch.carriers.length,
+    loadCount: branch.loads.length,
+    canDelete: branch.loads.length === 0 && branch.customers.length === 0
+  }));
+
+  const tabs = [
+    { id: "users", label: "Users" },
+    { id: "branches", label: "Branches" },
+    { id: "settings", label: "Settings" },
+    { id: "audit", label: "Audit Log" }
+  ] as const;
+
   return (
     <>
       <PageHeader
         title="Admin Console"
-        description="Invite users, manage roles and branches, disable accounts, and review audit history."
+        description="Manage users, branch assignments, billing seats, and organization settings."
       />
 
       {error ? (
@@ -125,163 +163,96 @@ export default async function AdminPage({
         </div>
       </div>
 
-      <div className="grid gap-6 2xl:grid-cols-[1.4fr_0.8fr]">
-        <section className="card overflow-hidden p-0">
-          <div className="border-b border-border p-5">
-            <h2 className="section-title">Users, Roles, And Account Status</h2>
-            <p className="muted">Admins can update access, force password changes, and lock or disable accounts. Click column headers to sort.</p>
-          </div>
-          <div className="overflow-x-auto">
-            <AdminUsersTable
-              rows={userRows}
-              branches={branchOptions}
-              currentUserId={currentUser.id}
-              currentUserRole={currentUser.role}
-              seatAvailable={seatSummary.available}
-            />
-          </div>
-        </section>
-
-        <section className="card">
-          <h2 className="section-title">Invite User</h2>
-          <p className="muted">Send an invite email so the user can set their own password and join your organization.</p>
-          <form action={inviteUser} className="mt-4 grid gap-3">
-            <input name="name" className="input" placeholder="Full name" required />
-            <input name="email" className="input" type="email" placeholder="Email" required />
-            <div className="grid gap-3 md:grid-cols-2">
-              <select name="role" className="select" defaultValue="BROKER">
-                {userRoles
-                  .filter((role) => currentUser.role === "OWNER" || role !== "OWNER")
-                  .map((role) => (
-                  <option key={role} value={role}>
-                    {humanize(role)}
-                  </option>
-                ))}
-              </select>
-              <select name="branchId" className="select" defaultValue="" required>
-                <option value="">Select branch</option>
-                {branches.map((branch) => (
-                  <option key={branch.id} value={branch.id}>
-                    {branch.name}
-                  </option>
-                ))}
-              </select>
-            </div>
-            <button type="submit" className="btn">
-              Send Invite
-            </button>
-          </form>
-        </section>
+      <div className="mb-6 flex flex-wrap gap-2">
+        {tabs.map((item) => (
+          <Link
+            key={item.id}
+            href={`/admin?tab=${item.id}`}
+            className={activeTab === item.id ? "btn" : "btn-secondary"}
+          >
+            {item.label}
+          </Link>
+        ))}
       </div>
 
-      <section className="card mt-6">
-        <h2 className="section-title">Load Number Settings</h2>
-        <p className="muted">
-          Set the prefix and the next auto-generated load number. If the next number is set to
-          2500, the next blank load number will be {company.loadNumberPrefix}-2500 and then
-          increment from there.
-        </p>
-        <form action={updateLoadNumberSettings} className="mt-4 grid gap-3 md:grid-cols-[1fr_1fr_auto]">
-          <label className="grid gap-2">
-            <span className="label">Prefix</span>
-            <input
-              name="loadNumberPrefix"
-              className="input"
-              defaultValue={company.loadNumberPrefix}
-              placeholder="GLB"
-              required
-            />
-          </label>
-          <label className="grid gap-2">
-            <span className="label">Next Load Number</span>
-            <input
-              name="nextLoadSequence"
-              className="input"
-              type="number"
-              min={1}
-              step={1}
-              defaultValue={company.nextLoadSequence}
-              required
-            />
-          </label>
-          <div className="flex items-end">
-            <button className="btn" type="submit">
-              Save Settings
-            </button>
-          </div>
-        </form>
-      </section>
+      {activeTab === "users" ? (
+        <AdminConsole
+          users={userRows}
+          branches={branchOptions}
+          currentUserId={currentUser.id}
+          currentUserRole={currentUser.role}
+          seatAvailable={seatSummary.available}
+        />
+      ) : null}
 
-      <div className="mt-6 grid gap-6 xl:grid-cols-[0.9fr_1.2fr]">
-        <section className="card">
-          <h2 className="section-title">Branches And Agents</h2>
-          <form action={createBranch} className="mt-4 grid gap-3 rounded-2xl bg-muted p-4">
-            <input name="name" className="input" placeholder="Branch name" required />
-            <div className="grid gap-3 md:grid-cols-2">
-              <input name="city" className="input" placeholder="City" />
-              <input name="state" className="input" placeholder="State" maxLength={2} />
-            </div>
-            <button type="submit" className="btn">
-              Create Branch
-            </button>
-          </form>
-          <div className="mt-5 grid gap-3">
-            {branches.map((branch) => {
-              const canDeleteBranch = branch.loads.length === 0 && branch.customers.length === 0;
-
-              return (
-              <div key={branch.id} className="rounded-2xl border border-border p-4">
-                <p className="font-semibold text-foreground">{branch.name}</p>
-                <p className="muted">
-                  {branch.city}, {branch.state}
-                </p>
-                <div className="mt-3 grid grid-cols-4 gap-2 text-center text-sm">
-                  <div className="rounded-xl bg-muted p-2">
-                    <p className="font-bold">{branch.memberships.length}</p>
-                    <p className="text-xs text-muted-foreground">Users</p>
-                  </div>
-                  <div className="rounded-xl bg-muted p-2">
-                    <p className="font-bold">{branch.customers.length}</p>
-                    <p className="text-xs text-muted-foreground">Customers</p>
-                  </div>
-                  <div className="rounded-xl bg-muted p-2">
-                    <p className="font-bold">{branch.carriers.length}</p>
-                    <p className="text-xs text-muted-foreground">Carriers</p>
-                  </div>
-                  <div className="rounded-xl bg-muted p-2">
-                    <p className="font-bold">{branch.loads.length}</p>
-                    <p className="text-xs text-muted-foreground">Loads</p>
-                  </div>
-                </div>
-                {canDeleteBranch ? (
-                  <form action={deleteBranch} className="mt-3">
-                    <input type="hidden" name="branchId" value={branch.id} />
-                    <button className="btn-danger w-full" type="submit">
-                      Delete Branch
-                    </button>
-                  </form>
-                ) : (
-                  <p className="mt-3 text-xs text-muted-foreground">
-                    Cannot delete while assigned to{" "}
-                    {[
-                      branch.loads.length > 0
-                        ? `${branch.loads.length} load${branch.loads.length === 1 ? "" : "s"}`
-                        : null,
-                      branch.customers.length > 0
-                        ? `${branch.customers.length} customer${branch.customers.length === 1 ? "" : "s"}`
-                        : null
-                    ]
-                      .filter(Boolean)
-                      .join(" and ")}
-                    .
-                  </p>
-                )}
+      {activeTab === "branches" ? (
+        <div className="grid gap-6 xl:grid-cols-[0.9fr_1.1fr]">
+          <section className="card">
+            <h2 className="section-title">Create Branch</h2>
+            <form action={createBranch} className="mt-4 grid gap-3 rounded-2xl bg-muted p-4">
+              <input name="name" className="input" placeholder="Branch name" required />
+              <div className="grid gap-3 md:grid-cols-2">
+                <input name="city" className="input" placeholder="City" />
+                <input name="state" className="input" placeholder="State" maxLength={2} />
               </div>
-              );
-            })}
-          </div>
-        </section>
+              <button type="submit" className="btn">
+                Create Branch
+              </button>
+            </form>
+          </section>
 
+          <section className="card overflow-hidden p-0">
+            <div className="border-b border-border p-5">
+              <h2 className="section-title">Branches</h2>
+              <p className="muted">All branches in your organization. Assign users to branches from the Users tab.</p>
+            </div>
+            <div className="overflow-x-auto">
+              <AdminBranchesTable rows={branchRows} />
+            </div>
+          </section>
+        </div>
+      ) : null}
+
+      {activeTab === "settings" ? (
+        <section className="card">
+          <h2 className="section-title">Load Number Settings</h2>
+          <p className="muted">
+            Set the prefix and the next auto-generated load number. If the next number is set to 2500, the next blank
+            load number will be {company.loadNumberPrefix}-2500 and then increment from there.
+          </p>
+          <form action={updateLoadNumberSettings} className="mt-4 grid gap-3 md:grid-cols-[1fr_1fr_auto]">
+            <label className="grid gap-2">
+              <span className="label">Prefix</span>
+              <input
+                name="loadNumberPrefix"
+                className="input"
+                defaultValue={company.loadNumberPrefix}
+                placeholder="GLB"
+                required
+              />
+            </label>
+            <label className="grid gap-2">
+              <span className="label">Next Load Number</span>
+              <input
+                name="nextLoadSequence"
+                className="input"
+                type="number"
+                min={1}
+                step={1}
+                defaultValue={company.nextLoadSequence}
+                required
+              />
+            </label>
+            <div className="flex items-end">
+              <button className="btn" type="submit">
+                Save Settings
+              </button>
+            </div>
+          </form>
+        </section>
+      ) : null}
+
+      {activeTab === "audit" ? (
         <section className="card overflow-hidden p-0">
           <div className="border-b border-border p-5">
             <h2 className="section-title">Security Audit Log</h2>
@@ -291,7 +262,7 @@ export default async function AdminPage({
             <AuditLogTable logs={auditRows} />
           </div>
         </section>
-      </div>
+      ) : null}
     </>
   );
 }

@@ -3,6 +3,7 @@ import { cookies } from "next/headers";
 import { redirect } from "next/navigation";
 import { prisma } from "@/lib/db";
 import { tryAutoAssignSeat } from "@/lib/seats";
+import { ensureMembershipBranchesSynced } from "@/lib/membership-branches";
 import type { OrganizationSummary, SessionUser } from "@/lib/types";
 
 export const sessionCookieName = "tms_session";
@@ -83,7 +84,8 @@ function toOrganizationSummary(
 function buildSessionUser(
   user: { id: string; name: string; email: string; mustChangePassword: boolean },
   membership: Awaited<ReturnType<typeof getActiveMemberships>>[number],
-  organizations: OrganizationSummary[]
+  organizations: OrganizationSummary[],
+  branchIds: string[]
 ): SessionUser {
   return {
     id: user.id,
@@ -96,6 +98,7 @@ function buildSessionUser(
     status: membership.status,
     mustChangePassword: user.mustChangePassword,
     branchId: membership.branchId,
+    branchIds,
     hasSeat: membership.seatAssignedAt != null,
     organizations
   };
@@ -194,8 +197,9 @@ export async function getCurrentUser(): Promise<CurrentUser | null> {
 
   const activeMemberships = await getActiveMemberships(session.userId);
   const organizations = activeMemberships.map(toOrganizationSummary);
+  const branchIds = await ensureMembershipBranchesSynced(membership.id, membership.branchId);
 
-  return buildSessionUser(session.user, membership, organizations);
+  return buildSessionUser(session.user, membership, organizations, branchIds);
 }
 
 export async function requireUser() {
@@ -467,6 +471,10 @@ export async function registerCompany(formData: FormData) {
         role: "OWNER",
         status: "ACTIVE"
       }
+    });
+
+    await tx.membershipBranch.create({
+      data: { membershipId: membership.id, branchId: branch.id }
     });
 
     await tx.seatSubscription.create({

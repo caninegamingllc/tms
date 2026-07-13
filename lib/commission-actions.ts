@@ -4,7 +4,8 @@ import { revalidatePath } from "next/cache";
 import { prisma } from "@/lib/db";
 import { requireAdmin, requireUser } from "@/lib/auth";
 import { requireWriteUser } from "@/lib/permissions";
-import { canAccessBranchRecord, canSettleCommission } from "@/lib/scope";
+import { canAccessRecord } from "@/lib/branch-filter-server";
+import { canSettleCommission } from "@/lib/scope";
 import { parseMoneyToCents } from "@/lib/format";
 import { ensureDefaultCommissionProfile, recalculateLoadCommission } from "@/lib/commission";
 
@@ -26,7 +27,7 @@ async function requireCommissionLoad(loadId: string, user: Awaited<ReturnType<ty
     where: { id: loadId, companyId: user.companyId }
   });
 
-  if (!canAccessBranchRecord(user, load.branchId)) {
+  if (!(await canAccessRecord(user, load.branchId))) {
     throw new Error("Load not found.");
   }
 
@@ -41,7 +42,7 @@ export async function markInvoicePaid(formData: FormData) {
     include: { load: true }
   });
 
-  if (!canAccessBranchRecord(user, invoice.load.branchId)) {
+  if (!(await canAccessRecord(user, invoice.load.branchId))) {
     throw new Error("Invoice not found.");
   }
 
@@ -175,7 +176,7 @@ export async function settleBranchCommission(formData: FormData) {
   });
 
   for (const commission of commissions) {
-    if (!canAccessBranchRecord(user, commission.load.branchId)) {
+    if (!(await canAccessRecord(user, commission.load.branchId))) {
       continue;
     }
 
@@ -210,7 +211,7 @@ export async function settleLoadCommission(formData: FormData) {
     throw new Error("Commission not found or not payable.");
   }
 
-  if (!canAccessBranchRecord(user, commission.load.branchId)) {
+  if (!(await canAccessRecord(user, commission.load.branchId))) {
     throw new Error("Commission not found.");
   }
 

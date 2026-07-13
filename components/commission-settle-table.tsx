@@ -165,6 +165,11 @@ export function CommissionSettleTable({
   }
 
   function toggleOne(id: string) {
+    const row = rows.find((entry) => entry.id === id);
+    if (!row?.canSettle) {
+      return;
+    }
+
     setSelected((current) => (current.includes(id) ? current.filter((value) => value !== id) : [...current, id]));
   }
 
@@ -175,7 +180,9 @@ export function CommissionSettleTable({
       <div className="flex flex-wrap items-center justify-between gap-4 border-b border-border p-5">
         <div>
           <h2 className="section-title">Commission & Settlement</h2>
-          <p className="muted">Branch commission becomes payable once the customer has paid the load. Click column headers to sort.</p>
+          <p className="muted">
+            Branch commission becomes payable once the customer has paid the load. Select payable rows to batch-settle branch commissions. Click column headers to sort.
+          </p>
         </div>
         {canSettle ? (
           <form action={settleBranchCommission}>
@@ -183,7 +190,9 @@ export function CommissionSettleTable({
               <input key={id} type="hidden" name="commissionIds" value={id} />
             ))}
             <button type="submit" className="btn" disabled={selected.length === 0}>
-              Mark {selected.length || ""} selected as settled
+              {selected.length > 0
+                ? `Mark ${selected.length} selected as settled`
+                : "Mark selected as settled"}
             </button>
           </form>
         ) : null}
@@ -197,7 +206,9 @@ export function CommissionSettleTable({
                 <th>
                   <input
                     type="checkbox"
+                    className="h-4 w-4 rounded border-border"
                     checked={allSelected}
+                    disabled={payableIds.length === 0}
                     onChange={toggleAll}
                     aria-label="Select all payable commissions"
                   />
@@ -250,14 +261,23 @@ export function CommissionSettleTable({
                 <tr key={row.id}>
                   {canSettle ? (
                     <td>
-                      {row.canSettle ? (
-                        <input
-                          type="checkbox"
-                          checked={selected.includes(row.id)}
-                          onChange={() => toggleOne(row.id)}
-                          aria-label={`Select ${row.loadNumber}`}
-                        />
-                      ) : null}
+                      <input
+                        type="checkbox"
+                        className="h-4 w-4 rounded border-border disabled:cursor-not-allowed disabled:opacity-40"
+                        checked={row.canSettle && selected.includes(row.id)}
+                        disabled={!row.canSettle}
+                        onChange={() => toggleOne(row.id)}
+                        title={
+                          row.canSettle
+                            ? `Select load ${row.loadNumber}`
+                            : "Payable after the customer pays this load"
+                        }
+                        aria-label={
+                          row.canSettle
+                            ? `Select load ${row.loadNumber}`
+                            : `Load ${row.loadNumber} is not yet payable`
+                        }
+                      />
                     </td>
                   ) : null}
                   {dataColumns.map((column) => (

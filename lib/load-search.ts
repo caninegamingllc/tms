@@ -1,7 +1,6 @@
 import { z } from "zod";
 import { prisma } from "@/lib/db";
-import { branchScopedWhere } from "@/lib/scope";
-import type { SessionUser } from "@/lib/types";
+import type { BranchScope } from "@/lib/scope";
 import type { Prisma } from "@prisma/client";
 
 export const loadSearchViewSchema = z.enum(["loads", "revenue"]);
@@ -63,10 +62,10 @@ export function parseLoadSearchParams(
 }
 
 export function buildLoadSearchWhere(
-  user: Pick<SessionUser, "companyId" | "role" | "branchId">,
+  scope: BranchScope,
   filters: LoadSearchFilters
 ): Prisma.LoadWhereInput {
-  const where: Prisma.LoadWhereInput = { ...branchScopedWhere(user) };
+  const where: Prisma.LoadWhereInput = { ...scope };
 
   const loadNumber = normalizeOptional(filters.loadNumber);
   if (loadNumber) {
@@ -191,12 +190,9 @@ export function describeActiveFilters(filters: LoadSearchFilters, customerName?:
   return parts.length ? parts.join(" · ") : "All loads";
 }
 
-export async function searchLoads(
-  user: Pick<SessionUser, "companyId" | "role" | "branchId">,
-  filters: LoadSearchFilters
-) {
+export async function searchLoads(scope: BranchScope, filters: LoadSearchFilters) {
   return prisma.load.findMany({
-    where: buildLoadSearchWhere(user, filters),
+    where: buildLoadSearchWhere(scope, filters),
     orderBy: [{ pickupDate: "desc" }, { loadNumber: "desc" }],
     include: {
       customer: true,
@@ -206,16 +202,16 @@ export async function searchLoads(
   });
 }
 
-export async function getLoadSearchOptions(user: Pick<SessionUser, "companyId" | "role" | "branchId">) {
+export async function getLoadSearchOptions(scope: BranchScope) {
   const [customers, commodityRows] = await Promise.all([
     prisma.customer.findMany({
-      where: branchScopedWhere(user),
+      where: scope,
       orderBy: { name: "asc" },
       select: { id: true, name: true }
     }),
     prisma.load.findMany({
       where: {
-        ...branchScopedWhere(user),
+        ...scope,
         commodity: { not: null }
       },
       select: { commodity: true },
