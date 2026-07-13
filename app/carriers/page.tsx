@@ -1,28 +1,28 @@
-import Link from "next/link";
 import { CarrierLookupForm } from "@/components/carrier-lookup-form";
+import { CarrierSearchFilters } from "@/components/carrier-search-filters";
 import { CarriersTable } from "@/components/carriers-table";
 import { PageHeader } from "@/components/page-header";
+import { SearchPrompt } from "@/components/search-prompt";
 import { createCarrier } from "@/lib/actions";
+import {
+  hasActiveCarrierFilters,
+  parseCarrierSearchParams,
+  searchCarriers
+} from "@/lib/carrier-search";
 import { requireTmsAccess } from "@/lib/permissions";
-import { prisma } from "@/lib/db";
 
 export default async function CarriersPage({
   searchParams
 }: {
-  searchParams: Promise<{ error?: string }>;
+  searchParams: Promise<Record<string, string | string[] | undefined>>;
 }) {
-  const { error } = await searchParams;
+  const params = await searchParams;
+  const { error, ...filterParams } = params;
   const user = await requireTmsAccess();
-  const carriers = await prisma.carrier.findMany({
-    where: { companyId: user.companyId },
-    orderBy: { name: "asc" },
-    include: {
-      contacts: true,
-      complianceDocuments: true,
-      insuranceCoverages: true,
-      assignments: { include: { load: true } }
-    }
-  });
+  const filters = parseCarrierSearchParams(filterParams);
+  const hasFilters = hasActiveCarrierFilters(filters);
+
+  const carriers = hasFilters ? await searchCarriers(user, filters) : [];
 
   const rows = carriers.map((carrier) => {
     const totalSpend = carrier.assignments.reduce((sum, assignment) => sum + assignment.rateCents, 0);
@@ -57,15 +57,25 @@ export default async function CarriersPage({
       ) : null}
 
       <div className="grid gap-6 xl:grid-cols-[1.35fr_0.8fr]">
-        <section className="card overflow-hidden p-0">
-          <div className="border-b border-border p-5">
-            <h2 className="section-title">Carrier Network</h2>
-            <p className="muted">Compliance status helps dispatchers avoid risky assignments. Click column headers to sort.</p>
-          </div>
-          <div className="overflow-x-auto">
-            <CarriersTable carriers={rows} />
-          </div>
-        </section>
+        <div className="grid gap-6">
+          <CarrierSearchFilters filters={filters} />
+
+          {hasFilters ? (
+            <section className="card overflow-hidden p-0">
+              <div className="border-b border-border p-5">
+                <h2 className="section-title">Search Results</h2>
+                <p className="muted">
+                  {carriers.length} carrier{carriers.length === 1 ? "" : "s"} found. Click column headers to sort.
+                </p>
+              </div>
+              <div className="overflow-x-auto">
+                <CarriersTable carriers={rows} />
+              </div>
+            </section>
+          ) : (
+            <SearchPrompt entity="carriers" />
+          )}
+        </div>
 
         <section className="card">
           <h2 className="section-title">Add Carrier</h2>

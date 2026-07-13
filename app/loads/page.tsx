@@ -1,23 +1,33 @@
 import Link from "next/link";
+import { LoadSearchFilters } from "@/components/load-search-filters";
 import { LoadsTable } from "@/components/loads-table";
 import { PageHeader } from "@/components/page-header";
+import { SearchPrompt } from "@/components/search-prompt";
 import { requireTmsAccess } from "@/lib/permissions";
-import { branchScopedWhere } from "@/lib/scope";
-import { prisma } from "@/lib/db";
 import { syncMissingCommissions } from "@/lib/commission";
+import {
+  getLoadSearchOptions,
+  hasActiveLoadFilters,
+  parseLoadSearchParams,
+  searchLoads
+} from "@/lib/load-search";
 
-export default async function LoadsPage() {
+export default async function LoadsPage({
+  searchParams
+}: {
+  searchParams: Promise<Record<string, string | string[] | undefined>>;
+}) {
   const user = await requireTmsAccess();
+  const params = await searchParams;
+  const filters = parseLoadSearchParams(params);
+  const hasFilters = hasActiveLoadFilters(filters);
+
   await syncMissingCommissions(user.companyId);
-  const loads = await prisma.load.findMany({
-    where: branchScopedWhere(user),
-    orderBy: [{ pickupDate: "desc" }, { loadNumber: "desc" }],
-    include: {
-      customer: true,
-      dispatchAssignment: { include: { carrier: true } },
-      commission: true
-    }
-  });
+
+  const [loads, options] = await Promise.all([
+    hasFilters ? searchLoads(user, filters) : Promise.resolve([]),
+    getLoadSearchOptions(user)
+  ]);
 
   const rows = loads.map((load) => ({
     id: load.id,
@@ -60,15 +70,30 @@ export default async function LoadsPage() {
         }
       />
 
-      <section className="card overflow-hidden p-0">
-        <div className="border-b border-border p-5">
-          <h2 className="section-title">All Loads</h2>
-          <p className="muted">Click any column header to sort. Most recent pickups shown first.</p>
+      <LoadSearchFilters
+        filters={filters}
+        customers={options.customers}
+        commodities={options.commodities}
+        basePath="/loads"
+      />
+
+      {hasFilters ? (
+        <section className="card mt-6 overflow-hidden p-0">
+          <div className="border-b border-border p-5">
+            <h2 className="section-title">Search Results</h2>
+            <p className="muted">
+              {loads.length} load{loads.length === 1 ? "" : "s"} found. Click any column header to sort.
+            </p>
+          </div>
+          <div className="overflow-x-auto">
+            <LoadsTable loads={rows} />
+          </div>
+        </section>
+      ) : (
+        <div className="mt-6">
+          <SearchPrompt entity="loads" />
         </div>
-        <div className="overflow-x-auto">
-          <LoadsTable loads={rows} />
-        </div>
-      </section>
+      )}
     </>
   );
 }

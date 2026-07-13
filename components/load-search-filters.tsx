@@ -15,11 +15,13 @@ type CustomerOption = {
 export function LoadSearchFilters({
   filters,
   customers,
-  commodities
+  commodities,
+  basePath = "/search"
 }: {
   filters: LoadSearchFilters;
   customers: CustomerOption[];
   commodities: string[];
+  basePath?: string;
 }) {
   const router = useRouter();
 
@@ -49,12 +51,12 @@ export function LoadSearchFilters({
     };
 
     const query = buildSearchQueryString(nextFilters);
-    router.push(query ? `/search?${query}` : "/search");
+    router.push(query ? `${basePath}?${query}` : basePath);
   }
 
   function handleClear() {
     const view = filters.view ?? "loads";
-    router.push(view === "revenue" ? "/search?view=revenue" : "/search");
+    router.push(view === "revenue" ? `${basePath}?view=revenue` : basePath);
   }
 
   return (

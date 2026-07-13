@@ -123,6 +123,20 @@ export function buildLoadSearchWhere(
   return where;
 }
 
+export function hasActiveLoadFilters(filters: LoadSearchFilters) {
+  return Boolean(
+    filters.dateFrom?.trim() ||
+      filters.dateTo?.trim() ||
+      filters.customerId?.trim() ||
+      filters.originCity?.trim() ||
+      filters.originState?.trim() ||
+      filters.destCity?.trim() ||
+      filters.destState?.trim() ||
+      filters.equipmentType?.trim() ||
+      filters.commodity?.trim()
+  );
+}
+
 export function buildSearchQueryString(filters: LoadSearchFilters) {
   const params = new URLSearchParams();
 
@@ -175,7 +189,8 @@ export async function searchLoads(
     orderBy: [{ pickupDate: "desc" }, { loadNumber: "desc" }],
     include: {
       customer: true,
-      dispatchAssignment: { include: { carrier: true } }
+      dispatchAssignment: { include: { carrier: true } },
+      commission: true
     }
   });
 }
