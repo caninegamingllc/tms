@@ -39,12 +39,18 @@ export function OAuthButtons({
       </div>
       <div className="grid gap-2">
         {googleConfigured ? (
-          <Link href={href("google")} className="btn-secondary justify-center text-center">
+          <Link
+            href={href("google")}
+            className="inline-flex items-center justify-center rounded-lg bg-black px-4 py-2 text-center text-sm font-semibold text-white transition hover:bg-neutral-800"
+          >
             Continue with Google
           </Link>
         ) : null}
         {microsoftConfigured ? (
-          <Link href={href("microsoft")} className="btn-secondary justify-center text-center">
+          <Link
+            href={href("microsoft")}
+            className="inline-flex items-center justify-center rounded-lg bg-black px-4 py-2 text-center text-sm font-semibold text-white transition hover:bg-neutral-800"
+          >
             Continue with Microsoft 365
           </Link>
         ) : null}
