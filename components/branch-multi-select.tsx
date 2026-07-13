@@ -1,10 +1,18 @@
 "use client";
 
-import { useState } from "react";
+import { useEffect, useState } from "react";
 import { Check } from "lucide-react";
 import { clsx } from "clsx";
 
 type BranchOption = { id: string; name: string };
+
+function resolvePrimary(selectedBranchIds: string[], primaryBranchId?: string | null) {
+  if (primaryBranchId && selectedBranchIds.includes(primaryBranchId)) {
+    return primaryBranchId;
+  }
+
+  return selectedBranchIds[0] ?? null;
+}
 
 export function BranchMultiSelect({
   branches,
@@ -22,11 +30,18 @@ export function BranchMultiSelect({
   required?: boolean;
 }) {
   const [selected, setSelected] = useState<string[]>(selectedBranchIds);
-  const [primary, setPrimary] = useState<string | null>(
-    primaryBranchId && selectedBranchIds.includes(primaryBranchId)
-      ? primaryBranchId
-      : selectedBranchIds[0] ?? null
+  const [primary, setPrimary] = useState<string | null>(() =>
+    resolvePrimary(selectedBranchIds, primaryBranchId)
   );
+
+  const selectedKey = selectedBranchIds.join(",");
+  const primaryKey = primaryBranchId ?? "";
+
+  useEffect(() => {
+    const nextSelected = selectedKey ? selectedKey.split(",") : [];
+    setSelected(nextSelected);
+    setPrimary(resolvePrimary(nextSelected, primaryKey || null));
+  }, [selectedKey, primaryKey]);
 
   function toggleBranch(branchId: string) {
     setSelected((current) => {

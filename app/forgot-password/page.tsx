@@ -35,14 +35,24 @@ export default async function ForgotPasswordPage({
               {devToken ? (
                 <div className="rounded-lg border border-border bg-card p-3 text-muted-foreground">
                   <p className="font-semibold text-foreground">Development reset link</p>
+                  <p className="mt-1 text-xs">
+                    Email is not required locally. Click the link below to set a new password.
+                  </p>
                   <Link
                     href={`/reset-password?token=${encodeURIComponent(devToken)}`}
-                    className="mt-2 block break-all font-semibold text-primary"
+                    className="btn mt-3 inline-flex w-full justify-center"
                   >
-                    /reset-password?token={devToken.slice(0, 8)}...
+                    Reset Password
                   </Link>
                 </div>
-              ) : null}
+              ) : (
+                <p className="text-xs text-amber-800">
+                  No local reset link was generated. Use a seeded account email like{" "}
+                  <span className="font-semibold">owner@example.com</span>, and make sure the
+                  local app is running on{" "}
+                  <span className="font-semibold">http://localhost:3000</span> (not production).
+                </p>
+              )}
             </div>
           ) : (
             <form action={requestPasswordReset} className="mt-6 grid gap-4">

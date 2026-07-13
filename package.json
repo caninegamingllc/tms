@@ -1,6 +1,6 @@
 {
   "name": "freight-broker-tms",
-  "version": "0.2.9",
+  "version": "0.3.0",
   "private": true,
   "scripts": {
     "dev": "prisma generate && prisma db push && next dev",

@@ -117,7 +117,11 @@ export function AdminUserEditor({
 
       <section className="rounded-2xl border border-border p-4">
         <h4 className="section-title">Access & Branches</h4>
-        <form action={updateAdminUser} className="mt-4 grid gap-4">
+        <form
+          key={user.membershipId}
+          action={updateAdminUser}
+          className="mt-4 grid gap-4"
+        >
           <input type="hidden" name="membershipId" value={user.membershipId} />
 
           <label className="grid gap-2">
@@ -152,9 +156,10 @@ export function AdminUserEditor({
           </div>
 
           <BranchMultiSelect
+            key={user.membershipId}
             branches={branches}
             selectedBranchIds={user.branchIds}
-            primaryBranchId={user.branchId}
+            primaryBranchId={user.branchId ?? user.branchIds[0] ?? null}
             required={user.role !== "OWNER" && user.role !== "ADMIN"}
           />
 

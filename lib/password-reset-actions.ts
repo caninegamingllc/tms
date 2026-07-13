@@ -57,8 +57,12 @@ export async function requestPasswordReset(formData: FormData) {
       console.error("[password-reset] email delivery failed:", error);
     }
 
-    if (process.env.NODE_ENV === "development" && !delivered) {
+    // Always surface the link locally so you can reset without mailbox access.
+    if (process.env.NODE_ENV !== "production") {
       devToken = token;
+      console.info(`[password-reset] Development reset link for ${user.email}: ${resetUrl}`);
+    } else if (!delivered) {
+      console.info(`[password-reset] ${user.email}: ${resetUrl}`);
     }
 
     await prisma.auditLog.create({
