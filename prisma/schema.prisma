@@ -317,6 +317,10 @@ model Load {
   invoices             Invoice[]
   carrierBills         CarrierBill[]
   commission           LoadCommission?
+  routeTotalMiles      Float?
+  routeStateMiles      Json?
+  routePolyline        String?
+  routeComputedAt      DateTime?
   createdAt            DateTime            @default(now())
   updatedAt            DateTime            @updatedAt
 

@@ -101,6 +101,26 @@ textarea::placeholder {
   }
 }
 
+.load-stop-marker {
+  background: transparent;
+  border: none;
+}
+
+.load-stop-marker__label {
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  width: 28px;
+  height: 28px;
+  border-radius: 9999px;
+  background: #5d87ff;
+  color: #ffffff;
+  border: 2px solid #ffffff;
+  box-shadow: 0 1px 4px rgba(0, 0, 0, 0.2);
+  font-size: 12px;
+  font-weight: 700;
+}
+
 @media print {
   aside {
     display: none !important;

@@ -1,6 +1,7 @@
 import { notFound } from "next/navigation";
 import Link from "next/link";
 import { PageHeader } from "@/components/page-header";
+import { LoadRoutePanel } from "@/components/load-route-panel";
 import { SearchCombobox } from "@/components/search-combobox";
 import { StatusBadge } from "@/components/status-badge";
 import {
@@ -162,6 +163,7 @@ export default async function LoadDetailPage({ params }: { params: Promise<{ id:
                 </div>
               ))}
             </div>
+            <LoadRoutePanel loadId={load.id} />
           </section>
 
           <section className="card">
