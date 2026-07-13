@@ -104,15 +104,38 @@ async function resolveCommissionProfile(companyId: string) {
   return profile;
 }
 
+const TMS_BRANCH_ALIASES: Record<string, string[]> = {
+  "Phillips Expedited": ["Phillips Expedited"],
+  "Matt Boreako": ["Matt Boreako", "Matthew Boreako"],
+  "Corey Horvath": ["Corey Horvath"],
+  "Suki Hamzic": ["Suki Hamzic"],
+  "Billy Parker": ["Billy Parker"],
+  "Talent Transport Logistics": [
+    "Talent Transport Logistics",
+    "Talent Transport Logistics Inc HQ"
+  ]
+};
+
+async function findBranch(companyId: string, canonicalBranch: string) {
+  const aliases = TMS_BRANCH_ALIASES[canonicalBranch] ?? [canonicalBranch];
+  for (const name of aliases) {
+    const branch = await prisma.branch.findFirst({
+      where: { companyId, name }
+    });
+    if (branch) {
+      return branch;
+    }
+  }
+  return null;
+}
+
 async function resolveBranchContext(
   companyId: string,
   branchName: string,
   commissionProfileId: string,
   summary: ImportSummary
 ): Promise<BranchContext> {
-  let branch = await prisma.branch.findFirst({
-    where: { companyId, name: branchName }
-  });
+  let branch = await findBranch(companyId, branchName);
 
   if (!branch) {
     if (branchName !== COREY_BRANCH) {
