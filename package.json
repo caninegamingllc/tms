@@ -1,6 +1,6 @@
 {
   "name": "freight-broker-tms",
-  "version": "0.3.0",
+  "version": "0.3.1",
   "private": true,
   "scripts": {
     "dev": "prisma generate && prisma db push && next dev",
@@ -30,6 +30,7 @@
     "react": "latest",
     "react-dom": "latest",
     "react-leaflet": "^5.0.0",
+    "recharts": "^3.9.2",
     "stripe": "^18.5.0",
     "zod": "latest"
   },

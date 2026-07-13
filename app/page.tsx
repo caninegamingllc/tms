@@ -1,13 +1,15 @@
 import Link from "next/link";
 import { AlertCircle, Banknote, ClipboardList, Truck } from "lucide-react";
+import { FuelIndexCard } from "@/components/fuel-index-card";
 import { LoadSnapshotTable } from "@/components/load-snapshot-table";
 import { MetricCard } from "@/components/metric-card";
 import { PageHeader } from "@/components/page-header";
+import { getDieselPrices } from "@/lib/eia-diesel";
 import { formatDateTime, formatMoney } from "@/lib/format";
 import { getDashboardData } from "@/lib/queries";
 
 export default async function DashboardPage() {
-  const data = await getDashboardData();
+  const [data, dieselPrices] = await Promise.all([getDashboardData(), getDieselPrices()]);
 
   return (
     <>
@@ -46,6 +48,10 @@ export default async function DashboardPage() {
           detail={`${data.customers} active customer accounts`}
           icon={<Truck className="h-5 w-5" />}
         />
+      </div>
+
+      <div className="mt-6">
+        <FuelIndexCard data={dieselPrices} />
       </div>
 
       <div className="mt-6 grid gap-6 xl:grid-cols-[1.5fr_1fr]">
