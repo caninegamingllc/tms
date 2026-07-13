@@ -13,6 +13,7 @@ import {
   generateRateConfirmation,
   updateLoadStatus
 } from "@/lib/actions";
+import { DeleteLoadButton } from "@/components/delete-load-button";
 import {
   addLoadExpense,
   assignLoadCommissionProfile,
@@ -23,7 +24,7 @@ import {
 import { recalculateLoadCommission } from "@/lib/commission";
 import { toDocumentTableRows } from "@/lib/document-rows";
 import { requireTmsAccess } from "@/lib/permissions";
-import { canAccessBranchRecord, canManageUsers, canSettleCommission } from "@/lib/scope";
+import { canAccessBranchRecord, canManageUsers, canSettleCommission, canWrite } from "@/lib/scope";
 import { expenseTypes, loadStatuses } from "@/lib/constants";
 import { prisma } from "@/lib/db";
 import { commissionMethodLabel, formatDate, formatDateTime, formatMoney, humanize, marginPercent } from "@/lib/format";
@@ -99,6 +100,11 @@ export default async function LoadDetailPage({ params }: { params: Promise<{ id:
       <PageHeader
         title={`${load.loadNumber}: ${load.title}`}
         description={`${load.customer.name} freight from ${load.pickupCity}, ${load.pickupState} to ${load.deliveryCity}, ${load.deliveryState}.`}
+        action={
+          canWrite(user) ? (
+            <DeleteLoadButton loadId={load.id} loadNumber={load.loadNumber} />
+          ) : undefined
+        }
       />
 
       <div className="grid gap-6 xl:grid-cols-[1.45fr_0.9fr]">

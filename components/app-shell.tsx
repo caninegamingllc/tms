@@ -37,6 +37,7 @@ const navItems = [
   { href: "/documents", label: "Documents", icon: FileText },
   { href: "/accounting", label: "Accounting", icon: Landmark },
   { href: "/commissions", label: "Commissions", icon: Percent },
+  { href: "/commissions/profiles", label: "Commission Profiles", icon: Percent, adminOnly: true },
   { href: "/reports", label: "Reports", icon: BarChart3 },
   { href: "/admin", label: "Admin", icon: Settings, adminOnly: true },
   { href: "/admin/billing", label: "Billing", icon: Landmark, adminOnly: true },
@@ -69,7 +70,9 @@ function SidebarContent({
               ? pathname === "/"
               : item.href === "/admin"
                 ? pathname === "/admin"
-                : pathname.startsWith(item.href);
+                : item.href === "/commissions"
+                  ? pathname === "/commissions"
+                  : pathname.startsWith(item.href);
 
           return (
             <Link

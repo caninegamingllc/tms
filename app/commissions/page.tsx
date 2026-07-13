@@ -23,7 +23,7 @@ export default async function CommissionsPage({
 
   const where = buildCommissionWhere(user, filters);
 
-  const [commissions, branches] = await Promise.all([
+  const [commissions, branches, profileCount] = await Promise.all([
     prisma.loadCommission.findMany({
       where,
       orderBy: [{ load: { pickupDate: "desc" } }, { load: { loadNumber: "desc" } }],
@@ -42,7 +42,10 @@ export default async function CommissionsPage({
           where: { companyId: user.companyId },
           orderBy: { name: "asc" }
         })
-      : Promise.resolve([])
+      : Promise.resolve([]),
+    canManageUsers(user)
+      ? prisma.commissionProfile.count({ where: { companyId: user.companyId } })
+      : Promise.resolve(0)
   ]);
 
   const totalPayable = commissions
@@ -102,6 +105,22 @@ export default async function CommissionsPage({
         <MetricCard label="Settled" value={formatMoney(totalSettled)} detail="Branch commissions paid out" />
         <MetricCard label="Pending Loads" value={String(pendingCount)} detail="Awaiting customer payment" />
       </div>
+
+      {canManageUsers(user) ? (
+        <section className="card mt-6 p-5">
+          <div className="flex flex-wrap items-start justify-between gap-4">
+            <div>
+              <h2 className="section-title">Commission Profiles</h2>
+              <p className="muted">
+                {profileCount} profile{profileCount === 1 ? "" : "s"} configured. Create rules for branch and company splits, then assign defaults to branches or individual loads.
+              </p>
+            </div>
+            <Link href="/commissions/profiles" className="btn">
+              Manage Profiles
+            </Link>
+          </div>
+        </section>
+      ) : null}
 
       <div className="mt-6 grid gap-6">
         <CommissionFilters filters={filters} branches={branches} />

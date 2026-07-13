@@ -39,6 +39,7 @@ export function LoadSearchFilters({
     event.preventDefault();
     const formData = new FormData(event.currentTarget);
     const nextFilters: LoadSearchFilters = {
+      loadNumber: String(formData.get("loadNumber") ?? ""),
       dateFrom: String(formData.get("dateFrom") ?? ""),
       dateTo: String(formData.get("dateTo") ?? ""),
       customerId: String(formData.get("customerId") ?? ""),
@@ -52,12 +53,7 @@ export function LoadSearchFilters({
     };
 
     const query = buildSearchQueryString(nextFilters);
-    if (basePath === "/loads") {
-      router.push(`${basePath}?${appendSearchSubmitted(query)}`);
-      return;
-    }
-
-    router.push(query ? `${basePath}?${query}` : basePath);
+    router.push(`${basePath}?${appendSearchSubmitted(query)}`);
   }
 
   function handleClear() {
@@ -70,11 +66,21 @@ export function LoadSearchFilters({
       <div className="mb-4">
         <h2 className="section-title">Search Filters</h2>
         <p className="muted">
-          Combine date range, customer, lane, equipment, and commodity filters to narrow results.
+          Search by load number or combine date range, customer, lane, equipment, and commodity filters.
         </p>
       </div>
 
       <form className="grid gap-4" onSubmit={handleSubmit}>
+        <label className="grid gap-2 md:max-w-sm">
+          <span className="label">Load Number</span>
+          <input
+            name="loadNumber"
+            className="input"
+            placeholder="e.g. SS-1001"
+            defaultValue={filters.loadNumber ?? ""}
+          />
+        </label>
+
         <div className="grid gap-4 md:grid-cols-2 xl:grid-cols-4">
           <label className="grid gap-2">
             <span className="label">Pickup From</span>

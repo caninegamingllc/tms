@@ -3,7 +3,9 @@ import { LoadSearchFilters } from "@/components/load-search-filters";
 import { LoadSearchResults } from "@/components/load-search-results";
 import { PageHeader } from "@/components/page-header";
 import { RevenueReportPanel, SearchViewToggle } from "@/components/revenue-report-panel";
+import { SearchPrompt } from "@/components/search-prompt";
 import { requireTmsAccess } from "@/lib/permissions";
+import { isSearchSubmitted } from "@/lib/list-search";
 import {
   buildRevenueSummary,
   describeActiveFilters,
@@ -22,9 +24,10 @@ export default async function SearchPage({ searchParams }: SearchPageProps) {
   const resolvedSearchParams = await searchParams;
   const filters = parseLoadSearchParams(resolvedSearchParams);
   const view = filters.view ?? "loads";
+  const showResults = isSearchSubmitted(resolvedSearchParams);
 
   const [loads, options] = await Promise.all([
-    searchLoads(user, filters),
+    showResults ? searchLoads(user, filters) : Promise.resolve([]),
     getLoadSearchOptions(user)
   ]);
 
@@ -48,27 +51,35 @@ export default async function SearchPage({ searchParams }: SearchPageProps) {
         commodities={options.commodities}
       />
 
-      <div className="mt-6">
-        <Suspense fallback={<div className="muted">Loading view...</div>}>
-          <SearchViewToggle view={view} />
-        </Suspense>
-      </div>
+      {showResults ? (
+        <>
+          <div className="mt-6">
+            <Suspense fallback={<div className="muted">Loading view...</div>}>
+              <SearchViewToggle view={view} />
+            </Suspense>
+          </div>
 
-      <div className="mt-6">
-        {view === "revenue" ? (
-          <RevenueReportPanel
-            summary={revenueSummary}
-            companyName={user.companyName}
-            filterSummary={filterSummary}
-          />
-        ) : (
-          <LoadSearchResults
-            loads={serializedLoads}
-            companyName={user.companyName}
-            filterSummary={filterSummary}
-          />
-        )}
-      </div>
+          <div className="mt-6">
+            {view === "revenue" ? (
+              <RevenueReportPanel
+                summary={revenueSummary}
+                companyName={user.companyName}
+                filterSummary={filterSummary}
+              />
+            ) : (
+              <LoadSearchResults
+                loads={serializedLoads}
+                companyName={user.companyName}
+                filterSummary={filterSummary}
+              />
+            )}
+          </div>
+        </>
+      ) : (
+        <div className="mt-6">
+          <SearchPrompt entity="loads" />
+        </div>
+      )}
     </>
   );
 }

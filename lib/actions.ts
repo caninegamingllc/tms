@@ -567,6 +567,33 @@ export async function updateLoadStatus(formData: FormData) {
   revalidatePath(`/loads/${loadId}`);
 }
 
+export async function deleteLoad(formData: FormData) {
+  const user = await requireWriteUser();
+  const loadId = requiredString(formData, "loadId");
+  const load = await requireCompanyLoad(loadId, user);
+
+  const documents = await prisma.loadDocument.findMany({
+    where: { loadId },
+    select: { filePath: true }
+  });
+
+  for (const document of documents) {
+    await deleteStoredFile(document.filePath);
+  }
+
+  await prisma.$transaction([
+    prisma.invoice.deleteMany({ where: { loadId } }),
+    prisma.carrierBill.deleteMany({ where: { loadId } }),
+    prisma.load.delete({ where: { id: loadId } })
+  ]);
+
+  revalidatePath("/loads");
+  revalidatePath("/search");
+  revalidatePath("/commissions");
+  revalidatePath("/dispatch");
+  redirect("/loads");
+}
+
 export async function assignCarrier(formData: FormData) {
   const user = await requireWriteUser();
   const loadId = requiredString(formData, "loadId");

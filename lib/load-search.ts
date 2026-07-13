@@ -8,6 +8,7 @@ export const loadSearchViewSchema = z.enum(["loads", "revenue"]);
 export type LoadSearchView = z.infer<typeof loadSearchViewSchema>;
 
 export const loadSearchFiltersSchema = z.object({
+  loadNumber: z.string().optional(),
   dateFrom: z.string().optional(),
   dateTo: z.string().optional(),
   customerId: z.string().optional(),
@@ -43,6 +44,7 @@ export function parseLoadSearchParams(
   searchParams: Record<string, string | string[] | undefined>
 ): LoadSearchFilters {
   const raw = {
+    loadNumber: typeof searchParams.loadNumber === "string" ? searchParams.loadNumber : undefined,
     dateFrom: typeof searchParams.dateFrom === "string" ? searchParams.dateFrom : undefined,
     dateTo: typeof searchParams.dateTo === "string" ? searchParams.dateTo : undefined,
     customerId: typeof searchParams.customerId === "string" ? searchParams.customerId : undefined,
@@ -65,6 +67,11 @@ export function buildLoadSearchWhere(
   filters: LoadSearchFilters
 ): Prisma.LoadWhereInput {
   const where: Prisma.LoadWhereInput = { ...branchScopedWhere(user) };
+
+  const loadNumber = normalizeOptional(filters.loadNumber);
+  if (loadNumber) {
+    where.loadNumber = { contains: loadNumber };
+  }
 
   const dateFrom = normalizeOptional(filters.dateFrom);
   const dateTo = normalizeOptional(filters.dateTo);
@@ -125,7 +132,8 @@ export function buildLoadSearchWhere(
 
 export function hasActiveLoadFilters(filters: LoadSearchFilters) {
   return Boolean(
-    filters.dateFrom?.trim() ||
+    filters.loadNumber?.trim() ||
+      filters.dateFrom?.trim() ||
       filters.dateTo?.trim() ||
       filters.customerId?.trim() ||
       filters.originCity?.trim() ||
@@ -152,6 +160,9 @@ export function buildSearchQueryString(filters: LoadSearchFilters) {
 export function describeActiveFilters(filters: LoadSearchFilters, customerName?: string) {
   const parts: string[] = [];
 
+  if (filters.loadNumber) {
+    parts.push(`Load #: ${filters.loadNumber}`);
+  }
   if (filters.dateFrom || filters.dateTo) {
     parts.push(
       `Pickup ${filters.dateFrom ?? "any"} to ${filters.dateTo ?? "any"}`
