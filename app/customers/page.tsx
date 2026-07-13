@@ -5,10 +5,10 @@ import { PageHeader } from "@/components/page-header";
 import { SearchPrompt } from "@/components/search-prompt";
 import { createCustomer } from "@/lib/actions";
 import {
-  hasActiveCustomerFilters,
   parseCustomerSearchParams,
   searchCustomers
 } from "@/lib/customer-search";
+import { isSearchSubmitted } from "@/lib/list-search";
 import { requireTmsAccess } from "@/lib/permissions";
 import { canSeeAllBranches } from "@/lib/scope";
 import { prisma } from "@/lib/db";
@@ -21,10 +21,10 @@ export default async function CustomersPage({
   const user = await requireTmsAccess();
   const params = await searchParams;
   const filters = parseCustomerSearchParams(params);
-  const hasFilters = hasActiveCustomerFilters(filters);
+  const showResults = isSearchSubmitted(params);
 
   const [customers, branches] = await Promise.all([
-    hasFilters ? searchCustomers(user, filters) : Promise.resolve([]),
+    showResults ? searchCustomers(user, filters) : Promise.resolve([]),
     canSeeAllBranches(user)
       ? prisma.branch.findMany({ where: { companyId: user.companyId }, orderBy: { name: "asc" } })
       : Promise.resolve([])
@@ -66,7 +66,7 @@ export default async function CustomersPage({
             showBranchPicker={canSeeAllBranches(user)}
           />
 
-          {hasFilters ? (
+          {showResults ? (
             <section className="card overflow-hidden p-0">
               <div className="border-b border-border p-5">
                 <h2 className="section-title">Search Results</h2>

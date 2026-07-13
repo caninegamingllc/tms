@@ -4,10 +4,10 @@ import { PageHeader } from "@/components/page-header";
 import { SearchPrompt } from "@/components/search-prompt";
 import { createFacility, updateFacility } from "@/lib/actions";
 import {
-  hasActiveLocationFilters,
   parseLocationSearchParams,
   searchLocations
 } from "@/lib/location-search";
+import { isSearchSubmitted } from "@/lib/list-search";
 import { requireTmsAccess } from "@/lib/permissions";
 import { prisma } from "@/lib/db";
 import { formatDate, humanize } from "@/lib/format";
@@ -20,10 +20,10 @@ export default async function LocationsPage({
   const user = await requireTmsAccess();
   const params = await searchParams;
   const filters = parseLocationSearchParams(params);
-  const hasFilters = hasActiveLocationFilters(filters);
+  const showResults = isSearchSubmitted(params);
 
   const [facilities, customers] = await Promise.all([
-    hasFilters ? searchLocations(user, filters) : Promise.resolve([]),
+    showResults ? searchLocations(user, filters) : Promise.resolve([]),
     prisma.customer.findMany({
       where: { companyId: user.companyId },
       orderBy: { name: "asc" }
@@ -46,7 +46,7 @@ export default async function LocationsPage({
         <div className="grid gap-6">
           <LocationSearchFilters filters={filters} customers={customerOptions} />
 
-          {hasFilters ? (
+          {showResults ? (
             <section className="card overflow-hidden p-0">
               <div className="border-b border-border p-5">
                 <h2 className="section-title">Search Results</h2>

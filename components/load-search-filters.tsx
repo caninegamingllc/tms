@@ -6,6 +6,7 @@ import { SearchCombobox } from "@/components/search-combobox";
 import { equipmentTypes } from "@/lib/constants";
 import type { LoadSearchFilters } from "@/lib/load-search";
 import { buildSearchQueryString } from "@/lib/load-search";
+import { appendSearchSubmitted } from "@/lib/list-search";
 
 type CustomerOption = {
   id: string;
@@ -51,6 +52,11 @@ export function LoadSearchFilters({
     };
 
     const query = buildSearchQueryString(nextFilters);
+    if (basePath === "/loads") {
+      router.push(`${basePath}?${appendSearchSubmitted(query)}`);
+      return;
+    }
+
     router.push(query ? `${basePath}?${query}` : basePath);
   }
 

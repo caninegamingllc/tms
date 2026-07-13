@@ -5,10 +5,10 @@ import { PageHeader } from "@/components/page-header";
 import { SearchPrompt } from "@/components/search-prompt";
 import { createCarrier } from "@/lib/actions";
 import {
-  hasActiveCarrierFilters,
   parseCarrierSearchParams,
   searchCarriers
 } from "@/lib/carrier-search";
+import { isSearchSubmitted } from "@/lib/list-search";
 import { requireTmsAccess } from "@/lib/permissions";
 
 export default async function CarriersPage({
@@ -20,9 +20,9 @@ export default async function CarriersPage({
   const { error, ...filterParams } = params;
   const user = await requireTmsAccess();
   const filters = parseCarrierSearchParams(filterParams);
-  const hasFilters = hasActiveCarrierFilters(filters);
+  const showResults = isSearchSubmitted(params);
 
-  const carriers = hasFilters ? await searchCarriers(user, filters) : [];
+  const carriers = showResults ? await searchCarriers(user, filters) : [];
 
   const rows = carriers.map((carrier) => {
     const totalSpend = carrier.assignments.reduce((sum, assignment) => sum + assignment.rateCents, 0);
@@ -60,7 +60,7 @@ export default async function CarriersPage({
         <div className="grid gap-6">
           <CarrierSearchFilters filters={filters} />
 
-          {hasFilters ? (
+          {showResults ? (
             <section className="card overflow-hidden p-0">
               <div className="border-b border-border p-5">
                 <h2 className="section-title">Search Results</h2>

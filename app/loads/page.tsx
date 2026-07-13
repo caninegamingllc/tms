@@ -7,10 +7,10 @@ import { requireTmsAccess } from "@/lib/permissions";
 import { syncMissingCommissions } from "@/lib/commission";
 import {
   getLoadSearchOptions,
-  hasActiveLoadFilters,
   parseLoadSearchParams,
   searchLoads
 } from "@/lib/load-search";
+import { isSearchSubmitted } from "@/lib/list-search";
 
 export default async function LoadsPage({
   searchParams
@@ -20,12 +20,12 @@ export default async function LoadsPage({
   const user = await requireTmsAccess();
   const params = await searchParams;
   const filters = parseLoadSearchParams(params);
-  const hasFilters = hasActiveLoadFilters(filters);
+  const showResults = isSearchSubmitted(params);
 
   await syncMissingCommissions(user.companyId);
 
   const [loads, options] = await Promise.all([
-    hasFilters ? searchLoads(user, filters) : Promise.resolve([]),
+    showResults ? searchLoads(user, filters) : Promise.resolve([]),
     getLoadSearchOptions(user)
   ]);
 
@@ -77,7 +77,7 @@ export default async function LoadsPage({
         basePath="/loads"
       />
 
-      {hasFilters ? (
+      {showResults ? (
         <section className="card mt-6 overflow-hidden p-0">
           <div className="border-b border-border p-5">
             <h2 className="section-title">Search Results</h2>

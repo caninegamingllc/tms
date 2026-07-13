@@ -7,6 +7,7 @@ import { facilityTypes } from "@/lib/constants";
 import { humanize } from "@/lib/format";
 import type { LocationFilters } from "@/lib/location-search";
 import { buildLocationQueryString } from "@/lib/location-search";
+import { appendSearchSubmitted } from "@/lib/list-search";
 
 type CustomerOption = {
   id: string;
@@ -40,8 +41,8 @@ export function LocationSearchFilters({
       customerId: String(formData.get("customerId") ?? "")
     };
 
-    const query = buildLocationQueryString(nextFilters);
-    router.push(query ? `/locations?${query}` : "/locations");
+    const query = appendSearchSubmitted(buildLocationQueryString(nextFilters));
+    router.push(`/locations?${query}`);
   }
 
   function handleClear() {

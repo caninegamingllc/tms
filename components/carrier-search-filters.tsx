@@ -5,6 +5,7 @@ import { FormEvent } from "react";
 import { equipmentTypes } from "@/lib/constants";
 import type { CarrierFilters } from "@/lib/carrier-search";
 import { buildCarrierQueryString } from "@/lib/carrier-search";
+import { appendSearchSubmitted } from "@/lib/list-search";
 
 const complianceStatuses = ["Approved", "Needs Review", "Review Soon", "Blocked"];
 
@@ -20,8 +21,8 @@ export function CarrierSearchFilters({ filters }: { filters: CarrierFilters }) {
       equipmentType: String(formData.get("equipmentType") ?? "")
     };
 
-    const query = buildCarrierQueryString(nextFilters);
-    router.push(query ? `/carriers?${query}` : "/carriers");
+    const query = appendSearchSubmitted(buildCarrierQueryString(nextFilters));
+    router.push(`/carriers?${query}`);
   }
 
   function handleClear() {

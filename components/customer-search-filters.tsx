@@ -4,6 +4,7 @@ import { useRouter } from "next/navigation";
 import { FormEvent } from "react";
 import type { CustomerFilters } from "@/lib/customer-search";
 import { buildCustomerQueryString } from "@/lib/customer-search";
+import { appendSearchSubmitted } from "@/lib/list-search";
 
 type BranchOption = {
   id: string;
@@ -29,8 +30,8 @@ export function CustomerSearchFilters({
       branchId: String(formData.get("branchId") ?? "")
     };
 
-    const query = buildCustomerQueryString(nextFilters);
-    router.push(query ? `/customers?${query}` : "/customers");
+    const query = appendSearchSubmitted(buildCustomerQueryString(nextFilters));
+    router.push(`/customers?${query}`);
   }
 
   function handleClear() {
