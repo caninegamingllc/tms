@@ -29,6 +29,16 @@ import { canManageUsers, canSettleCommission, canWrite } from "@/lib/scope";
 import { expenseTypes, loadStatuses } from "@/lib/constants";
 import { prisma } from "@/lib/db";
 import { commissionMethodLabel, formatDate, formatDateTime, formatMoney, humanize, marginPercent } from "@/lib/format";
+import {
+  pushCarrierBillToQuickbooksAction,
+  pushInvoiceToQuickbooksAction
+} from "@/lib/quickbooks/actions";
+import {
+  getCompanyQuickbooksMethod,
+  getExportsForEntities,
+  toExportStatusView
+} from "@/lib/quickbooks/exports";
+import type { AccountingExportMethod } from "@/lib/quickbooks/types";
 
 export default async function LoadDetailPage({ params }: { params: Promise<{ id: string }> }) {
   const { id } = await params;
@@ -68,6 +78,35 @@ export default async function LoadDetailPage({ params }: { params: Promise<{ id:
   if (!load || !(await canAccessRecord(user, load.branchId))) {
     notFound();
   }
+
+  const quickbooksMethod = await getCompanyQuickbooksMethod(user.companyId);
+  const activeExportMethod: AccountingExportMethod | null =
+    quickbooksMethod === "ONLINE" || quickbooksMethod === "IIF" ? quickbooksMethod : null;
+  const qboAccount = await prisma.integrationAccount.findUnique({
+    where: {
+      companyId_provider: { companyId: user.companyId, provider: "QUICKBOOKS" }
+    }
+  });
+  const canPushOnline = quickbooksMethod === "ONLINE" && qboAccount?.status === "Connected" && canWrite(user);
+
+  const [invoiceExports, billExports] = await Promise.all([
+    activeExportMethod
+      ? getExportsForEntities({
+          companyId: user.companyId,
+          method: activeExportMethod,
+          entityType: "INVOICE",
+          entityIds: load.invoices.map((invoice) => invoice.id)
+        })
+      : Promise.resolve(new Map()),
+    activeExportMethod
+      ? getExportsForEntities({
+          companyId: user.companyId,
+          method: activeExportMethod,
+          entityType: "CARRIER_BILL",
+          entityIds: load.carrierBills.map((bill) => bill.id)
+        })
+      : Promise.resolve(new Map())
+  ]);
 
   if (!load.commission) {
     await recalculateLoadCommission(load.id);
@@ -410,22 +449,52 @@ export default async function LoadDetailPage({ params }: { params: Promise<{ id:
           <section className="card">
             <h2 className="section-title">Accounting</h2>
             <div className="mt-4 grid gap-3">
-              {load.invoices.map((invoice) => (
-                <div key={invoice.id} className="rounded-2xl bg-muted p-3">
-                  <p className="font-semibold">{invoice.invoiceNo}</p>
-                  <p className="muted">
-                    {formatMoney(invoice.totalCents)} - {humanize(invoice.status)}
-                  </p>
-                </div>
-              ))}
-              {load.carrierBills.map((bill) => (
-                <div key={bill.id} className="rounded-2xl bg-muted p-3">
-                  <p className="font-semibold">{bill.billNo}</p>
-                  <p className="muted">
-                    {bill.carrier.name} - {formatMoney(bill.totalCents)} - {humanize(bill.status)}
-                  </p>
-                </div>
-              ))}
+              {load.invoices.map((invoice) => {
+                const exportView =
+                  activeExportMethod != null
+                    ? toExportStatusView(activeExportMethod, invoiceExports.get(invoice.id) ?? null)
+                    : null;
+                return (
+                  <div key={invoice.id} className="rounded-2xl bg-muted p-3">
+                    <p className="font-semibold">{invoice.invoiceNo}</p>
+                    <p className="muted">
+                      {formatMoney(invoice.totalCents)} - {humanize(invoice.status)}
+                    </p>
+                    {exportView ? <p className="mt-1 text-sm text-slate-700">{exportView.label}</p> : null}
+                    {canPushOnline ? (
+                      <form action={pushInvoiceToQuickbooksAction} className="mt-2">
+                        <input type="hidden" name="invoiceId" value={invoice.id} />
+                        <button type="submit" className="btn-secondary">
+                          Push to QuickBooks
+                        </button>
+                      </form>
+                    ) : null}
+                  </div>
+                );
+              })}
+              {load.carrierBills.map((bill) => {
+                const exportView =
+                  activeExportMethod != null
+                    ? toExportStatusView(activeExportMethod, billExports.get(bill.id) ?? null)
+                    : null;
+                return (
+                  <div key={bill.id} className="rounded-2xl bg-muted p-3">
+                    <p className="font-semibold">{bill.billNo}</p>
+                    <p className="muted">
+                      {bill.carrier.name} - {formatMoney(bill.totalCents)} - {humanize(bill.status)}
+                    </p>
+                    {exportView ? <p className="mt-1 text-sm text-slate-700">{exportView.label}</p> : null}
+                    {canPushOnline ? (
+                      <form action={pushCarrierBillToQuickbooksAction} className="mt-2">
+                        <input type="hidden" name="billId" value={bill.id} />
+                        <button type="submit" className="btn-secondary">
+                          Push to QuickBooks
+                        </button>
+                      </form>
+                    ) : null}
+                  </div>
+                );
+              })}
             </div>
           </section>
 

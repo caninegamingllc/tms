@@ -14,6 +14,10 @@ model Company {
   status               String                 @default("ACTIVE")
   loadNumberPrefix     String                 @default("GLB")
   nextLoadSequence     Int                    @default(1001)
+  /// NONE | ONLINE | IIF — active QuickBooks export method
+  quickbooksMethod     String                 @default("NONE")
+  /// JSON: AR/AP/income/expense account names and item defaults
+  quickbooksConfigJson String?
   memberships          CompanyMembership[]
   seatSubscription     SeatSubscription?
   branches             Branch[]
@@ -25,6 +29,7 @@ model Company {
   invoices             Invoice[]
   carrierBills         CarrierBill[]
   integrationAccounts  IntegrationAccount[]
+  accountingExports    AccountingExport[]
   auditLogs            AuditLog[]
   commissionProfiles   CommissionProfile[]
   createdAt            DateTime               @default(now())
@@ -157,29 +162,30 @@ model AuditLog {
 }
 
 model Customer {
-  id           String            @id @default(cuid())
-  companyId    String
-  company      Company           @relation(fields: [companyId], references: [id], onDelete: Cascade)
-  name         String
-  status       String            @default("Active")
-  creditLimit  Int               @default(0)
-  paymentTerms String            @default("Net 30")
-  industry     String?
-  phone        String?
-  email        String?
-  address      String?
-  city         String?
-  state        String?
-  postalCode   String?
-  branchId     String?
-  branch       Branch?           @relation(fields: [branchId], references: [id])
-  contacts     CustomerContact[]
-  facilities   Facility[]
-  loads        Load[]
-  documents    LoadDocument[]
-  invoices     Invoice[]
-  createdAt    DateTime          @default(now())
-  updatedAt    DateTime          @updatedAt
+  id            String            @id @default(cuid())
+  companyId     String
+  company       Company           @relation(fields: [companyId], references: [id], onDelete: Cascade)
+  name          String
+  status        String            @default("Active")
+  creditLimit   Int               @default(0)
+  paymentTerms  String            @default("Net 30")
+  industry      String?
+  phone         String?
+  email         String?
+  address       String?
+  city          String?
+  state         String?
+  postalCode    String?
+  externalQboId String?
+  branchId      String?
+  branch        Branch?           @relation(fields: [branchId], references: [id])
+  contacts      CustomerContact[]
+  facilities    Facility[]
+  loads         Load[]
+  documents     LoadDocument[]
+  invoices      Invoice[]
+  createdAt     DateTime          @default(now())
+  updatedAt     DateTime          @updatedAt
 
   @@index([companyId])
 }
@@ -215,6 +221,7 @@ model Carrier {
   safetyRating        String?
   insuranceExpiresAt  DateTime?
   complianceStatus    String                      @default("Needs Review")
+  externalQboId       String?
   branchId            String?
   branch              Branch?                     @relation(fields: [branchId], references: [id])
   contacts            CarrierContact[]
@@ -515,58 +522,89 @@ model LoadActivity {
 }
 
 model Invoice {
-  id          String        @id @default(cuid())
-  companyId   String
-  company     Company       @relation(fields: [companyId], references: [id], onDelete: Cascade)
-  invoiceNo   String
-  loadId      String
-  load        Load          @relation(fields: [loadId], references: [id])
-  customerId  String
-  customer    Customer      @relation(fields: [customerId], references: [id])
-  status      String        @default("DRAFT")
-  totalCents  Int
-  issuedAt    DateTime?
-  dueAt       DateTime?
-  paidAt      DateTime?
-  createdAt   DateTime      @default(now())
-  updatedAt   DateTime      @updatedAt
+  id            String        @id @default(cuid())
+  companyId     String
+  company       Company       @relation(fields: [companyId], references: [id], onDelete: Cascade)
+  invoiceNo     String
+  loadId        String
+  load          Load          @relation(fields: [loadId], references: [id])
+  customerId    String
+  customer      Customer      @relation(fields: [customerId], references: [id])
+  status        String        @default("DRAFT")
+  totalCents    Int
+  issuedAt      DateTime?
+  dueAt         DateTime?
+  paidAt        DateTime?
+  externalQboId String?
+  createdAt     DateTime      @default(now())
+  updatedAt     DateTime      @updatedAt
 
   @@unique([companyId, invoiceNo])
   @@index([companyId])
 }
 
 model CarrierBill {
-  id          String        @id @default(cuid())
-  companyId   String
-  company     Company       @relation(fields: [companyId], references: [id], onDelete: Cascade)
-  billNo      String
-  loadId      String
-  load        Load          @relation(fields: [loadId], references: [id])
-  carrierId   String
-  carrier     Carrier       @relation(fields: [carrierId], references: [id])
-  status      String        @default("DRAFT")
-  totalCents  Int
-  receivedAt  DateTime?
-  dueAt       DateTime?
-  paidAt      DateTime?
-  createdAt   DateTime      @default(now())
-  updatedAt   DateTime      @updatedAt
+  id            String        @id @default(cuid())
+  companyId     String
+  company       Company       @relation(fields: [companyId], references: [id], onDelete: Cascade)
+  billNo        String
+  loadId        String
+  load          Load          @relation(fields: [loadId], references: [id])
+  carrierId     String
+  carrier       Carrier       @relation(fields: [carrierId], references: [id])
+  status        String        @default("DRAFT")
+  totalCents    Int
+  receivedAt    DateTime?
+  dueAt         DateTime?
+  paidAt        DateTime?
+  externalQboId String?
+  createdAt     DateTime      @default(now())
+  updatedAt     DateTime      @updatedAt
 
   @@unique([companyId, billNo])
   @@index([companyId])
 }
 
 model IntegrationAccount {
-  id           String              @id @default(cuid())
-  companyId    String
-  company      Company             @relation(fields: [companyId], references: [id], onDelete: Cascade)
-  provider     String
-  displayName  String
-  status       String              @default("Not Connected")
-  apiKeyLast4  String?
-  notes        String?
-  createdAt    DateTime            @default(now())
-  updatedAt    DateTime            @updatedAt
+  id               String    @id @default(cuid())
+  companyId        String
+  company          Company   @relation(fields: [companyId], references: [id], onDelete: Cascade)
+  provider         String
+  displayName      String
+  status           String    @default("Not Connected")
+  apiKeyLast4      String?
+  notes            String?
+  realmId          String?
+  accessTokenEnc   String?
+  refreshTokenEnc  String?
+  tokenExpiresAt   DateTime?
+  connectedAt      DateTime?
+  lastSyncAt       DateTime?
+  lastError        String?
+  createdAt        DateTime  @default(now())
+  updatedAt        DateTime  @updatedAt
 
   @@index([companyId])
+  @@unique([companyId, provider])
+}
+
+/// Per-method export history for invoices and carrier bills (ONLINE vs IIF are independent).
+model AccountingExport {
+  id               String    @id @default(cuid())
+  companyId        String
+  company          Company   @relation(fields: [companyId], references: [id], onDelete: Cascade)
+  entityType       String
+  entityId         String
+  method           String
+  status           String    @default("SYNCED")
+  exportedAt       DateTime?
+  externalId       String?
+  message          String?
+  exportedByUserId String?
+  createdAt        DateTime  @default(now())
+  updatedAt        DateTime  @updatedAt
+
+  @@unique([entityType, entityId, method])
+  @@index([companyId, method])
+  @@index([companyId, entityType, entityId])
 }

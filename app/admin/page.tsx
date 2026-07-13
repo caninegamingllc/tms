@@ -157,9 +157,14 @@ export default async function AdminPage({
               available)
             </p>
           </div>
-          <Link href="/admin/billing" className="btn-secondary">
-            Manage Billing
-          </Link>
+          <div className="flex flex-wrap gap-2">
+            <Link href="/admin/billing" className="btn-secondary">
+              Manage Billing
+            </Link>
+            <Link href="/admin/accounting" className="btn-secondary">
+              Accounting / QuickBooks
+            </Link>
+          </div>
         </div>
       </div>
 
@@ -214,42 +219,56 @@ export default async function AdminPage({
       ) : null}
 
       {activeTab === "settings" ? (
-        <section className="card">
-          <h2 className="section-title">Load Number Settings</h2>
-          <p className="muted">
-            Set the prefix and the next auto-generated load number. If the next number is set to 2500, the next blank
-            load number will be {company.loadNumberPrefix}-2500 and then increment from there.
-          </p>
-          <form action={updateLoadNumberSettings} className="mt-4 grid gap-3 md:grid-cols-[1fr_1fr_auto]">
-            <label className="grid gap-2">
-              <span className="label">Prefix</span>
-              <input
-                name="loadNumberPrefix"
-                className="input"
-                defaultValue={company.loadNumberPrefix}
-                placeholder="GLB"
-                required
-              />
-            </label>
-            <label className="grid gap-2">
-              <span className="label">Next Load Number</span>
-              <input
-                name="nextLoadSequence"
-                className="input"
-                type="number"
-                min={1}
-                step={1}
-                defaultValue={company.nextLoadSequence}
-                required
-              />
-            </label>
-            <div className="flex items-end">
-              <button className="btn" type="submit">
-                Save Settings
-              </button>
+        <div className="grid gap-6">
+          <section className="card">
+            <h2 className="section-title">Load Number Settings</h2>
+            <p className="muted">
+              Set the prefix and the next auto-generated load number. If the next number is set to 2500, the next blank
+              load number will be {company.loadNumberPrefix}-2500 and then increment from there.
+            </p>
+            <form action={updateLoadNumberSettings} className="mt-4 grid gap-3 md:grid-cols-[1fr_1fr_auto]">
+              <label className="grid gap-2">
+                <span className="label">Prefix</span>
+                <input
+                  name="loadNumberPrefix"
+                  className="input"
+                  defaultValue={company.loadNumberPrefix}
+                  placeholder="GLB"
+                  required
+                />
+              </label>
+              <label className="grid gap-2">
+                <span className="label">Next Load Number</span>
+                <input
+                  name="nextLoadSequence"
+                  className="input"
+                  type="number"
+                  min={1}
+                  step={1}
+                  defaultValue={company.nextLoadSequence}
+                  required
+                />
+              </label>
+              <div className="flex items-end">
+                <button className="btn" type="submit">
+                  Save Settings
+                </button>
+              </div>
+            </form>
+          </section>
+
+          <section className="card">
+            <h2 className="section-title">QuickBooks Accounting</h2>
+            <p className="muted">
+              Choose QuickBooks Online sync or Desktop IIF export, account mappings, and OAuth connection.
+            </p>
+            <div className="mt-4">
+              <Link href="/admin/accounting" className="btn">
+                Open Accounting Settings
+              </Link>
             </div>
-          </form>
-        </section>
+          </section>
+        </div>
       ) : null}
 
       {activeTab === "audit" ? (

@@ -1,7 +1,10 @@
+import Link from "next/link";
 import { PageHeader } from "@/components/page-header";
 import { requireTmsAccess } from "@/lib/permissions";
+import { canManageUsers } from "@/lib/scope";
 import { prisma } from "@/lib/db";
 import { formatDate, humanize } from "@/lib/format";
+import { getCompanyQuickbooksMethod } from "@/lib/quickbooks/exports";
 
 const capabilities: Record<string, string[]> = {
   DAT: ["Post available loads", "Search trucks", "Import market rates"],
@@ -15,17 +18,42 @@ const capabilities: Record<string, string[]> = {
 
 export default async function IntegrationsPage() {
   const user = await requireTmsAccess();
-  const integrations = await prisma.integrationAccount.findMany({
-    where: { companyId: user.companyId },
-    orderBy: { provider: "asc" }
-  });
+  const [integrations, quickbooksMethod] = await Promise.all([
+    prisma.integrationAccount.findMany({
+      where: { companyId: user.companyId },
+      orderBy: { provider: "asc" }
+    }),
+    getCompanyQuickbooksMethod(user.companyId)
+  ]);
+  const isAdmin = canManageUsers(user);
 
   return (
     <>
       <PageHeader
         title="Integrations"
-        description="Placeholders for external services commonly used by freight brokers. These are ready for real API credentials later."
+        description="External services used by the brokerage. Configure QuickBooks export under Admin Accounting Settings."
       />
+
+      {isAdmin ? (
+        <div className="card mb-6">
+          <h2 className="section-title">QuickBooks</h2>
+          <p className="muted">
+            Active accounting method:{" "}
+            <span className="font-semibold text-foreground">
+              {quickbooksMethod === "ONLINE"
+                ? "QuickBooks Online"
+                : quickbooksMethod === "IIF"
+                  ? "IIF (Desktop)"
+                  : "Not configured"}
+            </span>
+          </p>
+          <div className="mt-4">
+            <Link href="/admin/accounting" className="btn">
+              Open Accounting Settings
+            </Link>
+          </div>
+        </div>
+      ) : null}
 
       <div className="grid gap-4 md:grid-cols-2 xl:grid-cols-3">
         {integrations.map((integration) => (
@@ -38,8 +66,11 @@ export default async function IntegrationsPage() {
               <span className="badge bg-slate-100 text-slate-700">{integration.status}</span>
             </div>
             <p className="mt-4 text-sm text-slate-700">{integration.notes}</p>
+            {integration.provider === "QUICKBOOKS" && integration.lastError ? (
+              <p className="mt-2 text-sm text-rose-700">{integration.lastError}</p>
+            ) : null}
             <div className="mt-4 rounded-2xl bg-muted p-4">
-              <p className="text-sm font-semibold text-foreground">Planned Capabilities</p>
+              <p className="text-sm font-semibold text-foreground">Capabilities</p>
               <ul className="mt-3 grid gap-2 text-sm text-slate-700">
                 {(capabilities[integration.provider] ?? ["API connection", "Status sync"]).map(
                   (capability) => (

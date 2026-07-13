@@ -26,7 +26,7 @@ export type CurrentUser = SessionUser;
 const starterIntegrations = [
   ["DAT", "DAT Load Board", "Future posting and truck search integration."],
   ["TRUCKSTOP", "Truckstop", "Future rate and posting integration."],
-  ["QUICKBOOKS", "QuickBooks Online", "Future invoice and bill sync."],
+  ["QUICKBOOKS", "QuickBooks Online", "Sync invoices and carrier bills via QuickBooks Online API."],
   ["TRUCKER_TOOLS", "Tracking and Document Capture", "Future driver tracking and POD capture."]
 ] as const;
 

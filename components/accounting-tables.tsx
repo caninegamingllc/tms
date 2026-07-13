@@ -4,7 +4,13 @@ import Link from "next/link";
 import { SortableTable } from "@/components/sortable-table";
 import { StatusBadge } from "@/components/status-badge";
 import { markInvoicePaid } from "@/lib/commission-actions";
+import {
+  markCarrierBillPaid,
+  pushCarrierBillToQuickbooksAction,
+  pushInvoiceToQuickbooksAction
+} from "@/lib/quickbooks/actions";
 import { formatDate, formatMoney } from "@/lib/format";
+import type { QuickbooksMethod } from "@/lib/quickbooks/types";
 
 export type InvoiceTableRow = {
   id: string;
@@ -17,19 +23,31 @@ export type InvoiceTableRow = {
   dueAt: string | null;
   commissionCents: number | null;
   canMarkPaid: boolean;
+  exportLabel: string | null;
+  canPushOnline: boolean;
 };
 
 export type CarrierBillTableRow = {
   id: string;
   billNo: string;
+  loadId: string;
   loadNumber: string;
   carrierName: string;
   status: string;
   totalCents: number;
   dueAt: string | null;
+  exportLabel: string | null;
+  canPushOnline: boolean;
+  canMarkPaid: boolean;
 };
 
-export function InvoicesTable({ invoices }: { invoices: InvoiceTableRow[] }) {
+export function InvoicesTable({
+  invoices,
+  quickbooksMethod
+}: {
+  invoices: InvoiceTableRow[];
+  quickbooksMethod: QuickbooksMethod;
+}) {
   return (
     <SortableTable
       data={invoices}
@@ -76,6 +94,18 @@ export function InvoicesTable({ invoices }: { invoices: InvoiceTableRow[] }) {
           sortValue: (invoice) => invoice.dueAt ?? "",
           render: (invoice) => (invoice.dueAt ? formatDate(invoice.dueAt) : "—")
         },
+        ...(quickbooksMethod !== "NONE"
+          ? [
+              {
+                id: "export",
+                label: "QuickBooks",
+                sortValue: (invoice: InvoiceTableRow) => invoice.exportLabel ?? "",
+                render: (invoice: InvoiceTableRow) => (
+                  <span className="text-sm text-slate-700">{invoice.exportLabel}</span>
+                )
+              }
+            ]
+          : []),
         {
           id: "actions",
           label: "Actions",
@@ -87,6 +117,14 @@ export function InvoicesTable({ invoices }: { invoices: InvoiceTableRow[] }) {
                   <input type="hidden" name="invoiceId" value={invoice.id} />
                   <button type="submit" className="btn-secondary">
                     Mark Paid
+                  </button>
+                </form>
+              ) : null}
+              {invoice.canPushOnline ? (
+                <form action={pushInvoiceToQuickbooksAction}>
+                  <input type="hidden" name="invoiceId" value={invoice.id} />
+                  <button type="submit" className="btn-secondary">
+                    Push to QuickBooks
                   </button>
                 </form>
               ) : null}
@@ -103,7 +141,13 @@ export function InvoicesTable({ invoices }: { invoices: InvoiceTableRow[] }) {
   );
 }
 
-export function CarrierBillsTable({ bills }: { bills: CarrierBillTableRow[] }) {
+export function CarrierBillsTable({
+  bills,
+  quickbooksMethod
+}: {
+  bills: CarrierBillTableRow[];
+  quickbooksMethod: QuickbooksMethod;
+}) {
   return (
     <SortableTable
       data={bills}
@@ -120,7 +164,11 @@ export function CarrierBillsTable({ bills }: { bills: CarrierBillTableRow[] }) {
           id: "load",
           label: "Load",
           sortValue: (bill) => bill.loadNumber,
-          render: (bill) => bill.loadNumber
+          render: (bill) => (
+            <Link href={`/loads/${bill.loadId}`} className="text-primary">
+              {bill.loadNumber}
+            </Link>
+          )
         },
         {
           id: "carrier",
@@ -145,6 +193,43 @@ export function CarrierBillsTable({ bills }: { bills: CarrierBillTableRow[] }) {
           label: "Due",
           sortValue: (bill) => bill.dueAt ?? "",
           render: (bill) => (bill.dueAt ? formatDate(bill.dueAt) : "—")
+        },
+        ...(quickbooksMethod !== "NONE"
+          ? [
+              {
+                id: "export",
+                label: "QuickBooks",
+                sortValue: (bill: CarrierBillTableRow) => bill.exportLabel ?? "",
+                render: (bill: CarrierBillTableRow) => (
+                  <span className="text-sm text-slate-700">{bill.exportLabel}</span>
+                )
+              }
+            ]
+          : []),
+        {
+          id: "actions",
+          label: "Actions",
+          sortable: false,
+          render: (bill) => (
+            <div className="grid gap-2">
+              {bill.canMarkPaid ? (
+                <form action={markCarrierBillPaid}>
+                  <input type="hidden" name="billId" value={bill.id} />
+                  <button type="submit" className="btn-secondary">
+                    Mark Paid
+                  </button>
+                </form>
+              ) : null}
+              {bill.canPushOnline ? (
+                <form action={pushCarrierBillToQuickbooksAction}>
+                  <input type="hidden" name="billId" value={bill.id} />
+                  <button type="submit" className="btn-secondary">
+                    Push to QuickBooks
+                  </button>
+                </form>
+              ) : null}
+            </div>
+          )
         }
       ]}
     />

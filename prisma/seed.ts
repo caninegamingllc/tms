@@ -59,6 +59,7 @@ async function main() {
   await prisma.customerContact.deleteMany();
   await prisma.facility.deleteMany();
   await prisma.integrationAccount.deleteMany();
+  await prisma.accountingExport.deleteMany();
   await prisma.carrier.deleteMany();
   await prisma.customer.deleteMany();
   await prisma.user.deleteMany();
@@ -720,7 +721,7 @@ async function main() {
         provider: "QUICKBOOKS",
         displayName: "QuickBooks Online",
         status: "Not Connected",
-        notes: "Future invoice and bill sync."
+        notes: "Sync invoices and carrier bills via QuickBooks Online API."
       },
       {
         companyId: company.id,

@@ -1,3 +1,4 @@
+import Link from "next/link";
 import { CarrierBillsTable, InvoicesTable } from "@/components/accounting-tables";
 import { MetricCard } from "@/components/metric-card";
 import { PageHeader } from "@/components/page-header";
@@ -7,11 +8,32 @@ import { requireTmsAccess } from "@/lib/permissions";
 import { paymentStatuses } from "@/lib/constants";
 import { prisma } from "@/lib/db";
 import { formatMoney, humanize } from "@/lib/format";
+import { reconcileQuickbooksPaymentsAction } from "@/lib/quickbooks/actions";
+import {
+  getCompanyQuickbooksMethod,
+  getExportsForEntities,
+  toExportStatusView
+} from "@/lib/quickbooks/exports";
+import type { AccountingExportMethod, QuickbooksMethod } from "@/lib/quickbooks/types";
 
-export default async function AccountingPage() {
+export default async function AccountingPage({
+  searchParams
+}: {
+  searchParams: Promise<{
+    reconciled?: string;
+    invoices?: string;
+    bills?: string;
+    error?: string;
+  }>;
+}) {
   const user = await requireTmsAccess();
+  const params = await searchParams;
   const loadScope = await getBranchScope(user);
-  const [loads, invoices, carrierBills, carriers] = await Promise.all([
+  const quickbooksMethod = await getCompanyQuickbooksMethod(user.companyId);
+  const activeExportMethod: AccountingExportMethod | null =
+    quickbooksMethod === "ONLINE" || quickbooksMethod === "IIF" ? quickbooksMethod : null;
+
+  const [loads, invoices, carrierBills, carriers, qboAccount] = await Promise.all([
     prisma.load.findMany({
       where: loadScope,
       orderBy: { loadNumber: "desc" },
@@ -30,8 +52,31 @@ export default async function AccountingPage() {
       orderBy: { createdAt: "desc" },
       include: { carrier: true, load: true }
     }),
-    prisma.carrier.findMany({ where: loadScope, orderBy: { name: "asc" } })
+    prisma.carrier.findMany({ where: loadScope, orderBy: { name: "asc" } }),
+    prisma.integrationAccount.findUnique({
+      where: {
+        companyId_provider: { companyId: user.companyId, provider: "QUICKBOOKS" }
+      }
+    })
   ]);
+
+  const invoiceExports = activeExportMethod
+    ? await getExportsForEntities({
+        companyId: user.companyId,
+        method: activeExportMethod,
+        entityType: "INVOICE",
+        entityIds: invoices.map((invoice) => invoice.id)
+      })
+    : new Map();
+
+  const billExports = activeExportMethod
+    ? await getExportsForEntities({
+        companyId: user.companyId,
+        method: activeExportMethod,
+        entityType: "CARRIER_BILL",
+        entityIds: carrierBills.map((bill) => bill.id)
+      })
+    : new Map();
 
   const openAr = invoices
     .filter((invoice) => invoice.status !== "PAID" && invoice.status !== "VOID")
@@ -44,28 +89,50 @@ export default async function AccountingPage() {
     0
   );
 
-  const invoiceRows = invoices.map((invoice) => ({
-    id: invoice.id,
-    invoiceNo: invoice.invoiceNo,
-    loadId: invoice.loadId,
-    loadNumber: invoice.load.loadNumber,
-    customerName: invoice.customer.name,
-    status: invoice.status,
-    totalCents: invoice.totalCents,
-    dueAt: invoice.dueAt?.toISOString() ?? null,
-    commissionCents: invoice.load.commission?.branchShareCents ?? null,
-    canMarkPaid: invoice.status !== "PAID" && invoice.status !== "VOID"
-  }));
+  const qboConnected = qboAccount?.status === "Connected";
+  const method: QuickbooksMethod = quickbooksMethod;
 
-  const carrierBillRows = carrierBills.map((bill) => ({
-    id: bill.id,
-    billNo: bill.billNo,
-    loadNumber: bill.load.loadNumber,
-    carrierName: bill.carrier.name,
-    status: bill.status,
-    totalCents: bill.totalCents,
-    dueAt: bill.dueAt?.toISOString() ?? null
-  }));
+  const invoiceRows = invoices.map((invoice) => {
+    const exportView = activeExportMethod
+      ? toExportStatusView(activeExportMethod, invoiceExports.get(invoice.id) ?? null)
+      : null;
+    return {
+      id: invoice.id,
+      invoiceNo: invoice.invoiceNo,
+      loadId: invoice.loadId,
+      loadNumber: invoice.load.loadNumber,
+      customerName: invoice.customer.name,
+      status: invoice.status,
+      totalCents: invoice.totalCents,
+      dueAt: invoice.dueAt?.toISOString() ?? null,
+      commissionCents: invoice.load.commission?.branchShareCents ?? null,
+      canMarkPaid: invoice.status !== "PAID" && invoice.status !== "VOID",
+      exportLabel: exportView?.label ?? null,
+      canPushOnline:
+        method === "ONLINE" &&
+        qboConnected &&
+        invoice.status !== "VOID"
+    };
+  });
+
+  const carrierBillRows = carrierBills.map((bill) => {
+    const exportView = activeExportMethod
+      ? toExportStatusView(activeExportMethod, billExports.get(bill.id) ?? null)
+      : null;
+    return {
+      id: bill.id,
+      billNo: bill.billNo,
+      loadId: bill.loadId,
+      loadNumber: bill.load.loadNumber,
+      carrierName: bill.carrier.name,
+      status: bill.status,
+      totalCents: bill.totalCents,
+      dueAt: bill.dueAt?.toISOString() ?? null,
+      exportLabel: exportView?.label ?? null,
+      canPushOnline: method === "ONLINE" && qboConnected && bill.status !== "VOID",
+      canMarkPaid: bill.status !== "PAID" && bill.status !== "VOID"
+    };
+  });
 
   return (
     <>
@@ -73,6 +140,75 @@ export default async function AccountingPage() {
         title="Accounting"
         description="Manage customer invoices, carrier bills, gross margin, receivables, payables, and settlement readiness."
       />
+
+      {params.error ? (
+        <div className="card mb-6 border-rose-200 bg-rose-50 text-sm font-semibold text-rose-700">
+          {params.error}
+        </div>
+      ) : null}
+      {params.reconciled ? (
+        <div className="card mb-6 border-emerald-200 bg-emerald-50 text-sm font-semibold text-emerald-800">
+          Reconciled {params.invoices ?? "0"} invoice(s) and {params.bills ?? "0"} bill(s) from QuickBooks
+          Online.
+        </div>
+      ) : null}
+
+      {method !== "NONE" ? (
+        <section className="card mb-6">
+          <div className="flex flex-wrap items-start justify-between gap-3">
+            <div>
+              <h2 className="section-title">QuickBooks</h2>
+              <p className="muted">
+                Active method:{" "}
+                <span className="font-semibold text-foreground">
+                  {method === "ONLINE" ? "QuickBooks Online" : "IIF (Desktop)"}
+                </span>
+                . Export status below is for this method only.
+              </p>
+            </div>
+            <div className="flex flex-wrap gap-2">
+              {method === "IIF" ? (
+                <>
+                  <a href="/api/integrations/quickbooks-desktop/export" className="btn">
+                    Download IIF (pending)
+                  </a>
+                  <a
+                    href="/api/integrations/quickbooks-desktop/export?includeExported=1"
+                    className="btn-secondary"
+                  >
+                    Download IIF (all)
+                  </a>
+                </>
+              ) : null}
+              {method === "ONLINE" && qboConnected ? (
+                <form action={reconcileQuickbooksPaymentsAction}>
+                  <button type="submit" className="btn-secondary">
+                    Reconcile Payments
+                  </button>
+                </form>
+              ) : null}
+              <Link href="/admin/accounting" className="btn-secondary">
+                Settings
+              </Link>
+            </div>
+          </div>
+          {method === "IIF" ? (
+            <p className="mt-3 text-sm text-slate-700">
+              After downloading, back up your QuickBooks Desktop company file, then use File → Utilities → Import →
+              IIF.
+            </p>
+          ) : null}
+          {method === "ONLINE" && !qboConnected ? (
+            <p className="mt-3 text-sm text-amber-800">
+              Connect QuickBooks Online under{" "}
+              <Link href="/admin/accounting" className="font-semibold underline">
+                Admin Accounting Settings
+              </Link>{" "}
+              before pushing documents.
+            </p>
+          ) : null}
+        </section>
+      ) : null}
 
       <div className="grid gap-4 md:grid-cols-3">
         <MetricCard label="Open AR" value={formatMoney(openAr)} detail="Customer invoices outstanding" />
@@ -87,7 +223,7 @@ export default async function AccountingPage() {
             <p className="muted">Invoices are tied directly to customer loads. Click column headers to sort.</p>
           </div>
           <div className="overflow-x-auto">
-            <InvoicesTable invoices={invoiceRows} />
+            <InvoicesTable invoices={invoiceRows} quickbooksMethod={method} />
           </div>
         </section>
 
@@ -97,7 +233,7 @@ export default async function AccountingPage() {
             <p className="muted">Track AP, quick pay, and settlement-style payables. Click column headers to sort.</p>
           </div>
           <div className="overflow-x-auto">
-            <CarrierBillsTable bills={carrierBillRows} />
+            <CarrierBillsTable bills={carrierBillRows} quickbooksMethod={method} />
           </div>
         </section>
       </div>

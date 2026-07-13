@@ -42,6 +42,7 @@ const navItems = [
   { href: "/commissions/profiles", label: "Commission Profiles", icon: Percent, adminOnly: true },
   { href: "/reports", label: "Reports", icon: BarChart3 },
   { href: "/admin", label: "Admin", icon: Settings, adminOnly: true },
+  { href: "/admin/accounting", label: "Accounting Settings", icon: Landmark, adminOnly: true },
   { href: "/admin/billing", label: "Billing", icon: Landmark, adminOnly: true },
   { href: "/integrations", label: "Integrations", icon: Plug }
 ] as const;
@@ -225,6 +226,7 @@ export function AppShell({
                 branches={branchSwitcher.branches}
                 selectedBranchIds={branchSwitcher.selectedBranchIds}
                 allSelected={branchSwitcher.allSelected}
+                primaryBranchId={branchSwitcher.primaryBranchId}
               />
             ) : null}
           </div>
