@@ -39,6 +39,7 @@ const BRANCH_NAMES = [
   "Talent Transport Logistics"
 ] as const;
 
+const MEMBERSHIP_LOOKUP_STATUSES = ["ACTIVE", "INVITED"] as const;
 const COREY_BRANCH = "Corey Horvath";
 const COREY_USER_NAME = "Corey Horvath";
 
@@ -116,7 +117,7 @@ async function findBranch(companyId: string, canonicalBranch: string) {
         memberships: {
           some: {
             companyId,
-            status: "ACTIVE",
+            status: { in: [...MEMBERSHIP_LOOKUP_STATUSES] },
             lockedAt: null,
             disabledAt: null
           }
@@ -146,7 +147,7 @@ async function findBranchMembership(companyId: string, canonicalBranch: string, 
   return prisma.companyMembership.findFirst({
     where: {
       companyId,
-      status: "ACTIVE",
+      status: { in: [...MEMBERSHIP_LOOKUP_STATUSES] },
       lockedAt: null,
       disabledAt: null,
       OR: [
