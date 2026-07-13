@@ -1,11 +1,11 @@
 # Auto-deploy on push to main
 
-Pushes to `main` deploy automatically to `https://www.tms.simple-source.com`.
+Pushes to `main` deploy automatically to `https://tms.simple-source.com`.
 
 ## How it works
 
 1. GitHub sends a signed webhook POST on every push to `main`.
-2. The server receives it at `https://www.tms.simple-source.com/hooks/tms-deploy`.
+2. The server receives it at `https://tms.simple-source.com/hooks/tms-deploy`.
 3. The server runs `/var/www/tms/scripts/tms-deploy.sh`, which pulls latest code, migrates the database, rebuilds, and restarts PM2.
 
 ## One-time GitHub setup
@@ -30,7 +30,7 @@ In the GitHub repo, go to **Settings → Webhooks → Add webhook**:
 
 | Field | Value |
 |-------|-------|
-| Payload URL | `https://www.tms.simple-source.com/hooks/tms-deploy` |
+| Payload URL | `https://tms.simple-source.com/hooks/tms-deploy` |
 | Content type | `application/json` |
 | Secret | Same value as in `/etc/webhook.conf` on the server |
 | Events | Just the push event |
@@ -43,6 +43,7 @@ The webhook only deploys when the push targets `main`.
 | Path | Purpose |
 |------|---------|
 | `/etc/webhook.conf` | Webhook listener config |
+| `/etc/nginx/sites-available/tms.simple-source.com` | nginx reverse proxy (HTTPS via certbot) |
 | `/usr/local/bin/tms-deploy.sh` | Symlink to repo deploy script |
 | `/var/www/tms/scripts/tms-deploy.sh` | Deploy script from this repo |
 | `/var/log/tms-deploy.log` | Deploy log |
@@ -50,7 +51,7 @@ The webhook only deploys when the push targets `main`.
 ## Manual deploy
 
 ```bash
-ssh root@147.182.206.104
+ssh root@167.172.24.124
 bash /var/www/tms/scripts/tms-deploy.sh
 ```
 

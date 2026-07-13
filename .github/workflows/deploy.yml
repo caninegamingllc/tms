@@ -24,4 +24,4 @@ jobs:
             -H "Content-Type: application/json" \
             -H "X-Hub-Signature-256: sha256=${signature}" \
             -d "$payload" \
-            "https://www.tms.simple-source.com/hooks/tms-deploy"
+            "https://tms.simple-source.com/hooks/tms-deploy"
