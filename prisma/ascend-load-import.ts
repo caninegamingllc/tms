@@ -94,13 +94,31 @@ async function resolveCompany(): Promise<{ id: string; nextLoadSequence: number 
 }
 
 async function resolveCommissionProfile(companyId: string) {
-  const profile = await prisma.commissionProfile.findFirst({
+  let profile = await prisma.commissionProfile.findFirst({
     where: { companyId, isDefault: true },
     include: { rule: true }
   });
+
   if (!profile) {
-    throw new Error("Default commission profile not found for company.");
+    profile = await prisma.commissionProfile.findFirst({
+      where: { companyId },
+      include: { rule: true },
+      orderBy: { createdAt: "asc" }
+    });
   }
+
+  if (!profile) {
+    const branch = await prisma.branch.findFirst({
+      where: { companyId, commissionProfileId: { not: null } },
+      include: { commissionProfile: { include: { rule: true } } }
+    });
+    profile = branch?.commissionProfile ?? null;
+  }
+
+  if (!profile?.rule) {
+    throw new Error("No commission profile found for company.");
+  }
+
   return profile;
 }
 
