@@ -1,9 +1,9 @@
 import Link from "next/link";
 import { AlertCircle, Banknote, ClipboardList, Truck } from "lucide-react";
+import { LoadSnapshotTable } from "@/components/load-snapshot-table";
 import { MetricCard } from "@/components/metric-card";
 import { PageHeader } from "@/components/page-header";
-import { StatusBadge } from "@/components/status-badge";
-import { formatDate, formatDateTime, formatMoney, marginPercent } from "@/lib/format";
+import { formatDateTime, formatMoney } from "@/lib/format";
 import { getDashboardData } from "@/lib/queries";
 
 export default async function DashboardPage() {
@@ -53,52 +53,29 @@ export default async function DashboardPage() {
           <div className="flex items-center justify-between border-b border-border p-5">
             <div>
               <h2 className="section-title">Load Board Snapshot</h2>
-              <p className="muted">Upcoming freight, coverage, and margin.</p>
+              <p className="muted">Most recent freight, coverage, and margin. Click column headers to sort.</p>
             </div>
             <Link href="/loads" className="btn-secondary">
               View All
             </Link>
           </div>
           <div className="overflow-x-auto">
-            <table className="table">
-              <thead>
-                <tr>
-                  <th>Load</th>
-                  <th>Customer</th>
-                  <th>Lane</th>
-                  <th>Pickup</th>
-                  <th>Status</th>
-                  <th>Margin</th>
-                </tr>
-              </thead>
-              <tbody>
-                {data.loads.map((load) => (
-                  <tr key={load.id}>
-                    <td>
-                      <Link href={`/loads/${load.id}`} className="font-semibold text-primary">
-                        {load.loadNumber}
-                      </Link>
-                      <p className="muted">{load.equipmentType}</p>
-                    </td>
-                    <td>{load.customer.name}</td>
-                    <td>
-                      {load.pickupCity}, {load.pickupState} to {load.deliveryCity},{" "}
-                      {load.deliveryState}
-                    </td>
-                    <td>{formatDate(load.pickupDate)}</td>
-                    <td>
-                      <StatusBadge value={load.status} />
-                    </td>
-                    <td>
-                      <span className="font-semibold">
-                        {formatMoney(load.revenueCents - load.carrierCostCents)}
-                      </span>
-                      <p className="muted">{marginPercent(load.revenueCents, load.carrierCostCents)}</p>
-                    </td>
-                  </tr>
-                ))}
-              </tbody>
-            </table>
+            <LoadSnapshotTable
+              loads={data.loads.map((load) => ({
+                id: load.id,
+                loadNumber: load.loadNumber,
+                equipmentType: load.equipmentType,
+                customerName: load.customer.name,
+                pickupCity: load.pickupCity,
+                pickupState: load.pickupState,
+                deliveryCity: load.deliveryCity,
+                deliveryState: load.deliveryState,
+                pickupDate: load.pickupDate.toISOString(),
+                status: load.status,
+                revenueCents: load.revenueCents,
+                carrierCostCents: load.carrierCostCents
+              }))}
+            />
           </div>
         </section>
 

@@ -2,6 +2,10 @@
 
 import Link from "next/link";
 import { useMemo, useState } from "react";
+import Link from "next/link";
+import { ArrowDown, ArrowUp, ChevronsUpDown } from "lucide-react";
+import { clsx } from "clsx";
+import { useSortedRows, type SortableColumn } from "@/components/sortable-table";
 import { StatusBadge } from "@/components/status-badge";
 import {
   buildExportMeta,
@@ -30,6 +34,87 @@ export type SerializedSearchLoad = {
   marginCents: number;
 };
 
+const columns: SortableColumn<SerializedSearchLoad>[] = [
+  {
+    id: "select",
+    label: "",
+    sortable: false,
+    render: () => null
+  },
+  {
+    id: "load",
+    label: "Load",
+    sortValue: (load) => load.loadNumber,
+    render: (load) => (
+      <>
+        <Link href={`/loads/${load.id}`} className="font-semibold text-primary">
+          {load.loadNumber}
+        </Link>
+        <p className="muted">{load.title}</p>
+      </>
+    )
+  },
+  {
+    id: "status",
+    label: "Status",
+    sortValue: (load) => load.status,
+    render: (load) => <StatusBadge value={load.status} />
+  },
+  {
+    id: "customer",
+    label: "Customer",
+    sortValue: (load) => load.customer,
+    render: (load) => load.customer
+  },
+  {
+    id: "lane",
+    label: "Lane",
+    sortValue: (load) => `${load.pickupCity}, ${load.pickupState} to ${load.deliveryCity}, ${load.deliveryState}`,
+    render: (load) => (
+      <>
+        {load.pickupCity}, {load.pickupState} to {load.deliveryCity}, {load.deliveryState}
+      </>
+    )
+  },
+  {
+    id: "pickup",
+    label: "Pickup",
+    sortValue: (load) => load.pickupDate,
+    render: (load) => formatDate(load.pickupDate)
+  },
+  {
+    id: "equipment",
+    label: "Equipment",
+    sortValue: (load) => load.equipmentType,
+    render: (load) => load.equipmentType
+  },
+  {
+    id: "commodity",
+    label: "Commodity",
+    sortValue: (load) => load.commodity ?? "General freight",
+    render: (load) => load.commodity ?? "General freight"
+  },
+  {
+    id: "carrier",
+    label: "Carrier",
+    sortValue: (load) => load.carrier,
+    render: (load) => load.carrier
+  },
+  {
+    id: "financials",
+    label: "Financials",
+    sortValue: (load) => load.marginCents,
+    render: (load) => (
+      <>
+        <p className="font-semibold">{formatMoney(load.revenueCents)}</p>
+        <p className="muted">
+          Margin {formatMoney(load.marginCents)} ({marginPercent(load.revenueCents, load.carrierCostCents)})
+        </p>
+      </>
+    )
+  }
+];
+
 export function LoadSearchResults({
   loads,
   companyName,
@@ -40,6 +125,10 @@ export function LoadSearchResults({
   filterSummary: string;
 }) {
   const [selectedIds, setSelectedIds] = useState<Set<string>>(() => new Set(loads.map((load) => load.id)));
+  const { sortedData, sortState, handleSort } = useSortedRows(loads, columns, {
+    columnId: "pickup",
+    direction: "desc"
+  });
 
   const allSelected = loads.length > 0 && selectedIds.size === loads.length;
   const selectedLoads = useMemo(
@@ -75,10 +164,7 @@ export function LoadSearchResults({
 
   function handleExportPdf() {
     const rows = buildLoadExportRows(selectedLoads);
-    exportLoadsPdf(
-      rows,
-      buildExportMeta(companyName, "Loads Report", filterSummary)
-    );
+    exportLoadsPdf(rows, buildExportMeta(companyName, "Loads Report", filterSummary));
   }
 
   return (
@@ -123,20 +209,53 @@ export function LoadSearchResults({
                   onChange={toggleAll}
                 />
               </th>
-              <th>Load</th>
-              <th>Status</th>
-              <th>Customer</th>
-              <th>Lane</th>
-              <th>Pickup</th>
-              <th>Equipment</th>
-              <th>Commodity</th>
-              <th>Carrier</th>
-              <th>Financials</th>
+              {columns.slice(1).map((column) => {
+                const isSortable = column.sortable !== false && column.sortValue != null;
+                const isActive = sortState.columnId === column.id;
+
+                return (
+                  <th
+                    key={column.id}
+                    className={clsx(isSortable && "sortable", column.headerClassName)}
+                    data-active={isActive || undefined}
+                    aria-sort={
+                      isSortable
+                        ? isActive
+                          ? sortState.direction === "asc"
+                            ? "ascending"
+                            : "descending"
+                          : "none"
+                        : undefined
+                    }
+                  >
+                    {isSortable ? (
+                      <button
+                        type="button"
+                        className="inline-flex items-center gap-1 text-left"
+                        onClick={() => handleSort(column.id)}
+                      >
+                        <span>{column.label}</span>
+                        {isActive ? (
+                          sortState.direction === "asc" ? (
+                            <ArrowUp className="sort-icon" aria-hidden="true" />
+                          ) : (
+                            <ArrowDown className="sort-icon" aria-hidden="true" />
+                          )
+                        ) : (
+                          <ChevronsUpDown className="sort-icon" aria-hidden="true" />
+                        )}
+                      </button>
+                    ) : (
+                      column.label
+                    )}
+                  </th>
+                );
+              })}
             </tr>
           </thead>
           <tbody>
-            {loads.length ? (
-              loads.map((load) => (
+            {sortedData.length ? (
+              sortedData.map((load) => (
                 <tr key={load.id}>
                   <td>
                     <input
@@ -146,35 +265,14 @@ export function LoadSearchResults({
                       onChange={() => toggleOne(load.id)}
                     />
                   </td>
-                  <td>
-                    <Link href={`/loads/${load.id}`} className="font-semibold text-primary">
-                      {load.loadNumber}
-                    </Link>
-                    <p className="muted">{load.title}</p>
-                  </td>
-                  <td>
-                    <StatusBadge value={load.status} />
-                  </td>
-                  <td>{load.customer}</td>
-                  <td>
-                    {load.pickupCity}, {load.pickupState} to {load.deliveryCity}, {load.deliveryState}
-                  </td>
-                  <td>{formatDate(load.pickupDate)}</td>
-                  <td>{load.equipmentType}</td>
-                  <td>{load.commodity ?? "General freight"}</td>
-                  <td>{load.carrier}</td>
-                  <td>
-                    <p className="font-semibold">{formatMoney(load.revenueCents)}</p>
-                    <p className="muted">
-                      Margin {formatMoney(load.marginCents)} (
-                      {marginPercent(load.revenueCents, load.carrierCostCents)})
-                    </p>
-                  </td>
+                  {columns.slice(1).map((column) => (
+                    <td key={column.id}>{column.render(load)}</td>
+                  ))}
                 </tr>
               ))
             ) : (
               <tr>
-                <td colSpan={10} className="p-8 text-center text-muted-foreground">
+                <td colSpan={columns.length} className="p-8 text-center text-muted-foreground">
                   No loads match the current filters.
                 </td>
               </tr>

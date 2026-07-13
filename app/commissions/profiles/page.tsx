@@ -1,4 +1,5 @@
 import Link from "next/link";
+import { CommissionProfilesTable } from "@/components/commission-profiles-table";
 import { PageHeader } from "@/components/page-header";
 import { assignBranchCommissionProfile, createCommissionProfile, updateCommissionProfile } from "@/lib/commission-actions";
 import { requireAdmin } from "@/lib/auth";
@@ -20,6 +21,16 @@ export default async function CommissionProfilesPage() {
     })
   ]);
 
+  const profileRows = profiles.map((profile) => ({
+    id: profile.id,
+    name: profile.name,
+    branchSharePercent: String(profile.rule?.branchSharePercent ?? "—"),
+    companySharePercent: String(profile.rule?.companySharePercent ?? "—"),
+    expenseFloorPercent: String(profile.rule?.companyMinimumExpensePercent ?? "—"),
+    isDefault: profile.isDefault,
+    branchNames: profile.branches.map((branch) => branch.name).join(", ")
+  }));
+
   return (
     <>
       <PageHeader
@@ -36,33 +47,10 @@ export default async function CommissionProfilesPage() {
         <section className="card overflow-hidden p-0">
           <div className="border-b border-border p-5">
             <h2 className="section-title">Profiles</h2>
-            <p className="muted">Default rule: branch earns 60% of gross profit when company 40% meets the 10% expense floor.</p>
+            <p className="muted">Default rule: branch earns 60% of gross profit when company 40% meets the 10% expense floor. Click column headers to sort.</p>
           </div>
           <div className="overflow-x-auto">
-            <table className="table">
-              <thead>
-                <tr>
-                  <th>Name</th>
-                  <th>Branch %</th>
-                  <th>Company %</th>
-                  <th>Expense Floor %</th>
-                  <th>Default</th>
-                  <th>Branches</th>
-                </tr>
-              </thead>
-              <tbody>
-                {profiles.map((profile) => (
-                  <tr key={profile.id}>
-                    <td className="font-semibold">{profile.name}</td>
-                    <td>{profile.rule?.branchSharePercent ?? "—"}%</td>
-                    <td>{profile.rule?.companySharePercent ?? "—"}%</td>
-                    <td>{profile.rule?.companyMinimumExpensePercent ?? "—"}%</td>
-                    <td>{profile.isDefault ? "Yes" : "No"}</td>
-                    <td>{profile.branches.map((branch) => branch.name).join(", ") || "—"}</td>
-                  </tr>
-                ))}
-              </tbody>
-            </table>
+            <CommissionProfilesTable profiles={profileRows} />
           </div>
         </section>
 

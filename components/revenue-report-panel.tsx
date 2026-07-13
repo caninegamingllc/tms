@@ -4,6 +4,7 @@ import Link from "next/link";
 import { usePathname, useSearchParams } from "next/navigation";
 import { clsx } from "clsx";
 import { MetricCard } from "@/components/metric-card";
+import { SortableTable } from "@/components/sortable-table";
 import {
   buildExportMeta,
   buildRevenueExportRows,
@@ -132,41 +133,55 @@ export function RevenueReportPanel({
             <p className="muted">Revenue, carrier cost, and margin by load.</p>
           </div>
           <div className="overflow-x-auto">
-            <table className="table">
-              <thead>
-                <tr>
-                  <th>Load</th>
-                  <th>Customer</th>
-                  <th>Pickup</th>
-                  <th>Revenue</th>
-                  <th>Cost</th>
-                  <th>Margin</th>
-                </tr>
-              </thead>
-              <tbody>
-                {summary.loads.length ? (
-                  summary.loads.map((load) => (
-                    <tr key={load.id}>
-                      <td className="font-semibold">{load.loadNumber}</td>
-                      <td>{load.customer}</td>
-                      <td>{formatDate(load.pickupDate)}</td>
-                      <td>{formatMoney(load.revenueCents)}</td>
-                      <td>{formatMoney(load.costCents)}</td>
-                      <td>
-                        {formatMoney(load.marginCents)}
-                        <p className="muted">{load.marginPercent}</p>
-                      </td>
-                    </tr>
-                  ))
-                ) : (
-                  <tr>
-                    <td colSpan={6} className="p-8 text-center text-muted-foreground">
-                      No loads match the current filters.
-                    </td>
-                  </tr>
-                )}
-              </tbody>
-            </table>
+            <SortableTable
+              data={summary.loads}
+              keyExtractor={(load) => load.id}
+              defaultSort={{ columnId: "pickup", direction: "desc" }}
+              emptyMessage="No loads match the current filters."
+              columns={[
+                {
+                  id: "load",
+                  label: "Load",
+                  sortValue: (load) => load.loadNumber,
+                  render: (load) => <span className="font-semibold">{load.loadNumber}</span>
+                },
+                {
+                  id: "customer",
+                  label: "Customer",
+                  sortValue: (load) => load.customer,
+                  render: (load) => load.customer
+                },
+                {
+                  id: "pickup",
+                  label: "Pickup",
+                  sortValue: (load) => load.pickupDate,
+                  render: (load) => formatDate(load.pickupDate)
+                },
+                {
+                  id: "revenue",
+                  label: "Revenue",
+                  sortValue: (load) => load.revenueCents,
+                  render: (load) => formatMoney(load.revenueCents)
+                },
+                {
+                  id: "cost",
+                  label: "Cost",
+                  sortValue: (load) => load.costCents,
+                  render: (load) => formatMoney(load.costCents)
+                },
+                {
+                  id: "margin",
+                  label: "Margin",
+                  sortValue: (load) => load.marginCents,
+                  render: (load) => (
+                    <>
+                      {formatMoney(load.marginCents)}
+                      <p className="muted">{load.marginPercent}</p>
+                    </>
+                  )
+                }
+              ]}
+            />
           </div>
         </section>
 
@@ -176,32 +191,32 @@ export function RevenueReportPanel({
             <p className="muted">Freight flow by lane for the filtered set.</p>
           </div>
           <div className="overflow-x-auto">
-            <table className="table">
-              <thead>
-                <tr>
-                  <th>Lane</th>
-                  <th>Loads</th>
-                  <th>Revenue</th>
-                </tr>
-              </thead>
-              <tbody>
-                {summary.lanes.length ? (
-                  summary.lanes.map((lane) => (
-                    <tr key={lane.lane}>
-                      <td className="font-semibold">{lane.lane}</td>
-                      <td>{lane.count}</td>
-                      <td>{formatMoney(lane.revenueCents)}</td>
-                    </tr>
-                  ))
-                ) : (
-                  <tr>
-                    <td colSpan={3} className="p-8 text-center text-muted-foreground">
-                      No lane data for the current filters.
-                    </td>
-                  </tr>
-                )}
-              </tbody>
-            </table>
+            <SortableTable
+              data={summary.lanes}
+              keyExtractor={(lane) => lane.lane}
+              defaultSort={{ columnId: "revenue", direction: "desc" }}
+              emptyMessage="No lane data for the current filters."
+              columns={[
+                {
+                  id: "lane",
+                  label: "Lane",
+                  sortValue: (lane) => lane.lane,
+                  render: (lane) => <span className="font-semibold">{lane.lane}</span>
+                },
+                {
+                  id: "loads",
+                  label: "Loads",
+                  sortValue: (lane) => lane.count,
+                  render: (lane) => lane.count
+                },
+                {
+                  id: "revenue",
+                  label: "Revenue",
+                  sortValue: (lane) => lane.revenueCents,
+                  render: (lane) => formatMoney(lane.revenueCents)
+                }
+              ]}
+            />
           </div>
         </section>
       </div>
@@ -212,32 +227,32 @@ export function RevenueReportPanel({
           <p className="muted">Load counts and revenue by customer.</p>
         </div>
         <div className="overflow-x-auto">
-          <table className="table">
-            <thead>
-              <tr>
-                <th>Customer</th>
-                <th>Loads</th>
-                <th>Revenue</th>
-              </tr>
-            </thead>
-            <tbody>
-              {summary.customers.length ? (
-                summary.customers.map((customer) => (
-                  <tr key={customer.customer}>
-                    <td className="font-semibold">{customer.customer}</td>
-                    <td>{customer.count}</td>
-                    <td>{formatMoney(customer.revenueCents)}</td>
-                  </tr>
-                ))
-              ) : (
-                <tr>
-                  <td colSpan={3} className="p-8 text-center text-muted-foreground">
-                    No customer data for the current filters.
-                  </td>
-                </tr>
-              )}
-            </tbody>
-          </table>
+          <SortableTable
+            data={summary.customers}
+            keyExtractor={(customer) => customer.customer}
+            defaultSort={{ columnId: "revenue", direction: "desc" }}
+            emptyMessage="No customer data for the current filters."
+            columns={[
+              {
+                id: "customer",
+                label: "Customer",
+                sortValue: (customer) => customer.customer,
+                render: (customer) => <span className="font-semibold">{customer.customer}</span>
+              },
+              {
+                id: "loads",
+                label: "Loads",
+                sortValue: (customer) => customer.count,
+                render: (customer) => customer.count
+              },
+              {
+                id: "revenue",
+                label: "Revenue",
+                sortValue: (customer) => customer.revenueCents,
+                render: (customer) => formatMoney(customer.revenueCents)
+              }
+            ]}
+          />
         </div>
       </section>
     </>

@@ -1,10 +1,10 @@
 import Link from "next/link";
 import { CarrierLookupForm } from "@/components/carrier-lookup-form";
+import { CarriersTable } from "@/components/carriers-table";
 import { PageHeader } from "@/components/page-header";
 import { createCarrier } from "@/lib/actions";
 import { requireTmsAccess } from "@/lib/permissions";
 import { prisma } from "@/lib/db";
-import { formatDate, formatMoney } from "@/lib/format";
 
 export default async function CarriersPage({
   searchParams
@@ -24,6 +24,25 @@ export default async function CarriersPage({
     }
   });
 
+  const rows = carriers.map((carrier) => {
+    const totalSpend = carrier.assignments.reduce((sum, assignment) => sum + assignment.rateCents, 0);
+
+    return {
+      id: carrier.id,
+      name: carrier.name,
+      contact: carrier.email ?? carrier.phone ?? "No contact info",
+      mcNumber: carrier.mcNumber ?? "MC missing",
+      dotNumber: carrier.dotNumber ?? "DOT missing",
+      equipmentTypes: carrier.equipmentTypes ?? "Not specified",
+      complianceStatus: carrier.complianceStatus,
+      safetyRating: carrier.safetyRating ?? "No rating",
+      insuranceExpiresAt: carrier.insuranceExpiresAt?.toISOString() ?? null,
+      coverageCount: carrier.insuranceCoverages.length,
+      loadCount: carrier.assignments.length,
+      totalSpendCents: totalSpend
+    };
+  });
+
   return (
     <>
       <PageHeader
@@ -41,57 +60,10 @@ export default async function CarriersPage({
         <section className="card overflow-hidden p-0">
           <div className="border-b border-border p-5">
             <h2 className="section-title">Carrier Network</h2>
-            <p className="muted">Compliance status helps dispatchers avoid risky assignments.</p>
+            <p className="muted">Compliance status helps dispatchers avoid risky assignments. Click column headers to sort.</p>
           </div>
           <div className="overflow-x-auto">
-            <table className="table">
-              <thead>
-                <tr>
-                  <th>Carrier</th>
-                  <th>Authority</th>
-                  <th>Equipment</th>
-                  <th>Compliance</th>
-                  <th>Insurance</th>
-                  <th>Load History</th>
-                </tr>
-              </thead>
-              <tbody>
-                {carriers.map((carrier) => {
-                  const totalSpend = carrier.assignments.reduce(
-                    (sum, assignment) => sum + assignment.rateCents,
-                    0
-                  );
-
-                  return (
-                    <tr key={carrier.id}>
-                      <td>
-                        <Link href={`/carriers/${carrier.id}`} className="font-semibold text-primary">
-                          {carrier.name}
-                        </Link>
-                        <p className="muted">{carrier.email ?? carrier.phone ?? "No contact info"}</p>
-                      </td>
-                      <td>
-                        <p>{carrier.mcNumber ?? "MC missing"}</p>
-                        <p className="muted">{carrier.dotNumber ?? "DOT missing"}</p>
-                      </td>
-                      <td>{carrier.equipmentTypes ?? "Not specified"}</td>
-                      <td>
-                        <p className="font-semibold">{carrier.complianceStatus}</p>
-                        <p className="muted">{carrier.safetyRating ?? "No rating"}</p>
-                      </td>
-                      <td>
-                        <p>{formatDate(carrier.insuranceExpiresAt)}</p>
-                        <p className="muted">{carrier.insuranceCoverages.length} coverages</p>
-                      </td>
-                      <td>
-                        <p>{carrier.assignments.length} loads</p>
-                        <p className="muted">{formatMoney(totalSpend)} spend</p>
-                      </td>
-                    </tr>
-                  );
-                })}
-              </tbody>
-            </table>
+            <CarriersTable carriers={rows} />
           </div>
         </section>
 

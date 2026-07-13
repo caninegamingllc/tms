@@ -1,27 +1,13 @@
+import { AdminUsersTable } from "@/components/admin-users-table";
+import { AuditLogTable } from "@/components/audit-log-table";
 import { PageHeader } from "@/components/page-header";
-import { StatusBadge } from "@/components/status-badge";
-import {
-  assignSeatToMember,
-  cancelInvite,
-  createBranch,
-  deleteBranch,
-  deleteUser,
-  forcePasswordChange,
-  inviteUser,
-  resendInvite,
-  resetUserPassword,
-  setUserDisabled,
-  setUserLock,
-  unassignSeatFromMember,
-  updateAdminUser,
-  updateLoadNumberSettings
-} from "@/lib/admin-actions";
+import { createBranch, deleteBranch, inviteUser, updateLoadNumberSettings } from "@/lib/admin-actions";
 import { InviteLinkBanner } from "@/components/invite-link-banner";
 import { refreshSeatSubscriptionFromStripe } from "@/lib/billing-actions";
 import { requireAdmin } from "@/lib/auth";
 import { userRoles, userStatuses } from "@/lib/constants";
 import { prisma } from "@/lib/db";
-import { formatDate, formatDateTime, humanize } from "@/lib/format";
+import { humanize } from "@/lib/format";
 import { getSeatSummary } from "@/lib/seats";
 import Link from "next/link";
 
@@ -66,6 +52,49 @@ export default async function AdminPage({
     (membership) => membership.role === "OWNER" && membership.status !== "INVITED"
   ).length;
 
+  const userRows = memberships.map((membership) => {
+    const user = membership.user;
+    const loadUsageCount = user._count.notes + user._count.activities;
+
+    return {
+      membershipId: membership.id,
+      userId: user.id,
+      userName: user.name,
+      userEmail: user.email,
+      lastLoginAt: user.lastLoginAt?.toISOString() ?? null,
+      role: membership.role,
+      branchId: membership.branchId,
+      branchName: membership.branch?.name ?? null,
+      status: membership.status,
+      seatAssigned: Boolean(membership.seatAssignedAt),
+      seatAssignedAt: membership.seatAssignedAt?.toISOString() ?? null,
+      mustChangePassword: user.mustChangePassword,
+      lockedAt: membership.lockedAt?.toISOString() ?? null,
+      disabledAt: membership.disabledAt?.toISOString() ?? null,
+      createdAt: membership.createdAt.toISOString(),
+      passwordResetAt: user.passwordResetAt?.toISOString() ?? null,
+      notesCount: user._count.notes,
+      activitiesCount: user._count.activities,
+      canDeleteUser:
+        membership.status !== "INVITED" &&
+        currentUser.id !== user.id &&
+        loadUsageCount === 0 &&
+        !(membership.role === "OWNER" && ownerCount <= 1) &&
+        (currentUser.role === "OWNER" || membership.role !== "OWNER")
+    };
+  });
+
+  const auditRows = auditLogs.map((log) => ({
+    id: log.id,
+    createdAt: log.createdAt.toISOString(),
+    actorEmail: log.actorUser?.email ?? "System",
+    action: log.action,
+    target: log.targetUser?.email ?? log.entityId ?? log.entityType ?? "—",
+    details: log.details ?? "No details"
+  }));
+
+  const branchOptions = branches.map((branch) => ({ id: branch.id, name: branch.name }));
+
   return (
     <>
       <PageHeader
@@ -100,184 +129,16 @@ export default async function AdminPage({
         <section className="card overflow-hidden p-0">
           <div className="border-b border-border p-5">
             <h2 className="section-title">Users, Roles, And Account Status</h2>
-            <p className="muted">Admins can update access, force password changes, and lock or disable accounts.</p>
+            <p className="muted">Admins can update access, force password changes, and lock or disable accounts. Click column headers to sort.</p>
           </div>
           <div className="overflow-x-auto">
-            <table className="table">
-              <thead>
-                <tr>
-                  <th>Seat</th>
-                  <th>User</th>
-                  <th>Access</th>
-                  <th>Status</th>
-                  <th>Security</th>
-                  <th>Actions</th>
-                </tr>
-              </thead>
-              <tbody>
-                {memberships.map((membership) => {
-                  const user = membership.user;
-                  const loadUsageCount = user._count.notes + user._count.activities;
-                  const canDeleteUser =
-                    membership.status !== "INVITED" &&
-                    currentUser.id !== user.id &&
-                    loadUsageCount === 0 &&
-                    !(membership.role === "OWNER" && ownerCount <= 1) &&
-                    (currentUser.role === "OWNER" || membership.role !== "OWNER");
-
-                  return (
-                  <tr key={membership.id}>
-                    <td>
-                      {membership.seatAssignedAt ? (
-                        <div className="grid gap-2">
-                          <span className="text-sm font-semibold text-emerald-700">Assigned</span>
-                          <form action={unassignSeatFromMember}>
-                            <input type="hidden" name="membershipId" value={membership.id} />
-                            <button className="btn-secondary w-full" type="submit">
-                              Remove Seat
-                            </button>
-                          </form>
-                        </div>
-                      ) : membership.status === "INVITED" ? (
-                        <span className="text-sm text-muted-foreground">Pending invite</span>
-                      ) : (
-                        <div className="grid gap-2">
-                          <span className="text-sm font-semibold text-amber-700">Unassigned</span>
-                          <form action={assignSeatToMember}>
-                            <input type="hidden" name="membershipId" value={membership.id} />
-                            <button
-                              className="btn-secondary w-full"
-                              type="submit"
-                              disabled={seatSummary.available <= 0}
-                            >
-                              Assign Seat
-                            </button>
-                          </form>
-                        </div>
-                      )}
-                    </td>
-                    <td>
-                      <p className="font-semibold text-foreground">{user.name}</p>
-                      <p className="muted">{user.email}</p>
-                      <p className="text-xs text-muted-foreground">Last login: {formatDateTime(user.lastLoginAt)}</p>
-                    </td>
-                    <td>
-                      <form action={updateAdminUser} className="grid min-w-64 gap-2">
-                        <input type="hidden" name="membershipId" value={membership.id} />
-                        <input name="name" className="input" defaultValue={user.name} />
-                        <select name="role" className="select" defaultValue={membership.role}>
-                          {userRoles
-                            .filter((role) => currentUser.role === "OWNER" || role !== "OWNER")
-                            .map((role) => (
-                            <option key={role} value={role}>
-                              {humanize(role)}
-                            </option>
-                          ))}
-                        </select>
-                        <select name="branchId" className="select" defaultValue={membership.branchId ?? ""}>
-                          <option value="">No branch</option>
-                          {branches.map((branch) => (
-                            <option key={branch.id} value={branch.id}>
-                              {branch.name}
-                            </option>
-                          ))}
-                        </select>
-                        <select name="status" className="select" defaultValue={membership.status}>
-                          {userStatuses.map((status) => (
-                            <option key={status} value={status}>
-                              {humanize(status)}
-                            </option>
-                          ))}
-                        </select>
-                        <button className="btn-secondary" type="submit">
-                          Save Access
-                        </button>
-                      </form>
-                    </td>
-                    <td>
-                      <StatusBadge value={membership.status} />
-                      <p className="mt-2 muted">{membership.branch?.name ?? "No branch"}</p>
-                      {user.mustChangePassword ? (
-                        <p className="mt-2 text-sm font-semibold text-amber-700">Password change required</p>
-                      ) : null}
-                    </td>
-                    <td>
-                      <form action={resetUserPassword} className="grid min-w-52 gap-2">
-                        <input type="hidden" name="userId" value={user.id} />
-                        <input name="newPassword" className="input" placeholder="New password" minLength={8} required />
-                        <button className="btn-secondary" type="submit">
-                          Reset Password
-                        </button>
-                      </form>
-                      <div className="mt-2 grid grid-cols-2 gap-2">
-                        <form action={forcePasswordChange}>
-                          <input type="hidden" name="userId" value={user.id} />
-                          <input type="hidden" name="mode" value={user.mustChangePassword ? "clear" : "force"} />
-                          <button className="btn-secondary w-full" type="submit">
-                            {user.mustChangePassword ? "Clear Force" : "Force Change"}
-                          </button>
-                        </form>
-                        <form action={setUserLock}>
-                          <input type="hidden" name="membershipId" value={membership.id} />
-                          <input type="hidden" name="mode" value={membership.lockedAt ? "unlock" : "lock"} />
-                          <button className="btn-secondary w-full" type="submit" disabled={currentUser.id === user.id && !membership.lockedAt}>
-                            {membership.lockedAt ? "Unlock" : "Lock"}
-                          </button>
-                        </form>
-                      </div>
-                    </td>
-                    <td>
-                      {membership.status === "INVITED" ? (
-                        <div className="grid gap-2">
-                          <form action={resendInvite}>
-                            <input type="hidden" name="membershipId" value={membership.id} />
-                            <button className="btn-secondary w-full" type="submit">
-                              Resend Invite
-                            </button>
-                          </form>
-                          <form action={cancelInvite}>
-                            <input type="hidden" name="membershipId" value={membership.id} />
-                            <button className="btn-secondary w-full" type="submit">
-                              Cancel Invite
-                            </button>
-                          </form>
-                        </div>
-                      ) : (
-                        <div className="grid gap-2">
-                          <form action={setUserDisabled}>
-                            <input type="hidden" name="membershipId" value={membership.id} />
-                            <input type="hidden" name="mode" value={membership.disabledAt ? "enable" : "disable"} />
-                            <button className="btn-secondary w-full" type="submit" disabled={currentUser.id === user.id && !membership.disabledAt}>
-                              {membership.disabledAt ? "Enable Account" : "Disable Account"}
-                            </button>
-                          </form>
-                          {canDeleteUser ? (
-                            <form action={deleteUser}>
-                              <input type="hidden" name="membershipId" value={membership.id} />
-                              <button className="btn-danger w-full" type="submit">
-                                Remove Member
-                              </button>
-                            </form>
-                          ) : membership.status !== "INVITED" && loadUsageCount > 0 ? (
-                            <p className="text-xs text-muted-foreground">
-                              In use on {user._count.notes} note{user._count.notes === 1 ? "" : "s"} and{" "}
-                              {user._count.activities} activit{user._count.activities === 1 ? "y" : "ies"}.
-                            </p>
-                          ) : null}
-                        </div>
-                      )}
-                      <p className="mt-2 text-xs text-muted-foreground">
-                        Joined {formatDate(membership.createdAt)}
-                      </p>
-                      {user.passwordResetAt ? (
-                        <p className="text-xs text-muted-foreground">Password reset {formatDate(user.passwordResetAt)}</p>
-                      ) : null}
-                    </td>
-                  </tr>
-                  );
-                })}
-              </tbody>
-            </table>
+            <AdminUsersTable
+              rows={userRows}
+              branches={branchOptions}
+              currentUserId={currentUser.id}
+              currentUserRole={currentUser.role}
+              seatAvailable={seatSummary.available}
+            />
           </div>
         </section>
 
@@ -424,31 +285,10 @@ export default async function AdminPage({
         <section className="card overflow-hidden p-0">
           <div className="border-b border-border p-5">
             <h2 className="section-title">Security Audit Log</h2>
-            <p className="muted">Recent administrator and login events.</p>
+            <p className="muted">Recent administrator and login events. Click column headers to sort.</p>
           </div>
           <div className="overflow-x-auto">
-            <table className="table">
-              <thead>
-                <tr>
-                  <th>Time</th>
-                  <th>Actor</th>
-                  <th>Action</th>
-                  <th>Target</th>
-                  <th>Details</th>
-                </tr>
-              </thead>
-              <tbody>
-                {auditLogs.map((log) => (
-                  <tr key={log.id}>
-                    <td>{formatDateTime(log.createdAt)}</td>
-                    <td>{log.actorUser?.email ?? "System"}</td>
-                    <td className="font-semibold">{humanize(log.action)}</td>
-                    <td>{log.targetUser?.email ?? log.entityId ?? log.entityType}</td>
-                    <td>{log.details ?? "No details"}</td>
-                  </tr>
-                ))}
-              </tbody>
-            </table>
+            <AuditLogTable logs={auditRows} />
           </div>
         </section>
       </div>

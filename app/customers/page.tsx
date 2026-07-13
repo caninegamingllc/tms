@@ -1,10 +1,10 @@
 import { PageHeader } from "@/components/page-header";
 import { CustomerForm } from "@/components/customer-form";
+import { CustomersTable } from "@/components/customers-table";
 import { createCustomer } from "@/lib/actions";
 import { requireTmsAccess } from "@/lib/permissions";
 import { branchScopedWhere, canSeeAllBranches } from "@/lib/scope";
 import { prisma } from "@/lib/db";
-import { formatMoney } from "@/lib/format";
 
 export default async function CustomersPage() {
   const user = await requireTmsAccess();
@@ -24,6 +24,27 @@ export default async function CustomersPage() {
       : Promise.resolve([])
   ]);
 
+  const rows = customers.map((customer) => {
+    const openAr = customer.invoices
+      .filter((invoice) => invoice.status !== "PAID" && invoice.status !== "VOID")
+      .reduce((sum, invoice) => sum + invoice.totalCents, 0);
+    const primary = customer.contacts.find((contact) => contact.isPrimary);
+
+    return {
+      id: customer.id,
+      name: customer.name,
+      city: customer.city ?? "No city",
+      state: customer.state ?? "No state",
+      branchName: customer.branch?.name ?? "Unassigned",
+      contactName: primary?.name ?? "No contact",
+      contactEmail: primary?.email ?? customer.email ?? "No email",
+      paymentTerms: customer.paymentTerms,
+      creditLimit: customer.creditLimit,
+      loadCount: customer.loads.length,
+      openArCents: openAr
+    };
+  });
+
   return (
     <>
       <PageHeader
@@ -35,50 +56,10 @@ export default async function CustomersPage() {
         <section className="card overflow-hidden p-0">
           <div className="border-b border-border p-5">
             <h2 className="section-title">Customer Accounts</h2>
-            <p className="muted">Accounts include load count and invoice exposure.</p>
+            <p className="muted">Accounts include load count and invoice exposure. Click column headers to sort.</p>
           </div>
           <div className="overflow-x-auto">
-            <table className="table">
-              <thead>
-                <tr>
-                  <th>Name</th>
-                  <th>Branch</th>
-                  <th>Primary Contact</th>
-                  <th>Terms</th>
-                  <th>Credit</th>
-                  <th>Loads</th>
-                  <th>Open AR</th>
-                </tr>
-              </thead>
-              <tbody>
-                {customers.map((customer) => {
-                  const openAr = customer.invoices
-                    .filter((invoice) => invoice.status !== "PAID" && invoice.status !== "VOID")
-                    .reduce((sum, invoice) => sum + invoice.totalCents, 0);
-                  const primary = customer.contacts.find((contact) => contact.isPrimary);
-
-                  return (
-                    <tr key={customer.id}>
-                      <td>
-                        <p className="font-semibold text-foreground">{customer.name}</p>
-                        <p className="muted">
-                          {customer.city ?? "No city"}, {customer.state ?? "No state"}
-                        </p>
-                      </td>
-                      <td>{customer.branch?.name ?? "Unassigned"}</td>
-                      <td>
-                        <p>{primary?.name ?? "No contact"}</p>
-                        <p className="muted">{primary?.email ?? customer.email ?? "No email"}</p>
-                      </td>
-                      <td>{customer.paymentTerms}</td>
-                      <td>{formatMoney(customer.creditLimit)}</td>
-                      <td>{customer.loads.length}</td>
-                      <td>{formatMoney(openAr)}</td>
-                    </tr>
-                  );
-                })}
-              </tbody>
-            </table>
+            <CustomersTable customers={rows} />
           </div>
         </section>
 

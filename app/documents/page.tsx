@@ -1,11 +1,11 @@
 import { PageHeader } from "@/components/page-header";
+import { DocumentsTable } from "@/components/documents-table";
 import { addDocument } from "@/lib/actions";
 import { requireTmsAccess } from "@/lib/permissions";
 import { branchScopedWhere } from "@/lib/scope";
 import { documentTypes } from "@/lib/constants";
 import { prisma } from "@/lib/db";
-import { formatDate, humanize } from "@/lib/format";
-import Link from "next/link";
+import { humanize } from "@/lib/format";
 
 export default async function DocumentsPage() {
   const user = await requireTmsAccess();
@@ -25,6 +25,17 @@ export default async function DocumentsPage() {
     prisma.carrier.findMany({ where: { companyId: user.companyId }, orderBy: { name: "asc" } })
   ]);
 
+  const rows = documents.map((document) => ({
+    id: document.id,
+    name: document.name,
+    notes: document.notes ?? "No notes",
+    type: document.type,
+    linkedTo:
+      document.load?.loadNumber ?? document.customer?.name ?? document.carrier?.name ?? "Unlinked",
+    documentRef: document.documentNumber ?? document.filePath ?? "No file path",
+    uploadedAt: document.uploadedAt.toISOString()
+  }));
+
   return (
     <>
       <PageHeader
@@ -36,45 +47,10 @@ export default async function DocumentsPage() {
         <section className="card overflow-hidden p-0">
           <div className="border-b border-border p-5">
             <h2 className="section-title">Document Library</h2>
-            <p className="muted">Documents can be linked to loads, customers, or carriers.</p>
+            <p className="muted">Documents can be linked to loads, customers, or carriers. Click column headers to sort.</p>
           </div>
           <div className="overflow-x-auto">
-            <table className="table">
-              <thead>
-                <tr>
-                  <th>Name</th>
-                  <th>Type</th>
-                  <th>Linked To</th>
-                  <th>Document # / Path</th>
-                  <th>Uploaded</th>
-                  <th>Preview</th>
-                </tr>
-              </thead>
-              <tbody>
-                {documents.map((document) => (
-                  <tr key={document.id}>
-                    <td>
-                      <p className="font-semibold text-foreground">{document.name}</p>
-                      <p className="muted">{document.notes ?? "No notes"}</p>
-                    </td>
-                    <td>{humanize(document.type)}</td>
-                    <td>
-                      {document.load?.loadNumber ??
-                        document.customer?.name ??
-                        document.carrier?.name ??
-                        "Unlinked"}
-                    </td>
-                    <td>{document.documentNumber ?? document.filePath ?? "No file path"}</td>
-                    <td>{formatDate(document.uploadedAt)}</td>
-                    <td>
-                      <Link href={`/documents/${document.id}`} className="font-semibold text-primary">
-                        Open
-                      </Link>
-                    </td>
-                  </tr>
-                ))}
-              </tbody>
-            </table>
+            <DocumentsTable documents={rows} />
           </div>
         </section>
 

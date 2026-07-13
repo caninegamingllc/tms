@@ -92,6 +92,22 @@ textarea::placeholder {
     @apply border-b border-border px-3 py-3 text-xs font-semibold uppercase tracking-wide text-muted-foreground;
   }
 
+  .table th.sortable button {
+    @apply w-full cursor-pointer uppercase tracking-wide;
+  }
+
+  .table th.sortable {
+    @apply transition hover:text-foreground;
+  }
+
+  .table th.sortable .sort-icon {
+    @apply inline-block h-3.5 w-3.5 shrink-0 opacity-40;
+  }
+
+  .table th.sortable[data-active="true"] .sort-icon {
+    @apply opacity-100 text-foreground;
+  }
+
   .table td {
     @apply border-b border-border px-3 py-3 align-top;
   }

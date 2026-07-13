@@ -1,14 +1,12 @@
-import Link from "next/link";
+import { CarrierBillsTable, InvoicesTable } from "@/components/accounting-tables";
 import { MetricCard } from "@/components/metric-card";
 import { PageHeader } from "@/components/page-header";
-import { StatusBadge } from "@/components/status-badge";
 import { createCarrierBill, createInvoice, generateCustomerInvoice } from "@/lib/actions";
-import { markInvoicePaid } from "@/lib/commission-actions";
 import { requireTmsAccess } from "@/lib/permissions";
 import { branchScopedWhere } from "@/lib/scope";
 import { paymentStatuses } from "@/lib/constants";
 import { prisma } from "@/lib/db";
-import { formatDate, formatMoney, humanize } from "@/lib/format";
+import { formatMoney, humanize } from "@/lib/format";
 
 export default async function AccountingPage() {
   const user = await requireTmsAccess();
@@ -46,6 +44,29 @@ export default async function AccountingPage() {
     0
   );
 
+  const invoiceRows = invoices.map((invoice) => ({
+    id: invoice.id,
+    invoiceNo: invoice.invoiceNo,
+    loadId: invoice.loadId,
+    loadNumber: invoice.load.loadNumber,
+    customerName: invoice.customer.name,
+    status: invoice.status,
+    totalCents: invoice.totalCents,
+    dueAt: invoice.dueAt?.toISOString() ?? null,
+    commissionCents: invoice.load.commission?.branchShareCents ?? null,
+    canMarkPaid: invoice.status !== "PAID" && invoice.status !== "VOID"
+  }));
+
+  const carrierBillRows = carrierBills.map((bill) => ({
+    id: bill.id,
+    billNo: bill.billNo,
+    loadNumber: bill.load.loadNumber,
+    carrierName: bill.carrier.name,
+    status: bill.status,
+    totalCents: bill.totalCents,
+    dueAt: bill.dueAt?.toISOString() ?? null
+  }));
+
   return (
     <>
       <PageHeader
@@ -63,92 +84,20 @@ export default async function AccountingPage() {
         <section className="card overflow-hidden p-0">
           <div className="border-b border-border p-5">
             <h2 className="section-title">Customer Invoices</h2>
-            <p className="muted">Invoices are tied directly to customer loads.</p>
+            <p className="muted">Invoices are tied directly to customer loads. Click column headers to sort.</p>
           </div>
           <div className="overflow-x-auto">
-            <table className="table">
-              <thead>
-                <tr>
-                  <th>Invoice</th>
-                  <th>Load</th>
-                  <th>Customer</th>
-                  <th>Status</th>
-                  <th>Total</th>
-                  <th>Due</th>
-                  <th>Actions</th>
-                </tr>
-              </thead>
-              <tbody>
-                {invoices.map((invoice) => (
-                  <tr key={invoice.id}>
-                    <td className="font-semibold">{invoice.invoiceNo}</td>
-                    <td>
-                      <Link href={`/loads/${invoice.loadId}`} className="text-primary">
-                        {invoice.load.loadNumber}
-                      </Link>
-                    </td>
-                    <td>{invoice.customer.name}</td>
-                    <td>
-                      <StatusBadge value={invoice.status} />
-                    </td>
-                    <td>{formatMoney(invoice.totalCents)}</td>
-                    <td>{formatDate(invoice.dueAt)}</td>
-                    <td>
-                      <div className="grid gap-2">
-                        {invoice.status !== "PAID" && invoice.status !== "VOID" ? (
-                          <form action={markInvoicePaid}>
-                            <input type="hidden" name="invoiceId" value={invoice.id} />
-                            <button type="submit" className="btn-secondary">
-                              Mark Paid
-                            </button>
-                          </form>
-                        ) : null}
-                        {invoice.load.commission ? (
-                          <Link href="/commissions" className="text-sm font-semibold text-primary">
-                            Commission {formatMoney(invoice.load.commission.branchShareCents)}
-                          </Link>
-                        ) : null}
-                      </div>
-                    </td>
-                  </tr>
-                ))}
-              </tbody>
-            </table>
+            <InvoicesTable invoices={invoiceRows} />
           </div>
         </section>
 
         <section className="card overflow-hidden p-0">
           <div className="border-b border-border p-5">
             <h2 className="section-title">Carrier Bills</h2>
-            <p className="muted">Track AP, quick pay, and settlement-style payables.</p>
+            <p className="muted">Track AP, quick pay, and settlement-style payables. Click column headers to sort.</p>
           </div>
           <div className="overflow-x-auto">
-            <table className="table">
-              <thead>
-                <tr>
-                  <th>Bill</th>
-                  <th>Load</th>
-                  <th>Carrier</th>
-                  <th>Status</th>
-                  <th>Total</th>
-                  <th>Due</th>
-                </tr>
-              </thead>
-              <tbody>
-                {carrierBills.map((bill) => (
-                  <tr key={bill.id}>
-                    <td className="font-semibold">{bill.billNo}</td>
-                    <td>{bill.load.loadNumber}</td>
-                    <td>{bill.carrier.name}</td>
-                    <td>
-                      <StatusBadge value={bill.status} />
-                    </td>
-                    <td>{formatMoney(bill.totalCents)}</td>
-                    <td>{formatDate(bill.dueAt)}</td>
-                  </tr>
-                ))}
-              </tbody>
-            </table>
+            <CarrierBillsTable bills={carrierBillRows} />
           </div>
         </section>
       </div>

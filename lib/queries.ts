@@ -9,7 +9,7 @@ export async function getDashboardData() {
   const [loads, customers, carriers, invoices, carrierBills, checkCalls] = await Promise.all([
     prisma.load.findMany({
       where: loadScope,
-      orderBy: { pickupDate: "asc" },
+      orderBy: [{ pickupDate: "desc" }, { loadNumber: "desc" }],
       include: {
         customer: true,
         dispatchAssignment: { include: { carrier: true } }
