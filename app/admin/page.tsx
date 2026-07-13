@@ -5,7 +5,7 @@ import { createBranch, deleteBranch, inviteUser, updateLoadNumberSettings } from
 import { InviteLinkBanner } from "@/components/invite-link-banner";
 import { refreshSeatSubscriptionFromStripe } from "@/lib/billing-actions";
 import { requireAdmin } from "@/lib/auth";
-import { userRoles, userStatuses } from "@/lib/constants";
+import { userRoles } from "@/lib/constants";
 import { prisma } from "@/lib/db";
 import { humanize } from "@/lib/format";
 import { getSeatSummary } from "@/lib/seats";

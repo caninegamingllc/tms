@@ -1,5 +1,6 @@
 "use client";
 
+import Link from "next/link";
 import { SortableTable } from "@/components/sortable-table";
 import { formatMoney } from "@/lib/format";
 
@@ -30,7 +31,9 @@ export function CustomersTable({ customers }: { customers: CustomerTableRow[] })
           sortValue: (customer) => customer.name,
           render: (customer) => (
             <>
-              <p className="font-semibold text-foreground">{customer.name}</p>
+              <Link href={`/customers/${customer.id}`} className="font-semibold text-primary">
+                {customer.name}
+              </Link>
               <p className="muted">
                 {customer.city}, {customer.state}
               </p>

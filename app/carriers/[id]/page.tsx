@@ -1,5 +1,7 @@
 import Link from "next/link";
 import { notFound } from "next/navigation";
+import { DocumentUploadForm } from "@/components/document-upload-form";
+import { DocumentsTable } from "@/components/documents-table";
 import { PageHeader } from "@/components/page-header";
 import {
   createCarrierInsuranceCoverage,
@@ -8,6 +10,7 @@ import {
 } from "@/lib/actions";
 import { requireTmsAccess } from "@/lib/permissions";
 import { insuranceCoverageTypes } from "@/lib/constants";
+import { toDocumentTableRows } from "@/lib/document-rows";
 import { prisma } from "@/lib/db";
 import { formatDate, formatMoney, humanize } from "@/lib/format";
 
@@ -34,7 +37,7 @@ export default async function CarrierDetailPage({
     include: {
       contacts: true,
       insuranceCoverages: { orderBy: [{ expiresAt: "asc" }, { coverageType: "asc" }] },
-      complianceDocuments: true,
+      documents: { include: { uploadedBy: true, load: true, customer: true, carrier: true } },
       assignments: { include: { load: true }, orderBy: { assignedAt: "desc" } }
     }
   });
@@ -204,6 +207,35 @@ export default async function CarrierDetailPage({
           </form>
         </section>
       </div>
+
+      <section className="card mt-6">
+        <div className="flex flex-wrap items-start justify-between gap-4">
+          <div>
+            <h2 className="section-title">Carrier Documents</h2>
+            <p className="muted">Upload and manage W-9s, insurance certificates, broker contracts, and other carrier paperwork.</p>
+          </div>
+          <Link href="/documents/new" className="btn-secondary">
+            Upload in document library
+          </Link>
+        </div>
+
+        <div className="mt-4 overflow-hidden rounded-2xl border border-border">
+          <DocumentsTable
+            documents={toDocumentTableRows(carrier.documents)}
+            showFilter={false}
+            compact
+          />
+        </div>
+
+        <div className="mt-5 rounded-2xl bg-muted p-4">
+          <p className="mb-3 text-sm font-semibold text-foreground">Upload Carrier Document</p>
+          <DocumentUploadForm
+            defaultCarrierId={carrier.id}
+            showEntityPickers={false}
+            submitLabel="Add Document"
+          />
+        </div>
+      </section>
     </>
   );
 }

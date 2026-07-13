@@ -1,5 +1,7 @@
 import { PrismaClient } from "@prisma/client";
 import { randomBytes, scryptSync } from "crypto";
+import { mkdir, writeFile } from "fs/promises";
+import path from "path";
 
 const prisma = new PrismaClient();
 const seedPassword = "ChangeMe123!";
@@ -15,6 +17,24 @@ const daysFromNow = (days: number) => {
   date.setDate(date.getDate() + days);
   return date;
 };
+
+async function createDemoPdfFiles() {
+  const uploadDir = path.resolve(process.env.UPLOAD_DIR?.trim() || "./uploads", "demo");
+  await mkdir(uploadDir, { recursive: true });
+
+  const demoPdf = Buffer.from(
+    "%PDF-1.4\n1 0 obj<< /Type /Catalog /Pages 2 0 R >>endobj\n2 0 obj<< /Type /Pages /Kids [3 0 R] /Count 1 >>endobj\n3 0 obj<< /Type /Page /Parent 2 0 R /MediaBox [0 0 300 144] >>endobj\nxref\n0 4\ntrailer<< /Root 1 0 R /Size 4 >>\nstartxref\n149\n%%EOF\n"
+  );
+
+  const files = [
+    "blue-ridge-insurance.pdf",
+    "blue-ridge-w9.pdf",
+    "glb-1001-rate-confirmation.pdf",
+    "glb-1001-bol.pdf"
+  ];
+
+  await Promise.all(files.map((fileName) => writeFile(path.join(uploadDir, fileName), demoPdf)));
+}
 
 async function main() {
   await prisma.session.deleteMany();
@@ -302,25 +322,38 @@ async function main() {
             isPrimary: true
           }
         ]
-      },
-      complianceDocuments: {
-        create: [
-          {
-            type: "INSURANCE",
-            name: "Cargo and Auto Liability Certificate",
-            expiresAt: daysFromNow(64),
-            status: "Current",
-            filePath: "/uploads/demo/blue-ridge-insurance.pdf"
-          },
-          {
-            type: "W9",
-            name: "Signed W-9",
-            status: "Current",
-            filePath: "/uploads/demo/blue-ridge-w9.pdf"
-          }
-        ]
       }
     }
+  });
+
+  await prisma.loadDocument.createMany({
+    data: [
+      {
+        companyId: company.id,
+        carrierId: carrier.id,
+        uploadedById: owner.id,
+        type: "INSURANCE_PROOF",
+        types: JSON.stringify(["INSURANCE_PROOF"]),
+        name: "Cargo and Auto Liability Certificate",
+        filePath: "demo/blue-ridge-insurance.pdf",
+        originalFileName: "blue-ridge-insurance.pdf",
+        mimeType: "application/pdf",
+        status: "PROCESSED",
+        notes: "Carrier insurance certificate on file."
+      },
+      {
+        companyId: company.id,
+        carrierId: carrier.id,
+        uploadedById: owner.id,
+        type: "W9",
+        types: JSON.stringify(["W9"]),
+        name: "Signed W-9",
+        filePath: "demo/blue-ridge-w9.pdf",
+        originalFileName: "blue-ridge-w9.pdf",
+        mimeType: "application/pdf",
+        status: "PROCESSED"
+      }
+    ]
   });
 
   await prisma.carrier.create({
@@ -443,15 +476,27 @@ async function main() {
         create: [
           {
             companyId: company.id,
+            uploadedById: dispatcher.id,
+            carrierId: carrier.id,
             type: "RATE_CONFIRMATION",
+            types: JSON.stringify(["RATE_CONFIRMATION"]),
             name: "Carrier Rate Confirmation",
-            filePath: "/uploads/demo/glb-1001-rate-confirmation.pdf"
+            filePath: "demo/glb-1001-rate-confirmation.pdf",
+            originalFileName: "glb-1001-rate-confirmation.pdf",
+            mimeType: "application/pdf",
+            status: "PROCESSED"
           },
           {
             companyId: company.id,
+            uploadedById: dispatcher.id,
+            customerId: customer.id,
             type: "BOL",
+            types: JSON.stringify(["BOL"]),
             name: "Bill of Lading",
-            filePath: "/uploads/demo/glb-1001-bol.pdf"
+            filePath: "demo/glb-1001-bol.pdf",
+            originalFileName: "glb-1001-bol.pdf",
+            mimeType: "application/pdf",
+            status: "PROCESSED"
           }
         ]
       },
@@ -651,6 +696,8 @@ async function main() {
   for (const load of seededLoads) {
     await recalculateLoadCommission(load.id);
   }
+
+  await createDemoPdfFiles();
 
   await prisma.integrationAccount.createMany({
     data: [

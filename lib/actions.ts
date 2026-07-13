@@ -15,6 +15,12 @@ import {
 import { normalizeCarrierNumber } from "@/lib/carrier-numbers";
 import { parseMoneyToCents } from "@/lib/format";
 import { recalculateLoadCommission } from "@/lib/commission";
+import { deleteStoredFile, saveUploadedFile } from "@/lib/document-storage";
+import {
+  parseDocumentTypesFromForm,
+  primaryDocumentType,
+  serializeDocumentTypes
+} from "@/lib/document-types";
 
 function requiredString(formData: FormData, key: string) {
   const value = String(formData.get(key) ?? "").trim();
@@ -641,12 +647,12 @@ export async function addCheckCall(formData: FormData) {
   revalidatePath(`/loads/${loadId}`);
 }
 
-export async function addDocument(formData: FormData) {
-  const user = await requireWriteUser();
-  const loadId = optionalString(formData, "loadId");
-  const customerId = optionalString(formData, "customerId");
-  const carrierId = optionalString(formData, "carrierId");
-
+async function validateDocumentEntityLinks(
+  user: SessionUser,
+  loadId?: string,
+  customerId?: string,
+  carrierId?: string
+) {
   if (loadId) {
     await requireCompanyLoad(loadId, user);
   }
@@ -656,17 +662,198 @@ export async function addDocument(formData: FormData) {
   if (carrierId) {
     await requireCompanyCarrier(carrierId, user.companyId);
   }
+}
 
-  await prisma.loadDocument.create({
+function revalidateDocumentPaths(
+  document: {
+    id: string;
+    loadId?: string | null;
+    customerId?: string | null;
+    carrierId?: string | null;
+  }
+) {
+  revalidatePath("/documents");
+  revalidatePath(`/documents/${document.id}`);
+  revalidatePath("/loads");
+
+  if (document.loadId) {
+    revalidatePath(`/loads/${document.loadId}`);
+  }
+  if (document.customerId) {
+    revalidatePath(`/customers/${document.customerId}`);
+  }
+  if (document.carrierId) {
+    revalidatePath(`/carriers/${document.carrierId}`);
+  }
+}
+
+export async function uploadDocument(formData: FormData) {
+  const user = await requireWriteUser();
+  const loadId = optionalString(formData, "loadId");
+  const customerId = optionalString(formData, "customerId");
+  const carrierId = optionalString(formData, "carrierId");
+  const redirectTo = optionalString(formData, "redirectTo");
+
+  await validateDocumentEntityLinks(user, loadId, customerId, carrierId);
+
+  const file = formData.get("file");
+  const types = parseDocumentTypesFromForm(formData);
+  const nameFromForm = optionalString(formData, "name");
+  const notes = optionalString(formData, "notes");
+  const isCompanyDocument = formData.get("isCompanyDocument") === "on";
+
+  let filePath: string | undefined;
+  let mimeType: string | undefined;
+  let originalFileName: string | undefined;
+  let fileSizeBytes: number | undefined;
+
+  if (file instanceof File && file.size > 0) {
+    const stored = await saveUploadedFile(user.companyId, file);
+    filePath = stored.storedPath;
+    mimeType = stored.mimeType;
+    originalFileName = stored.originalFileName;
+    fileSizeBytes = stored.fileSizeBytes;
+  }
+
+  const name = nameFromForm || originalFileName || "Uploaded Document";
+
+  const document = await prisma.loadDocument.create({
     data: {
       companyId: user.companyId,
       loadId,
       customerId,
       carrierId,
-      type: requiredString(formData, "type"),
+      uploadedById: user.id,
+      type: primaryDocumentType(types),
+      types: serializeDocumentTypes(types),
+      name,
+      filePath,
+      mimeType,
+      originalFileName,
+      fileSizeBytes,
+      notes,
+      status: filePath ? "PROCESSED" : "UPLOADED",
+      isCompanyDocument
+    }
+  });
+
+  if (loadId) {
+    await prisma.loadActivity.create({
+      data: {
+        loadId,
+        userId: user.id,
+        action: "Document added",
+        details: name
+      }
+    });
+  }
+
+  revalidateDocumentPaths(document);
+
+  if (redirectTo) {
+    redirect(redirectTo);
+  }
+
+  redirect(`/documents/${document.id}`);
+}
+
+export async function updateDocument(formData: FormData) {
+  const user = await requireWriteUser();
+  const documentId = requiredString(formData, "documentId");
+  const existing = await prisma.loadDocument.findUniqueOrThrow({
+    where: { id: documentId, companyId: user.companyId }
+  });
+
+  const loadId = optionalString(formData, "loadId");
+  const customerId = optionalString(formData, "customerId");
+  const carrierId = optionalString(formData, "carrierId");
+
+  await validateDocumentEntityLinks(user, loadId, customerId, carrierId);
+
+  const types = parseDocumentTypesFromForm(formData);
+  const file = formData.get("file");
+
+  let filePath = existing.filePath;
+  let mimeType = existing.mimeType;
+  let originalFileName = existing.originalFileName;
+  let fileSizeBytes = existing.fileSizeBytes;
+
+  if (file instanceof File && file.size > 0) {
+    await deleteStoredFile(existing.filePath);
+    const stored = await saveUploadedFile(user.companyId, file);
+    filePath = stored.storedPath;
+    mimeType = stored.mimeType;
+    originalFileName = stored.originalFileName;
+    fileSizeBytes = stored.fileSizeBytes;
+  }
+
+  const document = await prisma.loadDocument.update({
+    where: { id: documentId },
+    data: {
+      loadId: loadId ?? null,
+      customerId: customerId ?? null,
+      carrierId: carrierId ?? null,
+      type: primaryDocumentType(types, existing.type),
+      types: serializeDocumentTypes(types),
+      name: requiredString(formData, "name"),
+      notes: optionalString(formData, "notes"),
+      filePath,
+      mimeType,
+      originalFileName,
+      fileSizeBytes,
+      status: filePath ? "PROCESSED" : existing.status,
+      isCompanyDocument: formData.get("isCompanyDocument") === "on"
+    }
+  });
+
+  revalidateDocumentPaths(document);
+  redirect(`/documents/${document.id}`);
+}
+
+export async function deleteDocument(formData: FormData) {
+  const user = await requireWriteUser();
+  const documentId = requiredString(formData, "documentId");
+  const returnTo = optionalString(formData, "returnTo") ?? "/documents";
+
+  const existing = await prisma.loadDocument.findUniqueOrThrow({
+    where: { id: documentId, companyId: user.companyId }
+  });
+
+  await deleteStoredFile(existing.filePath);
+  await prisma.loadDocument.delete({ where: { id: documentId } });
+
+  revalidateDocumentPaths(existing);
+  redirect(returnTo);
+}
+
+export async function addDocument(formData: FormData) {
+  const file = formData.get("file");
+  if (file instanceof File && file.size > 0) {
+    return uploadDocument(formData);
+  }
+
+  const user = await requireWriteUser();
+  const loadId = optionalString(formData, "loadId");
+  const customerId = optionalString(formData, "customerId");
+  const carrierId = optionalString(formData, "carrierId");
+
+  await validateDocumentEntityLinks(user, loadId, customerId, carrierId);
+
+  const types = parseDocumentTypesFromForm(formData);
+
+  const document = await prisma.loadDocument.create({
+    data: {
+      companyId: user.companyId,
+      loadId,
+      customerId,
+      carrierId,
+      uploadedById: user.id,
+      type: primaryDocumentType(types),
+      types: serializeDocumentTypes(types),
       name: requiredString(formData, "name"),
       filePath: optionalString(formData, "filePath"),
-      notes: optionalString(formData, "notes")
+      notes: optionalString(formData, "notes"),
+      status: optionalString(formData, "filePath") ? "PROCESSED" : "UPLOADED"
     }
   });
 
@@ -681,11 +868,7 @@ export async function addDocument(formData: FormData) {
     });
   }
 
-  revalidatePath("/documents");
-  revalidatePath("/loads");
-  if (loadId) {
-    revalidatePath(`/loads/${loadId}`);
-  }
+  revalidateDocumentPaths(document);
 }
 
 export async function generateRateConfirmation(formData: FormData) {

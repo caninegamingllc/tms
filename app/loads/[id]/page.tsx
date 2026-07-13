@@ -1,12 +1,12 @@
 import { notFound } from "next/navigation";
-import Link from "next/link";
+import { DocumentUploadForm } from "@/components/document-upload-form";
+import { DocumentsTable } from "@/components/documents-table";
 import { PageHeader } from "@/components/page-header";
 import { LoadRoutePanel } from "@/components/load-route-panel";
 import { SearchCombobox } from "@/components/search-combobox";
 import { StatusBadge } from "@/components/status-badge";
 import {
   addCheckCall,
-  addDocument,
   assignCarrier,
   generateBillOfLading,
   generateCustomerInvoice,
@@ -21,9 +21,10 @@ import {
   updateLoadCommissionable
 } from "@/lib/commission-actions";
 import { recalculateLoadCommission } from "@/lib/commission";
+import { toDocumentTableRows } from "@/lib/document-rows";
 import { requireTmsAccess } from "@/lib/permissions";
 import { canAccessBranchRecord, canManageUsers, canSettleCommission } from "@/lib/scope";
-import { documentTypes, expenseTypes, loadStatuses } from "@/lib/constants";
+import { expenseTypes, loadStatuses } from "@/lib/constants";
 import { prisma } from "@/lib/db";
 import { commissionMethodLabel, formatDate, formatDateTime, formatMoney, humanize, marginPercent } from "@/lib/format";
 
@@ -40,7 +41,7 @@ export default async function LoadDetailPage({ params }: { params: Promise<{ id:
         charges: true,
         expenses: true,
         commission: true,
-        documents: true,
+        documents: { include: { uploadedBy: true, load: true, customer: true, carrier: true } },
         notes: { orderBy: { createdAt: "desc" }, include: { user: true } },
         activities: { orderBy: { createdAt: "desc" }, include: { user: true } },
         dispatchAssignment: {
@@ -193,51 +194,24 @@ export default async function LoadDetailPage({ params }: { params: Promise<{ id:
                 </form>
               </div>
             </div>
-            <div className="mt-4 grid gap-3">
-              {load.documents.map((document) => (
-                <div key={document.id} className="flex items-center justify-between rounded-2xl border border-border p-4">
-                  <div>
-                    <p className="font-semibold text-foreground">{document.name}</p>
-                    <p className="muted">
-                      {humanize(document.type)} - {document.documentNumber ?? document.filePath ?? "No file path"}
-                    </p>
-                  </div>
-                  <div className="text-right">
-                    <span className="text-xs text-muted-foreground">{formatDate(document.uploadedAt)}</span>
-                    <Link href={`/documents/${document.id}`} className="mt-2 block text-sm font-semibold text-primary">
-                      Preview
-                    </Link>
-                  </div>
-                </div>
-              ))}
+            <div className="mt-4 overflow-hidden rounded-2xl border border-border">
+              <DocumentsTable
+                documents={toDocumentTableRows(load.documents)}
+                showFilter={false}
+                compact
+              />
             </div>
 
-            <form action={addDocument} className="mt-5 grid gap-3 rounded-2xl bg-muted p-4 md:grid-cols-4">
-              <input type="hidden" name="loadId" value={load.id} />
-              <label className="grid gap-2">
-                <span className="label">Type</span>
-                <select name="type" className="select">
-                  {documentTypes.map((type) => (
-                    <option key={type} value={type}>
-                      {humanize(type)}
-                    </option>
-                  ))}
-                </select>
-              </label>
-              <label className="grid gap-2">
-                <span className="label">Name</span>
-                <input name="name" className="input" required />
-              </label>
-              <label className="grid gap-2">
-                <span className="label">File Path</span>
-                <input name="filePath" className="input" placeholder="/uploads/file.pdf" />
-              </label>
-              <div className="flex items-end">
-                <button className="btn w-full" type="submit">
-                  Add Document
-                </button>
-              </div>
-            </form>
+            <div className="mt-5 rounded-2xl bg-muted p-4">
+              <p className="mb-3 text-sm font-semibold text-foreground">Upload Load Document</p>
+              <DocumentUploadForm
+                defaultLoadId={load.id}
+                defaultCustomerId={load.customerId}
+                defaultCarrierId={load.dispatchAssignment?.carrierId}
+                showEntityPickers={false}
+                submitLabel="Add Document"
+              />
+            </div>
           </section>
         </div>
 

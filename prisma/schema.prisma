@@ -69,6 +69,7 @@ model User {
   auditLogs              AuditLog[]          @relation("AuditActor")
   targetAuditLogs        AuditLog[]          @relation("AuditTargetUser")
   settledCommissions     LoadCommission[]
+  documents              LoadDocument[]
   createdAt              DateTime            @default(now())
   updatedAt              DateTime            @updatedAt
 }
@@ -444,25 +445,37 @@ model CheckCall {
 }
 
 model LoadDocument {
-  id          String       @id @default(cuid())
-  companyId   String
-  company     Company      @relation(fields: [companyId], references: [id], onDelete: Cascade)
-  loadId      String?
-  load        Load?        @relation(fields: [loadId], references: [id], onDelete: Cascade)
-  customerId  String?
-  customer    Customer?    @relation(fields: [customerId], references: [id])
-  carrierId   String?
-  carrier     Carrier?     @relation(fields: [carrierId], references: [id])
-  type        String
-  name        String
-  documentNumber String?
-  filePath    String?
-  notes       String?
-  generatedContent String?
-  generatedAt DateTime?
-  uploadedAt  DateTime     @default(now())
+  id                String    @id @default(cuid())
+  companyId         String
+  company           Company   @relation(fields: [companyId], references: [id], onDelete: Cascade)
+  loadId            String?
+  load              Load?     @relation(fields: [loadId], references: [id], onDelete: Cascade)
+  customerId        String?
+  customer          Customer? @relation(fields: [customerId], references: [id])
+  carrierId         String?
+  carrier           Carrier?  @relation(fields: [carrierId], references: [id])
+  uploadedById      String?
+  uploadedBy        User?     @relation(fields: [uploadedById], references: [id])
+  type              String
+  types             String?
+  name              String
+  documentNumber    String?
+  filePath          String?
+  originalFileName  String?
+  mimeType          String?
+  fileSizeBytes     Int?
+  notes             String?
+  status            String    @default("PROCESSED")
+  isCompanyDocument Boolean   @default(false)
+  generatedContent  String?
+  generatedAt       DateTime?
+  uploadedAt        DateTime  @default(now())
+  updatedAt         DateTime  @default(now()) @updatedAt
 
   @@index([companyId])
+  @@index([loadId])
+  @@index([customerId])
+  @@index([carrierId])
 }
 
 model LoadNote {

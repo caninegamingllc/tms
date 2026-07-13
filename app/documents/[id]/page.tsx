@@ -1,26 +1,63 @@
 import Link from "next/link";
 import { notFound } from "next/navigation";
+import { DocumentMetadataForm } from "@/components/document-metadata-form";
 import { PageHeader } from "@/components/page-header";
 import { PrintButton } from "@/components/print-button";
 import { requireTmsAccess } from "@/lib/permissions";
+import { branchScopedWhere } from "@/lib/scope";
+import { isPreviewableMimeType } from "@/lib/document-storage";
+import { parseDocumentTypes } from "@/lib/document-types";
 import { prisma } from "@/lib/db";
 import { formatDateTime, humanize } from "@/lib/format";
 
 export default async function DocumentDetailPage({ params }: { params: Promise<{ id: string }> }) {
   const { id } = await params;
   const user = await requireTmsAccess();
-  const document = await prisma.loadDocument.findUnique({
-    where: { id, companyId: user.companyId },
-    include: {
-      load: true,
-      customer: true,
-      carrier: true
-    }
-  });
+  const loadScope = branchScopedWhere(user);
+  const customerScope = branchScopedWhere(user);
+
+  const [document, loads, customers, carriers, documentIds] = await Promise.all([
+    prisma.loadDocument.findUnique({
+      where: { id, companyId: user.companyId },
+      include: {
+        load: true,
+        customer: true,
+        carrier: true,
+        uploadedBy: true
+      }
+    }),
+    prisma.load.findMany({
+      where: loadScope,
+      orderBy: { loadNumber: "desc" },
+      select: { id: true, loadNumber: true, title: true }
+    }),
+    prisma.customer.findMany({
+      where: customerScope,
+      orderBy: { name: "asc" },
+      select: { id: true, name: true, city: true, state: true }
+    }),
+    prisma.carrier.findMany({
+      where: { companyId: user.companyId },
+      orderBy: { name: "asc" },
+      select: { id: true, name: true, mcNumber: true }
+    }),
+    prisma.loadDocument.findMany({
+      where: { companyId: user.companyId },
+      orderBy: { uploadedAt: "desc" },
+      select: { id: true }
+    })
+  ]);
 
   if (!document) {
     notFound();
   }
+
+  const currentIndex = documentIds.findIndex((item) => item.id === document.id);
+  const nextDocument = currentIndex >= 0 ? documentIds[currentIndex + 1] : undefined;
+
+  const types = parseDocumentTypes(document.types);
+  const hasFilePreview = Boolean(document.filePath && isPreviewableMimeType(document.mimeType));
+  const isImage = document.mimeType?.startsWith("image/");
 
   return (
     <>
@@ -30,48 +67,116 @@ export default async function DocumentDetailPage({ params }: { params: Promise<{
           description={`${humanize(document.type)} ${document.documentNumber ? `#${document.documentNumber}` : ""}`}
           action={
             <div className="flex flex-wrap gap-3">
+              <Link href="/documents" className="btn-secondary">
+                Back to document list
+              </Link>
               {document.load ? (
                 <Link href={`/loads/${document.load.id}`} className="btn-secondary">
-                  Back To Load
+                  Back to load
                 </Link>
               ) : null}
-              <PrintButton />
+              {document.filePath ? (
+                <a href={`/api/documents/${document.id}/file?download=1`} className="btn-secondary">
+                  Download
+                </a>
+              ) : null}
+              {nextDocument ? (
+                <Link href={`/documents/${nextDocument.id}`} className="btn-secondary">
+                  Next document
+                </Link>
+              ) : null}
+              {document.generatedContent ? <PrintButton /> : null}
             </div>
           }
         />
       </div>
 
-      <article className="mx-auto max-w-4xl rounded-2xl border border-border bg-white p-8 shadow-card print:border-0 print:p-0 print:shadow-none">
-        <header className="border-b border-border pb-5">
-          <p className="text-sm font-semibold uppercase tracking-wide text-primary">
-            Simple Source TMS
-          </p>
-          <h1 className="mt-2 text-3xl font-bold text-foreground">{document.name}</h1>
-          <div className="mt-3 grid gap-1 text-sm text-muted-foreground md:grid-cols-2">
-            <p>Document Type: {humanize(document.type)}</p>
-            <p>Document #: {document.documentNumber ?? "Not assigned"}</p>
-            <p>Load: {document.load?.loadNumber ?? "Not linked"}</p>
-            <p>Generated: {formatDateTime(document.generatedAt ?? document.uploadedAt)}</p>
-            <p>Customer: {document.customer?.name ?? document.load?.pickupCity ?? "N/A"}</p>
-            <p>Carrier: {document.carrier?.name ?? "N/A"}</p>
-          </div>
-        </header>
+      <div className="grid gap-6 xl:grid-cols-[1.1fr_0.9fr]">
+        <section className="card min-h-[70vh] overflow-hidden p-0">
+          {document.generatedContent ? (
+            <article className="p-8">
+              <header className="border-b border-border pb-5">
+                <p className="text-sm font-semibold uppercase tracking-wide text-primary">Generated Document</p>
+                <h1 className="mt-2 text-2xl font-bold text-foreground">{document.name}</h1>
+                <div className="mt-3 grid gap-1 text-sm text-muted-foreground md:grid-cols-2">
+                  <p>Document Type: {humanize(document.type)}</p>
+                  <p>Document #: {document.documentNumber ?? "Not assigned"}</p>
+                  <p>Load: {document.load?.loadNumber ?? "Not linked"}</p>
+                  <p>Generated: {formatDateTime(document.generatedAt ?? document.uploadedAt)}</p>
+                </div>
+              </header>
+              <pre className="mt-6 whitespace-pre-wrap font-sans text-sm leading-7 text-foreground">
+                {document.generatedContent}
+              </pre>
+            </article>
+          ) : hasFilePreview ? (
+            <div className="h-full min-h-[70vh] bg-muted">
+              {isImage ? (
+                // eslint-disable-next-line @next/next/no-img-element
+                <img
+                  src={`/api/documents/${document.id}/file`}
+                  alt={document.name}
+                  className="h-full w-full object-contain"
+                />
+              ) : (
+                <iframe
+                  title={document.name}
+                  src={`/api/documents/${document.id}/file`}
+                  className="h-full min-h-[70vh] w-full"
+                />
+              )}
+            </div>
+          ) : (
+            <div className="p-8">
+              <p className="font-semibold text-foreground">No preview available</p>
+              <p className="mt-2 text-sm text-muted-foreground">
+                This document does not have a previewable file attached yet.
+              </p>
+              {document.filePath ? (
+                <p className="mt-3 text-sm text-slate-700">Stored path: {document.filePath}</p>
+              ) : null}
+            </div>
+          )}
+        </section>
 
-        {document.generatedContent ? (
-          <pre className="mt-6 whitespace-pre-wrap font-sans text-sm leading-7 text-foreground">
-            {document.generatedContent}
-          </pre>
-        ) : (
-          <div className="mt-6 rounded-2xl bg-muted p-5">
-            <p className="font-semibold text-foreground">Manual Document</p>
-            <p className="mt-2 text-sm text-muted-foreground">
-              This document was added manually and does not have generated preview content.
-            </p>
-            <p className="mt-3 text-sm text-slate-700">Path: {document.filePath ?? "No file path"}</p>
-            <p className="mt-1 text-sm text-slate-700">Notes: {document.notes ?? "No notes"}</p>
+        <section className="card">
+          <div className="mb-4 flex flex-wrap items-center justify-between gap-3">
+            <div>
+              <h2 className="section-title">Document Details</h2>
+              <p className="muted">
+                Uploaded by {document.uploadedBy?.name ?? "System"} on{" "}
+                {formatDateTime(document.uploadedAt)}.
+              </p>
+            </div>
           </div>
-        )}
-      </article>
+
+          <DocumentMetadataForm
+            documentId={document.id}
+            defaultName={document.name}
+            defaultNotes={document.notes}
+            defaultTypes={types.length ? types : [document.type]}
+            defaultLoadId={document.loadId ?? undefined}
+            defaultCustomerId={document.customerId ?? undefined}
+            defaultCarrierId={document.carrierId ?? undefined}
+            defaultIsCompanyDocument={document.isCompanyDocument}
+            loads={loads.map((load) => ({
+              id: load.id,
+              label: load.loadNumber,
+              description: load.title
+            }))}
+            customers={customers.map((customer) => ({
+              id: customer.id,
+              label: customer.name,
+              description: `${customer.city ?? ""} ${customer.state ?? ""}`.trim()
+            }))}
+            carriers={carriers.map((carrier) => ({
+              id: carrier.id,
+              label: carrier.name,
+              description: carrier.mcNumber ?? undefined
+            }))}
+          />
+        </section>
+      </div>
     </>
   );
 }

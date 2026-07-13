@@ -25,10 +25,16 @@ export const documentTypes = [
   "RATE_CONFIRMATION",
   "INVOICE",
   "CARRIER_PACKET",
-  "INSURANCE",
+  "DOT_MC_FF_URS",
+  "NOA",
   "W9",
+  "INSURANCE_PROOF",
+  "BROKER_CONTRACT",
+  "INSURANCE",
   "OTHER"
 ] as const;
+
+export const documentStatuses = ["UPLOADED", "PROCESSED"] as const;
 
 export const paymentStatuses = [
   "DRAFT",
