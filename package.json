@@ -12,6 +12,7 @@
     "db:generate": "prisma generate",
     "db:push": "prisma db push",
     "db:seed": "prisma db seed",
+    "db:import-ascend": "tsx prisma/ascend-load-import.ts",
     "db:reset": "prisma db push --force-reset && prisma db seed"
   },
   "dependencies": {
