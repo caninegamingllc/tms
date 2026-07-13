@@ -34,6 +34,9 @@ export function documentTitle(type: string, loadNumber: string) {
   if (type === "RATE_CONFIRMATION") {
     return `Carrier Rate Confirmation - ${loadNumber}`;
   }
+  if (type === "CUSTOMER_LOAD_CONFIRMATION") {
+    return `Customer Load Confirmation - ${loadNumber}`;
+  }
   if (type === "BOL") {
     return `Bill of Lading - ${loadNumber}`;
   }
@@ -160,4 +163,77 @@ export function buildCustomerInvoice(load: LoadForDocument, documentNumber: stri
     "Accounting Department",
     "accounting@example.com"
   ].join("\n");
+}
+
+export function buildCustomerLoadConfirmation(load: LoadForDocument, documentNumber: string) {
+  const customerContact = load.customer.contacts.find((contact) => contact.isPrimary);
+  const charges = load.charges.length
+    ? load.charges.map((charge) => `${charge.label} - ${formatMoney(charge.amountCents)}`)
+    : [`Linehaul - ${formatMoney(load.revenueCents)}`];
+
+  return [
+    "CUSTOMER LOAD CONFIRMATION",
+    line("Confirmation #", documentNumber),
+    line("Load #", load.loadNumber),
+    line("Date", formatDate(new Date())),
+    "",
+    "CUSTOMER",
+    line("Name", load.customer.name),
+    line("Contact", customerContact?.name),
+    line("Phone", customerContact?.phone ?? load.customer.phone),
+    line("Email", customerContact?.email ?? load.customer.email),
+    line("Reference", load.referenceNumber),
+    "",
+    "SHIPMENT",
+    line("Equipment", load.equipmentType),
+    line("Commodity", load.commodity),
+    line("Weight", load.weight ? `${load.weight.toLocaleString()} lbs` : null),
+    line("Pickup", formatDate(load.pickupDate)),
+    line("Delivery", formatDate(load.deliveryDate)),
+    line("Lane", `${load.pickupCity}, ${load.pickupState} to ${load.deliveryCity}, ${load.deliveryState}`),
+    "",
+    "STOPS",
+    ...load.stops.sort((a, b) => a.sequence - b.sequence).map(stopBlock),
+    "",
+    "CHARGES",
+    ...charges,
+    moneyLine("Total", load.revenueCents),
+    "",
+    "NOTES",
+    "Please review the schedule and contact your broker immediately with any changes.",
+    "This confirmation acknowledges the load details and customer rates described above."
+  ].join("\n");
+}
+
+export function buildPodRequestEmail(load: LoadForDocument, brokerEmail: string) {
+  const assignment = load.dispatchAssignment;
+  const carrier = assignment?.carrier;
+
+  return [
+    `Proof of delivery request for load ${load.loadNumber}`,
+    "",
+    `Hello ${carrier?.name ?? "Carrier"},`,
+    "",
+    `Please send the signed POD for load ${load.loadNumber} at your earliest convenience.`,
+    "",
+    line("Load #", load.loadNumber),
+    line("Reference", load.referenceNumber),
+    line("Lane", `${load.pickupCity}, ${load.pickupState} to ${load.deliveryCity}, ${load.deliveryState}`),
+    line("Delivery", formatDate(load.deliveryDate)),
+    line("Driver", assignment?.driverName),
+    line("Truck #", assignment?.truckNumber),
+    "",
+    "Reply to this email with the signed POD (PDF or photo) attached.",
+    `If you have questions, contact ${brokerEmail}.`,
+    "",
+    "Thank you,"
+  ].join("\n");
+}
+
+export function plainTextToHtml(text: string) {
+  const escaped = text
+    .replace(/&/g, "&amp;")
+    .replace(/</g, "&lt;")
+    .replace(/>/g, "&gt;");
+  return `<div style="font-family:Arial,sans-serif;white-space:pre-wrap;line-height:1.5;color:#0f172a">${escaped}</div>`;
 }

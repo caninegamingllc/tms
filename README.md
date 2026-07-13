@@ -13,6 +13,8 @@ A beginner-friendly Freight Broker Transportation Management System inspired by 
 - Accounting for customer invoices, carrier bills, open receivables, open payables, and gross margin.
 - Reports for profitability, lanes, customer volume, and carrier performance.
 - Admin console with login, users, roles, branches, password resets, account lock/disable controls, and audit logs.
+- Google and Microsoft 365 sign-in for login, company registration, and passwordless invite accept.
+- Per-user Gmail / Outlook mailbox connect to email invoices, customer load confirmations, carrier rate confirmations, and POD requests, with reply sync on loads.
 - Integrations placeholders for DAT, Truckstop, QuickBooks, tracking, factoring, and email.
 
 ## First-Time Setup
@@ -75,7 +77,8 @@ After seeding, open the dashboard and inspect `GLB-1001` and `GLB-1002`.
 - `GLB-1002` is available freight that needs carrier coverage.
 - Use `Loads > New Load` to create another shipment.
 - Use the load detail page to assign a carrier, update status, add check calls, and attach document records.
-- Use the load detail page `Documents` panel to generate carrier rate confirmations, bills of lading, and customer invoice documents.
+- Use the load detail page `Documents` panel to generate carrier rate confirmations, customer load confirmations, bills of lading, and customer invoice documents.
+- Connect your mailbox under **Email settings** (sidebar), then use **Email Rate Con / Load Con / Invoice / POD Request** on a load.
 - Open generated documents from `Documents`, then use `Print / Save PDF` to print or save a PDF from your browser.
 - Use `Accounting` to create invoices and carrier bills.
 - Use `Accounting > Generate Customer Invoice Document` to generate printable invoices from accounting.
@@ -86,7 +89,14 @@ After seeding, open the dashboard and inspect `GLB-1001` and `GLB-1002`.
 The integration pages are placeholders by design. Recommended next steps are:
 
 - Replace path-based documents with S3, Azure Blob, or Supabase Storage.
-- Add email-based password reset links, rate limiting, and multi-factor authentication before using real brokerage data in production.
-- Connect QuickBooks for invoice and bill sync.
+- Add rate limiting and multi-factor authentication before using real brokerage data in production.
+- Connect QuickBooks for invoice and bill sync (partially implemented).
 - Connect DAT or Truckstop for load posting and carrier search.
 - Connect tracking/document-capture providers for automated check calls and POD capture.
+
+## OAuth Setup (Google / Microsoft)
+
+1. Set `APP_BASE_URL` and a token encryption key (`TOKEN_ENCRYPTION_KEY` or `INTUIT_TOKEN_ENCRYPTION_KEY`).
+2. Create a Google OAuth client with redirect URIs for identity and mail callbacks (see `.env.example`). Enable the Gmail API for mailbox send/sync.
+3. Register a Microsoft Entra app with delegated `Mail.Send` and `Mail.Read`, plus the identity redirect URIs.
+4. Fill `GOOGLE_*` and `MICROSOFT_*` values in `.env`, restart the app, then use the buttons on Login / Register / Accept invite, and **Email settings** for mailbox connect.

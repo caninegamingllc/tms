@@ -123,6 +123,9 @@ export async function createSession(userId: string, membershipId: string) {
   const expiresAt = new Date();
   expiresAt.setDate(expiresAt.getDate() + sessionDays);
 
+  // Single-session policy: a new login replaces any other browser sessions.
+  await prisma.session.deleteMany({ where: { userId } });
+
   await prisma.session.create({
     data: {
       tokenHash: hashToken(token),
@@ -210,7 +213,14 @@ export async function requireUser() {
   }
 
   if (user.mustChangePassword) {
-    redirect("/change-password");
+    const dbUser = await prisma.user.findUnique({
+      where: { id: user.id },
+      select: { passwordHash: true }
+    });
+    // OAuth-only users never need a forced password change.
+    if (dbUser?.passwordHash) {
+      redirect("/change-password");
+    }
   }
 
   return user;
@@ -413,35 +423,18 @@ async function uniqueCompanySlug(companyName: string) {
   return slug;
 }
 
-export async function registerCompany(formData: FormData) {
-  "use server";
+export async function createCompanyWorkspace(input: {
+  companyName: string;
+  name: string;
+  email: string;
+  passwordHash?: string | null;
+}) {
+  const slug = await uniqueCompanySlug(input.companyName);
 
-  const companyName = String(formData.get("companyName") ?? "").trim();
-  const name = String(formData.get("name") ?? "").trim();
-  const email = String(formData.get("email") ?? "").trim().toLowerCase();
-  const password = String(formData.get("password") ?? "");
-  const confirmPassword = String(formData.get("confirmPassword") ?? "");
-
-  if (!companyName || !name || !email) {
-    redirect("/register?error=Company%2C%20name%2C%20and%20email%20are%20required");
-  }
-
-  if (password.length < 8 || password !== confirmPassword) {
-    redirect("/register?error=Password%20must%20match%20and%20be%20at%20least%208%20characters");
-  }
-
-  const existingUser = await prisma.user.findUnique({ where: { email } });
-  if (existingUser) {
-    redirect("/register?error=An%20account%20already%20exists%20for%20that%20email");
-  }
-
-  const slug = await uniqueCompanySlug(companyName);
-  const passwordHash = await hashPassword(password);
-
-  const result = await prisma.$transaction(async (tx) => {
+  return prisma.$transaction(async (tx) => {
     const company = await tx.company.create({
       data: {
-        name: companyName,
+        name: input.companyName,
         slug,
         status: "ACTIVE"
       }
@@ -450,15 +443,15 @@ export async function registerCompany(formData: FormData) {
     const branch = await tx.branch.create({
       data: {
         companyId: company.id,
-        name: `${companyName} HQ`
+        name: `${input.companyName} HQ`
       }
     });
 
     const owner = await tx.user.create({
       data: {
-        name,
-        email,
-        passwordHash,
+        name: input.name,
+        email: input.email,
+        passwordHash: input.passwordHash ?? null,
         mustChangePassword: false
       }
     });
@@ -522,7 +515,37 @@ export async function registerCompany(formData: FormData) {
       }
     });
 
-    return { owner, membership };
+    return { owner, membership, company };
+  });
+}
+
+export async function registerCompany(formData: FormData) {
+  "use server";
+
+  const companyName = String(formData.get("companyName") ?? "").trim();
+  const name = String(formData.get("name") ?? "").trim();
+  const email = String(formData.get("email") ?? "").trim().toLowerCase();
+  const password = String(formData.get("password") ?? "");
+  const confirmPassword = String(formData.get("confirmPassword") ?? "");
+
+  if (!companyName || !name || !email) {
+    redirect("/register?error=Company%2C%20name%2C%20and%20email%20are%20required");
+  }
+
+  if (password.length < 8 || password !== confirmPassword) {
+    redirect("/register?error=Password%20must%20match%20and%20be%20at%20least%208%20characters");
+  }
+
+  const existingUser = await prisma.user.findUnique({ where: { email } });
+  if (existingUser) {
+    redirect("/register?error=An%20account%20already%20exists%20for%20that%20email");
+  }
+
+  const result = await createCompanyWorkspace({
+    companyName,
+    name,
+    email,
+    passwordHash: await hashPassword(password)
   });
 
   await createSession(result.owner.id, result.membership.id);

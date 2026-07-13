@@ -1,5 +1,8 @@
 import Link from "next/link";
 import { registerCompany } from "@/lib/auth";
+import { RegisterOAuthButtons } from "@/components/register-oauth-buttons";
+import { isGoogleOAuthConfigured } from "@/lib/oauth/google";
+import { isMicrosoftOAuthConfigured } from "@/lib/oauth/microsoft";
 
 export default async function RegisterPage({
   searchParams
@@ -25,6 +28,11 @@ export default async function RegisterPage({
               {error}
             </div>
           ) : null}
+
+          <RegisterOAuthButtons
+            googleConfigured={isGoogleOAuthConfigured()}
+            microsoftConfigured={isMicrosoftOAuthConfigured()}
+          />
 
           <form action={registerCompany} className="mt-6 grid gap-4">
             <label className="grid gap-2">

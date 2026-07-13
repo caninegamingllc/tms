@@ -32,6 +32,7 @@ model Company {
   accountingExports    AccountingExport[]
   auditLogs            AuditLog[]
   commissionProfiles   CommissionProfile[]
+  emailThreads         EmailThread[]
   createdAt            DateTime               @default(now())
   updatedAt            DateTime               @updatedAt
 }
@@ -76,8 +77,94 @@ model User {
   targetAuditLogs        AuditLog[]          @relation("AuditTargetUser")
   settledCommissions     LoadCommission[]
   documents              LoadDocument[]
+  oauthAccounts          OAuthAccount[]
+  mailboxes              UserMailbox[]
+  emailThreads           EmailThread[]
+  emailMessages          EmailMessage[]
   createdAt              DateTime            @default(now())
   updatedAt              DateTime            @updatedAt
+}
+
+model OAuthAccount {
+  id                String   @id @default(cuid())
+  userId            String
+  user              User     @relation(fields: [userId], references: [id], onDelete: Cascade)
+  provider          String
+  providerAccountId String
+  email             String
+  createdAt         DateTime @default(now())
+  updatedAt         DateTime @updatedAt
+
+  @@unique([provider, providerAccountId])
+  @@unique([userId, provider])
+  @@index([userId])
+}
+
+model UserMailbox {
+  id              String    @id @default(cuid())
+  userId          String
+  user            User      @relation(fields: [userId], references: [id], onDelete: Cascade)
+  provider        String
+  emailAddress    String
+  accessTokenEnc  String?
+  refreshTokenEnc String?
+  tokenExpiresAt  DateTime?
+  scopes          String?
+  status          String    @default("CONNECTED")
+  lastSyncAt      DateTime?
+  lastError       String?
+  createdAt       DateTime  @default(now())
+  updatedAt       DateTime  @updatedAt
+
+  @@unique([userId, provider])
+  @@index([userId])
+}
+
+model EmailThread {
+  id                 String         @id @default(cuid())
+  companyId          String
+  company            Company        @relation(fields: [companyId], references: [id], onDelete: Cascade)
+  loadId             String
+  load               Load           @relation(fields: [loadId], references: [id], onDelete: Cascade)
+  userId             String
+  user               User           @relation(fields: [userId], references: [id])
+  purpose            String
+  subject            String
+  provider           String
+  providerThreadId   String?
+  documentId         String?
+  document           LoadDocument?  @relation(fields: [documentId], references: [id])
+  invoiceId          String?
+  invoice            Invoice?       @relation(fields: [invoiceId], references: [id])
+  messages           EmailMessage[]
+  createdAt          DateTime       @default(now())
+  updatedAt          DateTime       @updatedAt
+
+  @@index([companyId])
+  @@index([loadId])
+  @@index([userId])
+  @@index([providerThreadId])
+}
+
+model EmailMessage {
+  id                 String      @id @default(cuid())
+  threadId           String
+  thread             EmailThread @relation(fields: [threadId], references: [id], onDelete: Cascade)
+  userId             String?
+  user               User?       @relation(fields: [userId], references: [id])
+  direction          String
+  fromAddress        String
+  toAddresses        String
+  subject            String
+  bodyPreview        String?
+  bodyText           String?
+  providerMessageId  String?
+  sentAt             DateTime?
+  receivedAt         DateTime?
+  createdAt          DateTime    @default(now())
+
+  @@unique([threadId, providerMessageId])
+  @@index([threadId])
 }
 
 model CompanyMembership {
@@ -340,6 +427,7 @@ model Load {
   invoices             Invoice[]
   carrierBills         CarrierBill[]
   commission           LoadCommission?
+  emailThreads         EmailThread[]
   routeTotalMiles      Float?
   routeStateMiles      Json?
   routePolyline        String?
@@ -493,6 +581,7 @@ model LoadDocument {
   generatedAt       DateTime?
   uploadedAt        DateTime  @default(now())
   updatedAt         DateTime  @default(now()) @updatedAt
+  emailThreads      EmailThread[]
 
   @@index([companyId])
   @@index([loadId])
@@ -538,6 +627,7 @@ model Invoice {
   externalQboId String?
   createdAt     DateTime      @default(now())
   updatedAt     DateTime      @updatedAt
+  emailThreads  EmailThread[]
 
   @@unique([companyId, invoiceNo])
   @@index([companyId])

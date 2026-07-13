@@ -1,8 +1,8 @@
 "use client";
 
 import Link from "next/link";
-import { usePathname } from "next/navigation";
-import { useState } from "react";
+import { usePathname, useRouter } from "next/navigation";
+import { useEffect, useState } from "react";
 import { clsx } from "clsx";
 import {
   BarChart3,
@@ -27,6 +27,8 @@ import { canAccessAdmin } from "@/lib/seats";
 import { OrgSwitcher } from "@/components/org-switcher";
 import { BranchSwitcher } from "@/components/branch-switcher";
 import type { BranchSwitcherData } from "@/lib/branch-filter";
+
+const SESSION_HEARTBEAT_MS = 30_000;
 
 const navItems = [
   { href: "/", label: "Dashboard", icon: LayoutDashboard },
@@ -116,6 +118,13 @@ function SidebarContent({
         <p className="text-xs text-muted-foreground">{currentUser.email}</p>
         <p className="text-xs text-muted-foreground">{currentUser.companyName}</p>
         <p className="text-xs text-muted-foreground">Role: {currentUser.role}</p>
+        <Link
+          href="/settings/email"
+          className="mt-3 block text-sm font-semibold text-primary"
+          onClick={onNavigate}
+        >
+          Email settings
+        </Link>
         <form action="/logout" method="post" className="mt-3">
           <button className="btn-secondary w-full" type="submit">
             Sign Out
@@ -136,6 +145,7 @@ export function AppShell({
   branchSwitcher: BranchSwitcherData | null;
 }) {
   const pathname = usePathname();
+  const router = useRouter();
   const [mobileNavOpen, setMobileNavOpen] = useState(false);
   const publicPage =
     pathname === "/login" ||
@@ -148,6 +158,54 @@ export function AppShell({
   const visibleNavItems = navItems.filter(
     (item) => !("adminOnly" in item && item.adminOnly) || (currentUser && canManageUsers(currentUser))
   );
+
+  useEffect(() => {
+    if (publicPage || !currentUser) {
+      return;
+    }
+
+    let cancelled = false;
+
+    async function checkSession() {
+      try {
+        const response = await fetch("/api/auth/session", {
+          method: "GET",
+          credentials: "same-origin",
+          cache: "no-store"
+        });
+        const payload = (await response.json().catch(() => null)) as {
+          authenticated?: boolean;
+        } | null;
+
+        if (!cancelled && payload?.authenticated === false) {
+          router.refresh();
+        }
+      } catch {
+        // Ignore transient network errors; next tick or focus will retry.
+      }
+    }
+
+    void checkSession();
+    const intervalId = window.setInterval(() => {
+      void checkSession();
+    }, SESSION_HEARTBEAT_MS);
+
+    function onVisibilityOrFocus() {
+      if (document.visibilityState === "visible") {
+        void checkSession();
+      }
+    }
+
+    document.addEventListener("visibilitychange", onVisibilityOrFocus);
+    window.addEventListener("focus", onVisibilityOrFocus);
+
+    return () => {
+      cancelled = true;
+      window.clearInterval(intervalId);
+      document.removeEventListener("visibilitychange", onVisibilityOrFocus);
+      window.removeEventListener("focus", onVisibilityOrFocus);
+    };
+  }, [currentUser, publicPage, router]);
 
   if (publicPage) {
     return <>{children}</>;

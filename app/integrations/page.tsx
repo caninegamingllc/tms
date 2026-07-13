@@ -31,7 +31,7 @@ export default async function IntegrationsPage() {
     <>
       <PageHeader
         title="Integrations"
-        description="External services used by the brokerage. Configure QuickBooks export under Admin Accounting Settings."
+        description="External services used by the brokerage. Connect personal email under Email settings. Configure QuickBooks export under Admin Accounting Settings."
       />
 
       {isAdmin ? (

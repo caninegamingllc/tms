@@ -23,6 +23,7 @@ export const documentTypes = [
   "BOL",
   "POD",
   "RATE_CONFIRMATION",
+  "CUSTOMER_LOAD_CONFIRMATION",
   "INVOICE",
   "CARRIER_PACKET",
   "DOT_MC_FF_URS",
@@ -33,6 +34,18 @@ export const documentTypes = [
   "INSURANCE",
   "OTHER"
 ] as const;
+
+export const oauthProviders = ["GOOGLE", "MICROSOFT"] as const;
+
+export const emailPurposes = [
+  "INVOICE",
+  "CUSTOMER_LOAD_CONFIRMATION",
+  "CARRIER_RATE_CONFIRMATION",
+  "POD_REQUEST",
+  "GENERAL"
+] as const;
+
+export const emailDirections = ["OUTBOUND", "INBOUND"] as const;
 
 export const documentStatuses = ["UPLOADED", "PROCESSED"] as const;
 

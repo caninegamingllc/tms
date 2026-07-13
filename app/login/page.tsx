@@ -1,6 +1,10 @@
 import Link from "next/link";
 import { redirect } from "next/navigation";
 import { getCurrentUser, login } from "@/lib/auth";
+import { OAuthButtons } from "@/components/oauth-buttons";
+import { isGoogleOAuthConfigured } from "@/lib/oauth/google";
+import { isMicrosoftOAuthConfigured } from "@/lib/oauth/microsoft";
+import { prisma } from "@/lib/db";
 import packageJson from "@/package.json";
 
 const appVersion = packageJson.version;
@@ -12,7 +16,16 @@ export default async function LoginPage({
 }) {
   const user = await getCurrentUser();
   if (user) {
-    redirect(user.mustChangePassword ? "/change-password" : "/");
+    if (user.mustChangePassword) {
+      const dbUser = await prisma.user.findUnique({
+        where: { id: user.id },
+        select: { passwordHash: true }
+      });
+      if (dbUser?.passwordHash) {
+        redirect("/change-password");
+      }
+    }
+    redirect("/");
   }
 
   const { error, message } = await searchParams;
@@ -39,6 +52,14 @@ export default async function LoginPage({
               {message}
             </div>
           ) : null}
+
+          <div className="mt-6">
+            <OAuthButtons
+              mode="login"
+              googleConfigured={isGoogleOAuthConfigured()}
+              microsoftConfigured={isMicrosoftOAuthConfigured()}
+            />
+          </div>
 
           <form action={login} className="mt-6 grid gap-4">
             <label className="grid gap-2">

@@ -13,6 +13,15 @@ import {
   generateRateConfirmation,
   updateLoadStatus
 } from "@/lib/actions";
+import {
+  emailCustomerLoadConfirmation,
+  emailInvoice,
+  emailPodRequest,
+  emailRateConfirmation,
+  generateCustomerLoadConfirmation,
+  syncLoadEmails
+} from "@/lib/email-ops-actions";
+import { getUserMailbox } from "@/lib/mail/user-mailbox";
 import { DeleteLoadButton } from "@/components/delete-load-button";
 import {
   addLoadExpense,
@@ -40,14 +49,21 @@ import {
 } from "@/lib/quickbooks/exports";
 import type { AccountingExportMethod } from "@/lib/quickbooks/types";
 
-export default async function LoadDetailPage({ params }: { params: Promise<{ id: string }> }) {
+export default async function LoadDetailPage({
+  params,
+  searchParams
+}: {
+  params: Promise<{ id: string }>;
+  searchParams: Promise<{ emailed?: string }>;
+}) {
   const { id } = await params;
+  const { emailed } = await searchParams;
   const user = await requireTmsAccess();
-  const [load, carriers, commissionProfiles] = await Promise.all([
+  const [load, carriers, commissionProfiles, mailbox] = await Promise.all([
     prisma.load.findUnique({
       where: { id, companyId: user.companyId },
       include: {
-        customer: true,
+        customer: { include: { contacts: true } },
         branch: true,
         stops: { orderBy: { sequence: "asc" } },
         charges: true,
@@ -56,9 +72,16 @@ export default async function LoadDetailPage({ params }: { params: Promise<{ id:
         documents: { include: { uploadedBy: true, load: true, customer: true, carrier: true } },
         notes: { orderBy: { createdAt: "desc" }, include: { user: true } },
         activities: { orderBy: { createdAt: "desc" }, include: { user: true } },
+        emailThreads: {
+          orderBy: { updatedAt: "desc" },
+          include: {
+            messages: { orderBy: { createdAt: "asc" } },
+            user: true
+          }
+        },
         dispatchAssignment: {
           include: {
-            carrier: true,
+            carrier: { include: { contacts: true } },
             checkCalls: { orderBy: { occurredAt: "desc" } }
           }
         },
@@ -72,7 +95,8 @@ export default async function LoadDetailPage({ params }: { params: Promise<{ id:
           where: { companyId: user.companyId },
           orderBy: { name: "asc" }
         })
-      : Promise.resolve([])
+      : Promise.resolve([]),
+    getUserMailbox(user.id)
   ]);
 
   if (!load || !(await canAccessRecord(user, load.branchId))) {
@@ -146,6 +170,22 @@ export default async function LoadDetailPage({ params }: { params: Promise<{ id:
           ) : undefined
         }
       />
+
+      {emailed ? (
+        <div className="mb-4 rounded-lg border border-emerald-200 bg-emerald-50 p-3 text-sm font-semibold text-emerald-700">
+          Email sent ({humanize(emailed.replace(/-/g, "_"))}).
+        </div>
+      ) : null}
+
+      {!mailbox ? (
+        <div className="mb-4 rounded-lg border border-amber-200 bg-amber-50 p-3 text-sm text-amber-800">
+          Connect your mailbox in{" "}
+          <a href="/settings/email" className="font-semibold underline">
+            Email settings
+          </a>{" "}
+          to send rate confirmations, invoices, load confirmations, and POD requests as yourself.
+        </div>
+      ) : null}
 
       <div className="grid gap-6 xl:grid-cols-[1.45fr_0.9fr]">
         <div className="grid gap-6">
@@ -226,6 +266,12 @@ export default async function LoadDetailPage({ params }: { params: Promise<{ id:
                     Generate Rate Con
                   </button>
                 </form>
+                <form action={generateCustomerLoadConfirmation}>
+                  <input type="hidden" name="loadId" value={load.id} />
+                  <button className="btn-secondary" type="submit">
+                    Generate Load Con
+                  </button>
+                </form>
                 <form action={generateBillOfLading}>
                   <input type="hidden" name="loadId" value={load.id} />
                   <button className="btn-secondary" type="submit">
@@ -240,6 +286,42 @@ export default async function LoadDetailPage({ params }: { params: Promise<{ id:
                 </form>
               </div>
             </div>
+
+            <div className="mt-4 flex flex-wrap gap-2">
+              <form action={emailRateConfirmation}>
+                <input type="hidden" name="loadId" value={load.id} />
+                <button
+                  className="btn"
+                  type="submit"
+                  disabled={!mailbox || !load.dispatchAssignment || !canWrite(user)}
+                >
+                  Email Rate Con
+                </button>
+              </form>
+              <form action={emailCustomerLoadConfirmation}>
+                <input type="hidden" name="loadId" value={load.id} />
+                <button className="btn" type="submit" disabled={!mailbox || !canWrite(user)}>
+                  Email Load Con
+                </button>
+              </form>
+              <form action={emailInvoice}>
+                <input type="hidden" name="loadId" value={load.id} />
+                <button className="btn" type="submit" disabled={!mailbox || !canWrite(user)}>
+                  Email Invoice
+                </button>
+              </form>
+              <form action={emailPodRequest}>
+                <input type="hidden" name="loadId" value={load.id} />
+                <button
+                  className="btn"
+                  type="submit"
+                  disabled={!mailbox || !load.dispatchAssignment || !canWrite(user)}
+                >
+                  Email POD Request
+                </button>
+              </form>
+            </div>
+
             <div className="mt-4 overflow-hidden rounded-2xl border border-border">
               <DocumentsTable
                 documents={toDocumentTableRows(load.documents)}
@@ -257,6 +339,55 @@ export default async function LoadDetailPage({ params }: { params: Promise<{ id:
                 showEntityPickers={false}
                 submitLabel="Add Document"
               />
+            </div>
+          </section>
+
+          <section className="card">
+            <div className="flex flex-wrap items-start justify-between gap-4">
+              <div>
+                <h2 className="section-title">Email</h2>
+                <p className="muted">Outbound and reply threads for this load.</p>
+              </div>
+              <form action={syncLoadEmails}>
+                <input type="hidden" name="loadId" value={load.id} />
+                <button type="submit" className="btn-secondary" disabled={!mailbox}>
+                  Sync replies
+                </button>
+              </form>
+            </div>
+            <div className="mt-4 grid gap-3">
+              {load.emailThreads.length === 0 ? (
+                <p className="text-sm text-muted-foreground">No emails sent for this load yet.</p>
+              ) : (
+                load.emailThreads.map((thread) => (
+                  <div key={thread.id} className="rounded-2xl border border-border p-4">
+                    <div className="flex flex-wrap items-start justify-between gap-2">
+                      <div>
+                        <p className="font-semibold text-foreground">{thread.subject}</p>
+                        <p className="text-sm text-muted-foreground">
+                          {humanize(thread.purpose)} · {humanize(thread.provider)} · {thread.user.name}
+                        </p>
+                      </div>
+                      <p className="text-xs text-muted-foreground">{formatDateTime(thread.updatedAt)}</p>
+                    </div>
+                    <div className="mt-3 grid gap-2">
+                      {thread.messages.map((message) => (
+                        <div key={message.id} className="rounded-xl bg-muted p-3 text-sm">
+                          <p className="font-semibold">
+                            {humanize(message.direction)} · {message.fromAddress} → {message.toAddresses}
+                          </p>
+                          <p className="mt-1 text-slate-700">
+                            {message.bodyPreview || message.subject}
+                          </p>
+                          <p className="mt-1 text-xs text-muted-foreground">
+                            {formatDateTime(message.sentAt ?? message.receivedAt ?? message.createdAt)}
+                          </p>
+                        </div>
+                      ))}
+                    </div>
+                  </div>
+                ))
+              )}
             </div>
           </section>
         </div>

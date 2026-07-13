@@ -1,0 +1,272 @@
+import type { OAuthProvider } from "@/lib/oauth/types";
+import { getAppBaseUrl } from "@/lib/oauth/types";
+import type { OAuthProfile } from "@/lib/oauth/google";
+
+const MS_AUTHORIZE = (tenant: string) =>
+  `https://login.microsoftonline.com/${tenant}/oauth2/v2.0/authorize`;
+const MS_TOKEN = (tenant: string) =>
+  `https://login.microsoftonline.com/${tenant}/oauth2/v2.0/token`;
+
+function microsoftTenant() {
+  return process.env.MICROSOFT_TENANT_ID?.trim() || "common";
+}
+
+export function isMicrosoftOAuthConfigured() {
+  return Boolean(
+    process.env.MICROSOFT_CLIENT_ID?.trim() && process.env.MICROSOFT_CLIENT_SECRET?.trim()
+  );
+}
+
+function microsoftIdentityRedirectUri() {
+  return (
+    process.env.MICROSOFT_REDIRECT_URI?.trim() ||
+    `${getAppBaseUrl()}/api/auth/oauth/microsoft/callback`
+  );
+}
+
+function microsoftMailRedirectUri() {
+  return (
+    process.env.MICROSOFT_MAIL_REDIRECT_URI?.trim() ||
+    `${getAppBaseUrl()}/api/mail/oauth/microsoft/callback`
+  );
+}
+
+export function getMicrosoftIdentityAuthorizeUrl(state: string) {
+  const clientId = process.env.MICROSOFT_CLIENT_ID?.trim();
+  if (!clientId) {
+    throw new Error("MICROSOFT_CLIENT_ID is not configured.");
+  }
+
+  const params = new URLSearchParams({
+    client_id: clientId,
+    response_type: "code",
+    redirect_uri: microsoftIdentityRedirectUri(),
+    response_mode: "query",
+    scope: "openid profile email User.Read offline_access",
+    state,
+    prompt: "select_account"
+  });
+
+  return `${MS_AUTHORIZE(microsoftTenant())}?${params.toString()}`;
+}
+
+export function getMicrosoftMailAuthorizeUrl(state: string) {
+  const clientId = process.env.MICROSOFT_CLIENT_ID?.trim();
+  if (!clientId) {
+    throw new Error("MICROSOFT_CLIENT_ID is not configured.");
+  }
+
+  const params = new URLSearchParams({
+    client_id: clientId,
+    response_type: "code",
+    redirect_uri: microsoftMailRedirectUri(),
+    response_mode: "query",
+    scope: "openid profile email offline_access User.Read Mail.Send Mail.Read",
+    state,
+    prompt: "consent"
+  });
+
+  return `${MS_AUTHORIZE(microsoftTenant())}?${params.toString()}`;
+}
+
+async function exchangeMicrosoftCode(code: string, redirectUri: string) {
+  const clientId = process.env.MICROSOFT_CLIENT_ID?.trim();
+  const clientSecret = process.env.MICROSOFT_CLIENT_SECRET?.trim();
+  if (!clientId || !clientSecret) {
+    throw new Error("Microsoft OAuth is not configured.");
+  }
+
+  const response = await fetch(MS_TOKEN(microsoftTenant()), {
+    method: "POST",
+    headers: { "Content-Type": "application/x-www-form-urlencoded" },
+    body: new URLSearchParams({
+      client_id: clientId,
+      client_secret: clientSecret,
+      code,
+      redirect_uri: redirectUri,
+      grant_type: "authorization_code"
+    })
+  });
+
+  if (!response.ok) {
+    throw new Error(`Microsoft token exchange failed: ${await response.text()}`);
+  }
+
+  return (await response.json()) as {
+    access_token: string;
+    refresh_token?: string;
+    expires_in: number;
+    scope?: string;
+  };
+}
+
+async function fetchMicrosoftProfile(accessToken: string): Promise<OAuthProfile> {
+  const response = await fetch("https://graph.microsoft.com/v1.0/me", {
+    headers: { Authorization: `Bearer ${accessToken}` }
+  });
+
+  if (!response.ok) {
+    throw new Error(`Microsoft Graph /me failed: ${await response.text()}`);
+  }
+
+  const data = (await response.json()) as {
+    id: string;
+    displayName?: string;
+    mail?: string;
+    userPrincipalName?: string;
+  };
+
+  const email = (data.mail || data.userPrincipalName || "").toLowerCase();
+  if (!email || !email.includes("@")) {
+    throw new Error("Microsoft account did not return an email address.");
+  }
+
+  return {
+    provider: "MICROSOFT" satisfies OAuthProvider,
+    providerAccountId: data.id,
+    email,
+    name: data.displayName?.trim() || email.split("@")[0]
+  };
+}
+
+export async function completeMicrosoftIdentityOAuth(code: string) {
+  const tokens = await exchangeMicrosoftCode(code, microsoftIdentityRedirectUri());
+  const profile = await fetchMicrosoftProfile(tokens.access_token);
+  return { profile, tokens };
+}
+
+export async function completeMicrosoftMailOAuth(code: string) {
+  const tokens = await exchangeMicrosoftCode(code, microsoftMailRedirectUri());
+  const profile = await fetchMicrosoftProfile(tokens.access_token);
+  return { profile, tokens };
+}
+
+export async function refreshMicrosoftAccessToken(refreshToken: string) {
+  const clientId = process.env.MICROSOFT_CLIENT_ID?.trim();
+  const clientSecret = process.env.MICROSOFT_CLIENT_SECRET?.trim();
+  if (!clientId || !clientSecret) {
+    throw new Error("Microsoft OAuth is not configured.");
+  }
+
+  const response = await fetch(MS_TOKEN(microsoftTenant()), {
+    method: "POST",
+    headers: { "Content-Type": "application/x-www-form-urlencoded" },
+    body: new URLSearchParams({
+      client_id: clientId,
+      client_secret: clientSecret,
+      refresh_token: refreshToken,
+      grant_type: "refresh_token"
+    })
+  });
+
+  if (!response.ok) {
+    throw new Error(`Microsoft token refresh failed: ${await response.text()}`);
+  }
+
+  return (await response.json()) as {
+    access_token: string;
+    refresh_token?: string;
+    expires_in: number;
+    scope?: string;
+  };
+}
+
+export async function sendMicrosoftMail(
+  accessToken: string,
+  message: {
+    subject: string;
+    to: string[];
+    bodyText: string;
+    bodyHtml?: string;
+  }
+) {
+  const response = await fetch("https://graph.microsoft.com/v1.0/me/sendMail", {
+    method: "POST",
+    headers: {
+      Authorization: `Bearer ${accessToken}`,
+      "Content-Type": "application/json"
+    },
+    body: JSON.stringify({
+      message: {
+        subject: message.subject,
+        body: {
+          contentType: message.bodyHtml ? "HTML" : "Text",
+          content: message.bodyHtml ?? message.bodyText
+        },
+        toRecipients: message.to.map((address) => ({
+          emailAddress: { address }
+        }))
+      },
+      saveToSentItems: true
+    })
+  });
+
+  if (!response.ok) {
+    throw new Error(`Microsoft sendMail failed: ${await response.text()}`);
+  }
+}
+
+export async function listMicrosoftConversationMessages(
+  accessToken: string,
+  conversationId: string
+) {
+  const params = new URLSearchParams({
+    $filter: `conversationId eq '${conversationId.replace(/'/g, "''")}'`,
+    $top: "50",
+    $select: "id,subject,from,toRecipients,bodyPreview,receivedDateTime,sentDateTime,conversationId",
+    $orderby: "receivedDateTime asc"
+  });
+
+  const response = await fetch(`https://graph.microsoft.com/v1.0/me/messages?${params.toString()}`, {
+    headers: { Authorization: `Bearer ${accessToken}` }
+  });
+
+  if (!response.ok) {
+    throw new Error(`Microsoft conversation fetch failed: ${await response.text()}`);
+  }
+
+  return (await response.json()) as {
+    value: Array<{
+      id: string;
+      subject?: string;
+      bodyPreview?: string;
+      conversationId?: string;
+      receivedDateTime?: string;
+      sentDateTime?: string;
+      from?: { emailAddress?: { address?: string } };
+      toRecipients?: Array<{ emailAddress?: { address?: string } }>;
+    }>;
+  };
+}
+
+export async function searchMicrosoftMessages(accessToken: string, search: string) {
+  const params = new URLSearchParams({
+    $search: `"${search.replace(/"/g, "")}"`,
+    $top: "25",
+    $select: "id,subject,from,toRecipients,bodyPreview,receivedDateTime,sentDateTime,conversationId"
+  });
+
+  const response = await fetch(`https://graph.microsoft.com/v1.0/me/messages?${params.toString()}`, {
+    headers: {
+      Authorization: `Bearer ${accessToken}`,
+      ConsistencyLevel: "eventual"
+    }
+  });
+
+  if (!response.ok) {
+    throw new Error(`Microsoft message search failed: ${await response.text()}`);
+  }
+
+  return (await response.json()) as {
+    value: Array<{
+      id: string;
+      subject?: string;
+      bodyPreview?: string;
+      conversationId?: string;
+      receivedDateTime?: string;
+      sentDateTime?: string;
+      from?: { emailAddress?: { address?: string } };
+      toRecipients?: Array<{ emailAddress?: { address?: string } }>;
+    }>;
+  };
+}

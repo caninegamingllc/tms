@@ -1,7 +1,16 @@
 import { NextResponse, type NextRequest } from "next/server";
 
 const sessionCookieName = "tms_session";
-const publicPaths = ["/login", "/register", "/change-password", "/accept-invite", "/forgot-password", "/reset-password", "/hooks"];
+const publicPaths = [
+  "/login",
+  "/register",
+  "/change-password",
+  "/accept-invite",
+  "/forgot-password",
+  "/reset-password",
+  "/hooks",
+  "/api/auth/oauth"
+];
 
 export function proxy(request: NextRequest) {
   const { pathname } = request.nextUrl;
