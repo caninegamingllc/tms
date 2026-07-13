@@ -2,7 +2,6 @@
 
 import Link from "next/link";
 import { useMemo, useState } from "react";
-import Link from "next/link";
 import { ArrowDown, ArrowUp, ChevronsUpDown } from "lucide-react";
 import { clsx } from "clsx";
 import { useSortedRows, type SortableColumn } from "@/components/sortable-table";
