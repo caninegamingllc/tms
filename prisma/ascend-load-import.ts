@@ -23,20 +23,24 @@ import {
   resolveStopAddress,
   type AscendLoadRow
 } from "./lib/ascend-csv";
+import { backfillFacilitiesForCompany } from "./backfill-facilities";
 
 const prisma = new PrismaClient();
 
 const COMPANY_NAME = "Talent Transport Logistics Inc";
 const MAX_ASCEND_LOAD_ID = 2486;
 
-const BRANCH_USER_MAP: Record<string, { userName: string; role: "OWNER" | "BROKER" }> = {
-  "Phillips Expedited": { userName: "Ian Phillips", role: "BROKER" },
-  "Matt Boreako": { userName: "Matthew Boreako", role: "BROKER" },
-  "Corey Horvath": { userName: "Corey Horvath", role: "BROKER" },
-  "Suki Hamzic": { userName: "Suki Hamzic", role: "BROKER" },
-  "Billy Parker": { userName: "Billy Parker", role: "BROKER" },
-  "Talent Transport Logistics": { userName: "Frank Periandri", role: "OWNER" }
-};
+const BRANCH_NAMES = [
+  "Phillips Expedited",
+  "Matt Boreako",
+  "Corey Horvath",
+  "Suki Hamzic",
+  "Billy Parker",
+  "Talent Transport Logistics"
+] as const;
+
+const COREY_BRANCH = "Corey Horvath";
+const COREY_USER_NAME = "Corey Horvath";
 
 type BranchContext = {
   branchId: string;
@@ -75,53 +79,18 @@ function emailForUser(name: string) {
   return `${slug}@talenttransportlogistics.com`;
 }
 
-async function resolveCompany(summary: ImportSummary): Promise<{
-  company: { id: string; nextLoadSequence: number };
-  bootstrapped: boolean;
-  commissionProfileId?: string;
-}> {
-  const existing = await prisma.company.findFirst({
-    where: { name: COMPANY_NAME }
+async function resolveCompany(): Promise<{ id: string; nextLoadSequence: number }> {
+  const company = await prisma.company.findFirst({
+    where: {
+      OR: [{ name: COMPANY_NAME }, { slug: "talent-transport-logistics-inc" }]
+    }
   });
-  if (existing) {
-    return { company: existing, bootstrapped: false };
+  if (!company) {
+    throw new Error(
+      `Company not found: ${COMPANY_NAME}. Register or create the organization before running import.`
+    );
   }
-
-  const company = await prisma.company.create({
-    data: {
-      name: COMPANY_NAME,
-      slug: "talent-transport-logistics-inc",
-      status: "ACTIVE",
-      loadNumberPrefix: "TTL",
-      nextLoadSequence: MAX_ASCEND_LOAD_ID
-    }
-  });
-
-  const profile = await prisma.commissionProfile.create({
-    data: {
-      companyId: company.id,
-      name: "Standard 60/40",
-      isDefault: true,
-      rule: {
-        create: {
-          branchSharePercent: 60,
-          companySharePercent: 40,
-          companyMinimumExpensePercent: 10
-        }
-      }
-    }
-  });
-
-  await prisma.seatSubscription.create({
-    data: {
-      companyId: company.id,
-      seatQuantity: 6,
-      status: "ACTIVE"
-    }
-  });
-
-  summary.warnings.push("Bootstrapped company and default commission profile (local/dev setup).");
-  return { company, bootstrapped: true, commissionProfileId: profile.id };
+  return company;
 }
 
 async function resolveCommissionProfile(companyId: string) {
@@ -135,123 +104,94 @@ async function resolveCommissionProfile(companyId: string) {
   return profile;
 }
 
-async function resolveBranch(
+async function resolveBranchContext(
   companyId: string,
   branchName: string,
   commissionProfileId: string,
-  summary: ImportSummary,
-  bootstrapped: boolean
-) {
-  const existing = await prisma.branch.findFirst({
+  summary: ImportSummary
+): Promise<BranchContext> {
+  let branch = await prisma.branch.findFirst({
     where: { companyId, name: branchName }
   });
-  if (existing) {
-    return existing;
-  }
 
-  if (!bootstrapped && branchName !== "Corey Horvath") {
-    throw new Error(`Expected existing branch not found: ${branchName}`);
-  }
-
-  const created = await prisma.branch.create({
-    data: {
-      companyId,
-      name: branchName,
-      commissionProfileId
+  if (!branch) {
+    if (branchName !== COREY_BRANCH) {
+      throw new Error(`Expected existing branch not found: ${branchName}`);
     }
-  });
-  if (branchName === "Corey Horvath") {
+
+    branch = await prisma.branch.create({
+      data: {
+        companyId,
+        name: branchName,
+        commissionProfileId
+      }
+    });
     summary.branchCreated = true;
   }
-  return created;
-}
 
-async function resolveUser(
-  companyId: string,
-  branchId: string,
-  userName: string,
-  role: "OWNER" | "BROKER",
-  summary: ImportSummary,
-  bootstrapped: boolean
-) {
-  const existingMembership = await prisma.companyMembership.findFirst({
+  let membership = await prisma.companyMembership.findFirst({
     where: {
       companyId,
-      user: { name: userName }
+      branchId: branch.id,
+      status: "ACTIVE"
     },
-    include: { user: true }
+    include: { user: true },
+    orderBy: { createdAt: "asc" }
   });
 
-  if (existingMembership) {
-    return existingMembership.user;
-  }
-
-  if (!bootstrapped && userName !== "Corey Horvath") {
-    throw new Error(`Expected existing user not found: ${userName}`);
-  }
-
-  const user = await prisma.user.create({
-    data: {
-      name: userName,
-      email: emailForUser(userName),
-      passwordHash: hashSeedPassword("ChangeMe123!"),
-      mustChangePassword: true
+  if (!membership) {
+    if (branchName !== COREY_BRANCH) {
+      throw new Error(`No active user linked to branch: ${branchName}`);
     }
-  });
 
-  await prisma.companyMembership.create({
-    data: {
-      userId: user.id,
-      companyId,
-      branchId,
-      role,
-      status: "ACTIVE",
-      seatAssignedAt: new Date()
-    }
-  });
-
-  const subscription = await prisma.seatSubscription.findUnique({ where: { companyId } });
-  if (subscription) {
-    await prisma.seatSubscription.update({
-      where: { companyId },
-      data: { seatQuantity: Math.max(subscription.seatQuantity, 6) }
+    const user = await prisma.user.create({
+      data: {
+        name: COREY_USER_NAME,
+        email: emailForUser(COREY_USER_NAME),
+        passwordHash: hashSeedPassword("ChangeMe123!"),
+        mustChangePassword: true
+      }
     });
-  }
 
-  if (userName === "Corey Horvath") {
+    membership = await prisma.companyMembership.create({
+      data: {
+        userId: user.id,
+        companyId,
+        branchId: branch.id,
+        role: "BROKER",
+        status: "ACTIVE",
+        seatAssignedAt: new Date()
+      },
+      include: { user: true }
+    });
+
+    const subscription = await prisma.seatSubscription.findUnique({ where: { companyId } });
+    if (subscription) {
+      await prisma.seatSubscription.update({
+        where: { companyId },
+        data: { seatQuantity: subscription.seatQuantity + 1 }
+      });
+    }
+
     summary.userCreated = true;
   }
-  return user;
+
+  return { branchId: branch.id, userId: membership.userId };
 }
 
 async function setupOrg(summary: ImportSummary) {
-  const { company, bootstrapped, commissionProfileId: bootstrappedProfileId } =
-    await resolveCompany(summary);
-  const profile = bootstrappedProfileId
-    ? await prisma.commissionProfile.findUniqueOrThrow({
-        where: { id: bootstrappedProfileId },
-        include: { rule: true }
-      })
-    : await resolveCommissionProfile(company.id);
+  const company = await resolveCompany();
+  const profile = await resolveCommissionProfile(company.id);
   const branchContexts = new Map<string, BranchContext>();
 
-  for (const [branchName, config] of Object.entries(BRANCH_USER_MAP)) {
-    const branch = await resolveBranch(
+  for (const branchName of BRANCH_NAMES) {
+    const context = await resolveBranchContext(
       company.id,
       branchName,
       profile.id,
-      summary,
-      bootstrapped
+      summary
     );
-    const user = await resolveUser(
-      company.id,
-      branch.id,
-      config.userName,
-      config.role,
-      summary,
-      bootstrapped
-    );
-    branchContexts.set(branchName, { branchId: branch.id, userId: user.id });
+    branchContexts.set(branchName, context);
   }
 
   if (company.nextLoadSequence < MAX_ASCEND_LOAD_ID) {
@@ -580,6 +520,8 @@ async function main() {
     }
   }
 
+  const facilityResult = await backfillFacilitiesForCompany(company.id);
+
   console.log("Ascend import complete");
   console.log(`CSV rows: ${rows.length}`);
   console.log(`Loads created: ${summary.loadsCreated}`);
@@ -588,6 +530,9 @@ async function main() {
   console.log(`Carriers created: ${summary.carriersCreated}`);
   console.log(`Corey branch created: ${summary.branchCreated}`);
   console.log(`Corey user created: ${summary.userCreated}`);
+  console.log(`Facilities created: ${facilityResult.facilitiesCreated}`);
+  console.log(`Stops linked to facilities: ${facilityResult.stopsLinked}`);
+  console.log(`Unique facility locations: ${facilityResult.uniqueFacilities}`);
   console.log("Branch counts in CSV:");
   for (const [branch, count] of [...branchCounts.entries()].sort((a, b) => a[0].localeCompare(b[0]))) {
     console.log(`  ${branch}: ${count}`);

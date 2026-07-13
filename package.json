@@ -13,6 +13,7 @@
     "db:push": "prisma db push",
     "db:seed": "prisma db seed",
     "db:import-ascend": "tsx prisma/ascend-load-import.ts",
+    "db:backfill-facilities": "tsx prisma/backfill-facilities.ts",
     "db:reset": "prisma db push --force-reset && prisma db seed"
   },
   "dependencies": {
