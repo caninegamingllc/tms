@@ -107,6 +107,27 @@ const TMS_BRANCH_ALIASES: Record<string, string[]> = {
 
 async function findBranch(companyId: string, canonicalBranch: string) {
   const aliases = TMS_BRANCH_ALIASES[canonicalBranch] ?? [canonicalBranch];
+
+  for (const name of aliases) {
+    const branchWithMember = await prisma.branch.findFirst({
+      where: {
+        companyId,
+        name,
+        memberships: {
+          some: {
+            companyId,
+            status: "ACTIVE",
+            lockedAt: null,
+            disabledAt: null
+          }
+        }
+      }
+    });
+    if (branchWithMember) {
+      return branchWithMember;
+    }
+  }
+
   for (const name of aliases) {
     const branch = await prisma.branch.findFirst({
       where: { companyId, name }
@@ -115,7 +136,32 @@ async function findBranch(companyId: string, canonicalBranch: string) {
       return branch;
     }
   }
+
   return null;
+}
+
+async function findBranchMembership(companyId: string, canonicalBranch: string, branchId: string) {
+  const aliases = TMS_BRANCH_ALIASES[canonicalBranch] ?? [canonicalBranch];
+
+  return prisma.companyMembership.findFirst({
+    where: {
+      companyId,
+      status: "ACTIVE",
+      lockedAt: null,
+      disabledAt: null,
+      OR: [
+        { branchId },
+        {
+          branch: {
+            companyId,
+            name: { in: aliases }
+          }
+        }
+      ]
+    },
+    include: { user: true },
+    orderBy: { createdAt: "asc" }
+  });
 }
 
 async function resolveBranchContext(
@@ -141,15 +187,7 @@ async function resolveBranchContext(
     summary.branchCreated = true;
   }
 
-  let membership = await prisma.companyMembership.findFirst({
-    where: {
-      companyId,
-      branchId: branch.id,
-      status: "ACTIVE"
-    },
-    include: { user: true },
-    orderBy: { createdAt: "asc" }
-  });
+  let membership = await findBranchMembership(companyId, branchName, branch.id);
 
   if (!membership) {
     if (branchName !== COREY_BRANCH) {
