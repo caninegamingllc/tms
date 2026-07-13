@@ -1,7 +1,7 @@
 import "dotenv/config";
 import { randomBytes, scryptSync } from "crypto";
 import { PrismaClient } from "@prisma/client";
-import { recalculateLoadCommission } from "../lib/commission";
+import { ensureDefaultCommissionProfile, recalculateLoadCommission } from "../lib/commission";
 import {
   assertKnownBranch,
   buildLoadTitle,
@@ -91,35 +91,6 @@ async function resolveCompany(): Promise<{ id: string; nextLoadSequence: number 
     );
   }
   return company;
-}
-
-async function resolveCommissionProfile(companyId: string) {
-  let profile = await prisma.commissionProfile.findFirst({
-    where: { companyId, isDefault: true },
-    include: { rule: true }
-  });
-
-  if (!profile) {
-    profile = await prisma.commissionProfile.findFirst({
-      where: { companyId },
-      include: { rule: true },
-      orderBy: { createdAt: "asc" }
-    });
-  }
-
-  if (!profile) {
-    const branch = await prisma.branch.findFirst({
-      where: { companyId, commissionProfileId: { not: null } },
-      include: { commissionProfile: { include: { rule: true } } }
-    });
-    profile = branch?.commissionProfile ?? null;
-  }
-
-  if (!profile?.rule) {
-    throw new Error("No commission profile found for company.");
-  }
-
-  return profile;
 }
 
 const TMS_BRANCH_ALIASES: Record<string, string[]> = {
@@ -222,7 +193,7 @@ async function resolveBranchContext(
 
 async function setupOrg(summary: ImportSummary) {
   const company = await resolveCompany();
-  const profile = await resolveCommissionProfile(company.id);
+  const profile = await ensureDefaultCommissionProfile(company.id);
   const branchContexts = new Map<string, BranchContext>();
 
   for (const branchName of BRANCH_NAMES) {
