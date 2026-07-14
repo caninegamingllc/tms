@@ -1,0 +1,37 @@
+---
+description: Commit-and-deploy to production — push main, never use PPK/SSH deploys
+alwaysApply: true
+---
+
+# Production deploy
+
+Production URL: `https://tms.simple-source.com`
+
+## When the user asks to commit and deploy
+
+1. Commit only if they asked to commit (follow normal git commit rules).
+2. Push to `origin main` (this repo’s default deploy branch).
+3. Stop. Do **not** SSH, scp, rsync, convert keys, or run `tms-deploy.sh` yourself.
+
+Push to `main` triggers `.github/workflows/deploy.yml`, which POSTs the production webhook. The server pulls, builds, and restarts PM2.
+
+## Do not
+
+- Read, convert, or ask about `.ppk` / PuTTY keys for deploys
+- Put private keys or webhook secrets in the repo, chat, or commits
+- Use GitHub repo webhooks **and** Actions together (double deploy) — Actions only
+- SSH deploy as the normal path
+
+## Optional (debug / logs only)
+
+```bash
+ssh tms
+tail -f /var/log/tms-deploy.log
+```
+
+`Host tms` is already in the local `~/.ssh/config` (uses `~/.ssh/tms-prod.pem`). Use SSH only when the user asks to inspect the server or when the Actions/webhook path is broken.
+
+## Verify deploy
+
+- GitHub → Actions → **Deploy** (should be green)
+- Or: `ssh tms "tail -n 40 /var/log/tms-deploy.log"`

@@ -10,13 +10,13 @@ Pushes to `main` deploy automatically to `https://tms.simple-source.com`.
 
 ## One-time GitHub setup
 
-Choose **one** of these options. Do not enable both or every push will deploy twice.
+Already configured: GitHub Actions on push to `main` (Option A). Do not also add a repo webhook or every push will deploy twice.
 
-### Option A: GitHub Actions (recommended)
+### Option A: GitHub Actions (recommended — in use)
 
-Add this repository secret:
+Repo secret `DEPLOY_WEBHOOK_SECRET` must match the HMAC secret in `/etc/webhook.conf` on the server.
 
-**Settings → Secrets and variables → Actions → New repository secret**
+**Settings → Secrets and variables → Actions → New repository secret** (only if missing/rotating):
 
 | Name | Value |
 |------|-------|
@@ -48,15 +48,17 @@ The webhook only deploys when the push targets `main`.
 | `/var/www/tms/scripts/tms-deploy.sh` | Deploy script from this repo |
 | `/var/log/tms-deploy.log` | Deploy log |
 
-## Manual deploy
+## Manual deploy / SSH
+
+Prefer push to `main`. SSH only for ops/debug (local `~/.ssh/config` host `tms` → `tms-prod.pem`):
 
 ```bash
-ssh root@167.172.24.124
+ssh tms
 bash /var/www/tms/scripts/tms-deploy.sh
 ```
 
 ## Logs
 
 ```bash
-tail -f /var/log/tms-deploy.log
+ssh tms "tail -f /var/log/tms-deploy.log"
 ```
