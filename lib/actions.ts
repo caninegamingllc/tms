@@ -208,6 +208,7 @@ export async function createCustomer(formData: FormData) {
       status: requiredString(formData, "status"),
       creditLimit: parseMoneyToCents(formData.get("creditLimit")),
       paymentTerms: requiredString(formData, "paymentTerms"),
+      rateConfirmationTerms: optionalString(formData, "rateConfirmationTerms"),
       industry: optionalString(formData, "industry"),
       phone: optionalString(formData, "phone"),
       email: optionalString(formData, "email"),
@@ -229,6 +230,21 @@ export async function createCustomer(formData: FormData) {
 
   revalidatePath("/customers");
   redirect("/customers?saved=1");
+}
+
+export async function updateCustomerRateConfirmationTerms(formData: FormData) {
+  const user = await requireWriteUser();
+  const customerId = requiredString(formData, "customerId");
+  await requireCompanyCustomer(customerId, user);
+  const terms = optionalString(formData, "rateConfirmationTerms") ?? null;
+
+  await prisma.customer.update({
+    where: { id: customerId },
+    data: { rateConfirmationTerms: terms }
+  });
+
+  revalidatePath("/customers");
+  revalidatePath(`/customers/${customerId}`);
 }
 
 export async function createCarrier(formData: FormData) {
@@ -521,6 +537,7 @@ export async function createLoad(formData: FormData) {
         deliveryDate,
         revenueCents,
         carrierCostCents,
+        rateConfirmationTerms: optionalString(formData, "rateConfirmationTerms"),
         stops: {
           create: [
             {
@@ -642,6 +659,31 @@ export async function addLoadActivityNote(formData: FormData) {
       userId: user.id,
       action: "Activity note",
       details: body
+    }
+  });
+
+  revalidatePath(`/loads/${loadId}`);
+}
+
+export async function updateLoadRateConfirmationTerms(formData: FormData) {
+  const user = await requireWriteUser();
+  const loadId = requiredString(formData, "loadId");
+  await requireCompanyLoad(loadId, user);
+  const terms = optionalString(formData, "rateConfirmationTerms") ?? null;
+
+  await prisma.load.update({
+    where: { id: loadId },
+    data: {
+      rateConfirmationTerms: terms,
+      activities: {
+        create: {
+          userId: user.id,
+          action: "Rate confirmation terms updated",
+          details: terms
+            ? "Load-level rate confirmation terms override saved."
+            : "Load-level override cleared; customer default will apply."
+        }
+      }
     }
   });
 

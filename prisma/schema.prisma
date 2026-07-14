@@ -302,6 +302,8 @@ model Customer {
   status        String            @default("Active")
   creditLimit   Int               @default(0)
   paymentTerms  String            @default("Net 30")
+  /// Default carrier rate confirmation terms (appended after built-in terms).
+  rateConfirmationTerms String?
   industry      String?
   phone         String?
   email         String?
@@ -492,6 +494,8 @@ model Load {
   revenueCents         Int                 @default(0)
   carrierCostCents     Int                 @default(0)
   isCommissionable     Boolean             @default(true)
+  /// Load-level rate con terms override; blank inherits customer default.
+  rateConfirmationTerms String?
   commissionProfileId  String?
   commissionProfile    CommissionProfile?  @relation(fields: [commissionProfileId], references: [id])
   stops                LoadStop[]

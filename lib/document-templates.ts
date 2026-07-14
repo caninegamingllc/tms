@@ -187,6 +187,34 @@ function withPublicNotes(
   return [...(sections ?? []), notes];
 }
 
+const BUILT_IN_RATE_CONFIRMATION_TERMS = [
+  "Carrier must notify broker immediately of delays, OS&D, temperature issues, detention, or accessorials.",
+  "Carrier must submit signed POD and all supporting receipts before payment.",
+  "Double brokering is prohibited. Carrier agrees it is the motor carrier responsible for this shipment."
+];
+
+function splitTermsLines(text: string | null | undefined) {
+  if (!text?.trim()) {
+    return [];
+  }
+  return text
+    .split(/\r?\n/)
+    .map((line) => line.trim())
+    .filter(Boolean);
+}
+
+/** Built-in broker terms plus load override or customer default (newline-split). */
+export function resolveRateConfirmationTerms(load: {
+  rateConfirmationTerms?: string | null;
+  customer?: { rateConfirmationTerms?: string | null } | null;
+}) {
+  const custom =
+    load.rateConfirmationTerms?.trim() ||
+    load.customer?.rateConfirmationTerms?.trim() ||
+    "";
+  return [...BUILT_IN_RATE_CONFIRMATION_TERMS, ...splitTermsLines(custom)];
+}
+
 function line(label: string, value?: string | number | null) {
   return `${label}: ${value || "N/A"}`;
 }
@@ -271,11 +299,7 @@ export function buildRateConfirmationDocument(
       ],
       load
     ),
-    terms: [
-      "Carrier must notify broker immediately of delays, OS&D, temperature issues, detention, or accessorials.",
-      "Carrier must submit signed POD and all supporting receipts before payment.",
-      "Double brokering is prohibited. Carrier agrees it is the motor carrier responsible for this shipment."
-    ],
+    terms: resolveRateConfirmationTerms(load),
     signatures: ["Carrier Signature: ______________________________ Date: _______________"]
   };
 }

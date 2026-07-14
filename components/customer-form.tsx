@@ -239,6 +239,19 @@ export function CustomerForm({ action, branches = [], showBranchPicker = false }
         <input name="creditLimit" className="input" placeholder="Credit limit" />
         <input name="paymentTerms" className="input" defaultValue="Net 30" />
       </div>
+      <label className="grid gap-2">
+        <span className="label">Rate confirmation terms &amp; conditions</span>
+        <textarea
+          name="rateConfirmationTerms"
+          className="textarea"
+          rows={4}
+          placeholder="Customer-specific check-in or failure-to-comply procedures…"
+        />
+        <p className="text-xs text-muted-foreground">
+          Appended to built-in rate confirmation terms for every load for this customer, unless a
+          load sets its own override.
+        </p>
+      </label>
       <div className="rounded-2xl bg-muted p-4">
         <p className="mb-3 text-sm font-semibold text-foreground">Primary Contact</p>
         <div className="grid gap-3">

@@ -15,6 +15,7 @@ import {
   generateCustomerInvoice,
   generateRateConfirmation,
   unassignCarrier,
+  updateLoadRateConfirmationTerms,
   updateLoadStatus
 } from "@/lib/actions";
 import {
@@ -277,6 +278,45 @@ export default async function LoadDetailPage({
               ))}
             </div>
             <LoadRoutePanel loadId={load.id} />
+          </section>
+
+          <section className="card">
+            <h2 className="section-title">Rate Confirmation Terms</h2>
+            <p className="muted">
+              Override customer default terms for this load only. Leave blank to use the customer
+              profile terms when generating a rate confirmation.
+            </p>
+            {!load.rateConfirmationTerms?.trim() && load.customer.rateConfirmationTerms?.trim() ? (
+              <div className="mt-3 rounded-2xl border border-dashed border-border bg-muted/60 p-3">
+                <p className="text-xs font-semibold uppercase tracking-wide text-muted-foreground">
+                  Customer default (in use)
+                </p>
+                <p className="mt-2 whitespace-pre-wrap text-sm text-slate-700">
+                  {load.customer.rateConfirmationTerms}
+                </p>
+              </div>
+            ) : null}
+            {canWrite(user) ? (
+              <form action={updateLoadRateConfirmationTerms} className="mt-4 grid gap-3">
+                <input type="hidden" name="loadId" value={load.id} />
+                <textarea
+                  name="rateConfirmationTerms"
+                  className="textarea"
+                  rows={5}
+                  defaultValue={load.rateConfirmationTerms ?? ""}
+                  placeholder="Optional load-specific rate confirmation terms…"
+                />
+                <button type="submit" className="btn-secondary">
+                  Save Rate Con Terms
+                </button>
+              </form>
+            ) : (
+              <p className="mt-4 whitespace-pre-wrap rounded-2xl bg-muted p-4 text-sm text-slate-700">
+                {load.rateConfirmationTerms?.trim() ||
+                  load.customer.rateConfirmationTerms?.trim() ||
+                  "No custom rate confirmation terms."}
+              </p>
+            )}
           </section>
 
           <section className="card">

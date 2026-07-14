@@ -167,6 +167,19 @@ export default async function NewLoadPage() {
           <input name="carrierCost" className="input" placeholder="1900" />
         </label>
 
+        <label className="grid gap-2">
+          <span className="label">Rate confirmation terms override</span>
+          <textarea
+            name="rateConfirmationTerms"
+            className="textarea"
+            rows={4}
+            placeholder="Optional — leave blank to use the customer’s default rate confirmation terms"
+          />
+          <p className="text-xs text-muted-foreground">
+            Appended after built-in broker terms on rate confirmations for this load only.
+          </p>
+        </label>
+
         <div className="flex justify-end gap-3">
           <button type="submit" className="btn">
             Save Load
