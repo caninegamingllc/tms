@@ -24,6 +24,7 @@ export function CarriersTable({ carriers }: { carriers: CarrierTableRow[] }) {
     <SortableTable
       data={carriers}
       keyExtractor={(carrier) => carrier.id}
+      getRowHref={(carrier) => `/carriers/${carrier.id}`}
       defaultSort={{ columnId: "carrier", direction: "asc" }}
       columns={[
         {

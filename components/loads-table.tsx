@@ -31,6 +31,7 @@ export function LoadsTable({ loads }: { loads: LoadTableRow[] }) {
     <SortableTable
       data={loads}
       keyExtractor={(load) => load.id}
+      getRowHref={(load) => `/loads/${load.id}`}
       defaultSort={{ columnId: "pickup", direction: "desc" }}
       emptyMessage="No loads found."
       columns={[

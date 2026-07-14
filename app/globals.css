@@ -112,6 +112,15 @@ textarea::placeholder {
     @apply border-b border-border px-3 py-3 align-top;
   }
 
+  .table tbody tr.table-row-link {
+    @apply cursor-pointer transition-colors;
+  }
+
+  .table tbody tr.table-row-link:hover,
+  .table tbody tr.table-row-link:focus-visible {
+    @apply bg-muted/70 outline-none;
+  }
+
   .badge {
     @apply inline-flex rounded-full px-2.5 py-1 text-xs font-semibold;
   }

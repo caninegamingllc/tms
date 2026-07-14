@@ -1,6 +1,7 @@
 "use client";
 
-import { useEffect, useMemo, useState } from "react";
+import { useEffect, useMemo, useState, type KeyboardEvent, type MouseEvent } from "react";
+import { useRouter } from "next/navigation";
 import { ArrowDown, ArrowUp, ChevronsUpDown } from "lucide-react";
 import { clsx } from "clsx";
 import { TablePagination } from "@/components/table-pagination";
@@ -31,7 +32,47 @@ type SortableTableProps<T> = {
   className?: string;
   /** When false, render all rows without pagination controls. Default true. */
   paginated?: boolean;
+  /** When set, clicking anywhere on the row navigates to this href (except interactive controls). */
+  getRowHref?: (row: T) => string | undefined;
 };
+
+const INTERACTIVE_SELECTOR = "a, button, input, select, textarea, label, [role='button']";
+
+export function navigateFromRowClick(
+  event: MouseEvent<HTMLElement>,
+  href: string,
+  push: (href: string) => void
+) {
+  const target = event.target as HTMLElement | null;
+  if (target?.closest(INTERACTIVE_SELECTOR)) {
+    return;
+  }
+
+  if (event.metaKey || event.ctrlKey || event.button === 1) {
+    window.open(href, "_blank", "noopener,noreferrer");
+    return;
+  }
+
+  push(href);
+}
+
+export function navigateFromRowKeyDown(
+  event: KeyboardEvent<HTMLElement>,
+  href: string,
+  push: (href: string) => void
+) {
+  if (event.key !== "Enter" && event.key !== " ") {
+    return;
+  }
+
+  const target = event.target as HTMLElement | null;
+  if (target?.closest(INTERACTIVE_SELECTOR) && target !== event.currentTarget) {
+    return;
+  }
+
+  event.preventDefault();
+  push(href);
+}
 
 export function useClientPagination<T>(rows: T[], resetKey?: unknown) {
   const [page, setPage] = useState(1);
@@ -77,8 +118,10 @@ export function SortableTable<T>({
   keyExtractor,
   emptyMessage = "No records found.",
   className,
-  paginated = true
+  paginated = true,
+  getRowHref
 }: SortableTableProps<T>) {
+  const router = useRouter();
   const firstSortableColumn = columns.find((column) => column.sortable !== false && column.sortValue);
   const [sortState, setSortState] = useState<{ columnId: string; direction: SortDirection }>(() => {
     if (defaultSort) {
@@ -172,15 +215,25 @@ export function SortableTable<T>({
         </thead>
         <tbody>
           {displayRows.length ? (
-            displayRows.map((row) => (
-              <tr key={keyExtractor(row)}>
-                {columns.map((column) => (
-                  <td key={column.id} className={column.className}>
-                    {column.render(row)}
-                  </td>
-                ))}
-              </tr>
-            ))
+            displayRows.map((row) => {
+              const href = getRowHref?.(row);
+
+              return (
+                <tr
+                  key={keyExtractor(row)}
+                  className={clsx(href && "table-row-link")}
+                  tabIndex={href ? 0 : undefined}
+                  onClick={href ? (event) => navigateFromRowClick(event, href, router.push) : undefined}
+                  onKeyDown={href ? (event) => navigateFromRowKeyDown(event, href, router.push) : undefined}
+                >
+                  {columns.map((column) => (
+                    <td key={column.id} className={column.className}>
+                      {column.render(row)}
+                    </td>
+                  ))}
+                </tr>
+              );
+            })
           ) : (
             <tr>
               <td colSpan={columns.length} className="p-8 text-center text-muted-foreground">

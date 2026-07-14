@@ -23,6 +23,7 @@ export function CustomersTable({ customers }: { customers: CustomerTableRow[] })
     <SortableTable
       data={customers}
       keyExtractor={(customer) => customer.id}
+      getRowHref={(customer) => `/customers/${customer.id}`}
       defaultSort={{ columnId: "name", direction: "asc" }}
       columns={[
         {

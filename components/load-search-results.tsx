@@ -2,9 +2,16 @@
 
 import Link from "next/link";
 import { useMemo, useState } from "react";
+import { useRouter } from "next/navigation";
 import { ArrowDown, ArrowUp, ChevronsUpDown } from "lucide-react";
 import { clsx } from "clsx";
-import { useSortedRows, useClientPagination, type SortableColumn } from "@/components/sortable-table";
+import {
+  navigateFromRowClick,
+  navigateFromRowKeyDown,
+  useSortedRows,
+  useClientPagination,
+  type SortableColumn
+} from "@/components/sortable-table";
 import { TablePagination } from "@/components/table-pagination";
 import { StatusBadge } from "@/components/status-badge";
 import {
@@ -120,6 +127,7 @@ export function LoadSearchResults({
   companyName: string;
   filterSummary: string;
 }) {
+  const router = useRouter();
   const [selectedIds, setSelectedIds] = useState<Set<string>>(() => new Set(loads.map((load) => load.id)));
   const { sortedData, sortState, handleSort } = useSortedRows(loads, columns, {
     columnId: "pickup",
@@ -262,21 +270,31 @@ export function LoadSearchResults({
           </thead>
           <tbody>
             {pageRows.length ? (
-              pageRows.map((load) => (
-                <tr key={load.id}>
-                  <td>
-                    <input
-                      type="checkbox"
-                      aria-label={`Select load ${load.loadNumber}`}
-                      checked={selectedIds.has(load.id)}
-                      onChange={() => toggleOne(load.id)}
-                    />
-                  </td>
-                  {columns.slice(1).map((column) => (
-                    <td key={column.id}>{column.render(load)}</td>
-                  ))}
-                </tr>
-              ))
+              pageRows.map((load) => {
+                const href = `/loads/${load.id}`;
+
+                return (
+                  <tr
+                    key={load.id}
+                    className="table-row-link"
+                    tabIndex={0}
+                    onClick={(event) => navigateFromRowClick(event, href, router.push)}
+                    onKeyDown={(event) => navigateFromRowKeyDown(event, href, router.push)}
+                  >
+                    <td>
+                      <input
+                        type="checkbox"
+                        aria-label={`Select load ${load.loadNumber}`}
+                        checked={selectedIds.has(load.id)}
+                        onChange={() => toggleOne(load.id)}
+                      />
+                    </td>
+                    {columns.slice(1).map((column) => (
+                      <td key={column.id}>{column.render(load)}</td>
+                    ))}
+                  </tr>
+                );
+              })
             ) : (
               <tr>
                 <td colSpan={columns.length} className="p-8 text-center text-muted-foreground">
