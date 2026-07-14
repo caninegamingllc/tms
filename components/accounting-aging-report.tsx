@@ -2,6 +2,8 @@
 
 import Link from "next/link";
 import { useMemo, useState } from "react";
+import { useClientPagination } from "@/components/sortable-table";
+import { TablePagination } from "@/components/table-pagination";
 import {
   AGING_BUCKET_LABELS,
   bucketBalance,
@@ -109,10 +111,17 @@ function AgingTable<T extends AgingArRow | AgingApRow>({
     });
   }, [rows, query]);
 
-  const enriched = filtered.map((row) => {
-    const buckets = bucketBalance(row.balanceCents, row.dueAt);
-    return { row, buckets, days: daysPastDue(row.dueAt) };
-  });
+  const enriched = useMemo(
+    () =>
+      filtered.map((row) => {
+        const buckets = bucketBalance(row.balanceCents, row.dueAt);
+        return { row, buckets, days: daysPastDue(row.dueAt) };
+      }),
+    [filtered]
+  );
+
+  const pagination = useClientPagination(enriched, query);
+  const pageRows = pagination.pageRows;
 
   const totals = {
     totalCents: enriched.reduce((sum, item) => sum + item.row.totalCents, 0),
@@ -193,7 +202,7 @@ function AgingTable<T extends AgingArRow | AgingApRow>({
             </tr>
           </thead>
           <tbody>
-            {enriched.map(({ row, buckets, days }) => {
+            {pageRows.map(({ row, buckets, days }) => {
               const docNo = "invoiceNo" in row ? row.invoiceNo : row.billNo;
               return (
                 <tr key={row.id} className="border-b border-border">
@@ -244,6 +253,18 @@ function AgingTable<T extends AgingArRow | AgingApRow>({
             )}
           </tbody>
         </table>
+      </div>
+      <div className="border-t border-border px-5 py-3">
+        <TablePagination
+          page={pagination.page}
+          pageSize={pagination.pageSize}
+          total={pagination.total}
+          totalPages={pagination.totalPages}
+          start={pagination.start}
+          end={pagination.end}
+          onPageChange={pagination.setPage}
+          onPageSizeChange={pagination.setPageSize}
+        />
       </div>
     </section>
   );

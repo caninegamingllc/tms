@@ -5,9 +5,11 @@ import { Fragment, useMemo, useState } from "react";
 import { ChevronDown, ChevronRight } from "lucide-react";
 import {
   SortableTableHeader,
+  useClientPagination,
   useSortedRows,
   type SortableColumn
 } from "@/components/sortable-table";
+import { TablePagination } from "@/components/table-pagination";
 import { StatusBadge } from "@/components/status-badge";
 import { formatDate, formatMoney } from "@/lib/format";
 import {
@@ -66,7 +68,7 @@ export type AccountingApLoadRow = {
   canPushOnline: boolean;
 };
 
-function useSelection(ids: string[]) {
+function useSelection() {
   const [selected, setSelected] = useState<Set<string>>(new Set());
 
   function toggle(id: string) {
@@ -81,8 +83,21 @@ function useSelection(ids: string[]) {
     });
   }
 
-  function toggleAll(checked: boolean) {
-    setSelected(checked ? new Set(ids) : new Set());
+  /** Select or deselect only the given ids (e.g. current page), keeping other pages' selections. */
+  function toggleAll(ids: string[], checked: boolean) {
+    setSelected((prev) => {
+      const next = new Set(prev);
+      if (checked) {
+        for (const id of ids) {
+          next.add(id);
+        }
+      } else {
+        for (const id of ids) {
+          next.delete(id);
+        }
+      }
+      return next;
+    });
   }
 
   function clear() {
@@ -199,12 +214,33 @@ export function AccountingInvoicesPanel({
     columnId: "due",
     direction: "desc"
   });
-  const selection = useSelection(sortedData.map((row) => row.id));
+  const pagination = useClientPagination(sortedData, query);
+  const pageRows = pagination.pageRows;
+  const pageIds = pageRows.map((row) => row.id);
+  const selection = useSelection();
   const selectedRows = sortedData.filter((row) => selection.selected.has(row.id));
   const openBalance = selectedRows.reduce((sum, row) => sum + row.balanceCents, 0);
   const sameCustomer =
     selectedRows.length > 0 &&
     selectedRows.every((row) => row.customerId === selectedRows[0].customerId);
+  const allPageSelected = pageIds.length > 0 && pageIds.every((id) => selection.selected.has(id));
+
+  const headerColumns = columns.map((column) =>
+    column.id === "select"
+      ? {
+          ...column,
+          label: (
+            <input
+              type="checkbox"
+              aria-label="Select all invoices on this page"
+              checked={allPageSelected}
+              disabled={pageIds.length === 0}
+              onChange={(event) => selection.toggleAll(pageIds, event.target.checked)}
+            />
+          )
+        }
+      : column
+  );
 
   return (
     <div>
@@ -307,9 +343,9 @@ export function AccountingInvoicesPanel({
 
       <div className="overflow-x-auto">
         <table className="table min-w-full text-left text-sm">
-          <SortableTableHeader columns={columns} sortState={sortState} onSort={handleSort} />
+          <SortableTableHeader columns={headerColumns} sortState={sortState} onSort={handleSort} />
           <tbody>
-            {sortedData.map((row) => (
+            {pageRows.map((row) => (
               <tr
                 key={row.id}
                 className={selection.selected.has(row.id) ? "bg-amber-50" : undefined}
@@ -365,6 +401,16 @@ export function AccountingInvoicesPanel({
           </tbody>
         </table>
       </div>
+      <TablePagination
+        page={pagination.page}
+        pageSize={pagination.pageSize}
+        total={pagination.total}
+        totalPages={pagination.totalPages}
+        start={pagination.start}
+        end={pagination.end}
+        onPageChange={pagination.setPage}
+        onPageSizeChange={pagination.setPageSize}
+      />
     </div>
   );
 }
@@ -479,8 +525,10 @@ export function AccountingBillsPanel({
     direction: "desc"
   });
 
-  const billIds = sortedData.filter((row) => row.billId).map((row) => row.billId!);
-  const selection = useSelection(billIds);
+  const pagination = useClientPagination(sortedData, query);
+  const pageRows = pagination.pageRows;
+  const pageBillIds = pageRows.filter((row) => row.billId).map((row) => row.billId!);
+  const selection = useSelection();
   const selectedRows = sortedData.filter(
     (row) => row.billId && selection.selected.has(row.billId)
   );
@@ -488,6 +536,25 @@ export function AccountingBillsPanel({
   const sameCarrier =
     selectedRows.length > 0 &&
     selectedRows.every((row) => row.carrierId === selectedRows[0].carrierId);
+  const allPageSelected =
+    pageBillIds.length > 0 && pageBillIds.every((id) => selection.selected.has(id));
+
+  const headerColumns = columns.map((column) =>
+    column.id === "select"
+      ? {
+          ...column,
+          label: (
+            <input
+              type="checkbox"
+              aria-label="Select all bills on this page"
+              checked={allPageSelected}
+              disabled={pageBillIds.length === 0}
+              onChange={(event) => selection.toggleAll(pageBillIds, event.target.checked)}
+            />
+          )
+        }
+      : column
+  );
 
   function toggleExpanded(key: string) {
     setExpanded((prev) => {
@@ -597,9 +664,9 @@ export function AccountingBillsPanel({
 
       <div className="overflow-x-auto">
         <table className="table min-w-full text-left text-sm">
-          <SortableTableHeader columns={columns} sortState={sortState} onSort={handleSort} />
+          <SortableTableHeader columns={headerColumns} sortState={sortState} onSort={handleSort} />
           <tbody>
-            {sortedData.map((row) => {
+            {pageRows.map((row) => {
               const isOpen = expanded.has(row.rowKey);
               return (
                 <Fragment key={row.rowKey}>
@@ -698,6 +765,16 @@ export function AccountingBillsPanel({
           </tbody>
         </table>
       </div>
+      <TablePagination
+        page={pagination.page}
+        pageSize={pagination.pageSize}
+        total={pagination.total}
+        totalPages={pagination.totalPages}
+        start={pagination.start}
+        end={pagination.end}
+        onPageChange={pagination.setPage}
+        onPageSizeChange={pagination.setPageSize}
+      />
     </div>
   );
 }

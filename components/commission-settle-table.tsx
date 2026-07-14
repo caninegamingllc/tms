@@ -3,7 +3,8 @@
 import { useMemo, useState } from "react";
 import { ArrowDown, ArrowUp, ChevronsUpDown } from "lucide-react";
 import { clsx } from "clsx";
-import { useSortedRows, type SortableColumn } from "@/components/sortable-table";
+import { useSortedRows, useClientPagination, type SortableColumn } from "@/components/sortable-table";
+import { TablePagination } from "@/components/table-pagination";
 import { settleBranchCommission } from "@/lib/commission-actions";
 
 type CommissionRow = {
@@ -156,12 +157,24 @@ export function CommissionSettleTable({
     columnId: "pickup",
     direction: "desc"
   });
+  const pagination = useClientPagination(sortedData, rows);
+  const pageRows = pagination.pageRows;
 
-  const payableIds = rows.filter((row) => row.canSettle).map((row) => row.id);
-  const allSelected = payableIds.length > 0 && payableIds.every((id) => selected.includes(id));
+  const pagePayableIds = pageRows.filter((row) => row.canSettle).map((row) => row.id);
+  const allPageSelected =
+    pagePayableIds.length > 0 && pagePayableIds.every((id) => selected.includes(id));
 
-  function toggleAll() {
-    setSelected(allSelected ? [] : payableIds);
+  function toggleAllPage() {
+    setSelected((current) => {
+      if (allPageSelected) {
+        return current.filter((id) => !pagePayableIds.includes(id));
+      }
+      const next = new Set(current);
+      for (const id of pagePayableIds) {
+        next.add(id);
+      }
+      return [...next];
+    });
   }
 
   function toggleOne(id: string) {
@@ -207,10 +220,10 @@ export function CommissionSettleTable({
                   <input
                     type="checkbox"
                     className="h-4 w-4 rounded border-border"
-                    checked={allSelected}
-                    disabled={payableIds.length === 0}
-                    onChange={toggleAll}
-                    aria-label="Select all payable commissions"
+                    checked={allPageSelected}
+                    disabled={pagePayableIds.length === 0}
+                    onChange={toggleAllPage}
+                    aria-label="Select all payable commissions on this page"
                   />
                 </th>
               ) : null}
@@ -257,7 +270,7 @@ export function CommissionSettleTable({
                 </td>
               </tr>
             ) : (
-              sortedData.map((row) => (
+              pageRows.map((row) => (
                 <tr key={row.id}>
                   {canSettle ? (
                     <td>
@@ -288,6 +301,18 @@ export function CommissionSettleTable({
             )}
           </tbody>
         </table>
+      </div>
+      <div className="px-5 pb-5">
+        <TablePagination
+          page={pagination.page}
+          pageSize={pagination.pageSize}
+          total={pagination.total}
+          totalPages={pagination.totalPages}
+          start={pagination.start}
+          end={pagination.end}
+          onPageChange={pagination.setPage}
+          onPageSizeChange={pagination.setPageSize}
+        />
       </div>
     </section>
   );

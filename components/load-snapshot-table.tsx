@@ -27,6 +27,7 @@ export function LoadSnapshotTable({ loads }: { loads: LoadSnapshotRow[] }) {
       keyExtractor={(load) => load.id}
       defaultSort={{ columnId: "pickup", direction: "desc" }}
       emptyMessage="No loads found."
+      paginated={false}
       columns={[
         {
           id: "load",

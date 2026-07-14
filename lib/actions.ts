@@ -1121,7 +1121,7 @@ export async function generateBillOfLading(formData: FormData) {
   const user = await requireWriteUser();
   const loadId = requiredString(formData, "loadId");
   const load = await loadForDocument(loadId, user);
-  const documentNumber = await nextDocumentNumber(user.companyId, "BOL");
+  const documentNumber = `BOL-${load.loadNumber}`;
   const company = await getCompanyBranding(user.companyId);
   const structured = structuredDocumentForType("BOL", load, documentNumber, company);
   const pdf = await persistGeneratedPdf(user.companyId, structured);

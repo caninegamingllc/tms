@@ -191,7 +191,9 @@ async function ensurePrimaryDocument(
     const documentNumber =
       docType === "INVOICE"
         ? load.invoices[0]?.invoiceNo ?? (await nextInvoiceNumber(user.companyId))
-        : await nextDocumentNumber(user.companyId, docTypePrefix(docType));
+        : docType === "BOL"
+          ? `BOL-${load.loadNumber}`
+          : await nextDocumentNumber(user.companyId, docTypePrefix(docType));
 
     const structured = structuredDocumentForType(docType, load, documentNumber, company);
     const pdf = await persistGeneratedPdf(user.companyId, structured);
@@ -216,7 +218,11 @@ async function ensurePrimaryDocument(
       }
     });
   } else if (!document.filePath) {
-    const documentNumber = document.documentNumber ?? (await nextDocumentNumber(user.companyId, docTypePrefix(docType)));
+    const documentNumber =
+      document.documentNumber ??
+      (docType === "BOL"
+        ? `BOL-${load.loadNumber}`
+        : await nextDocumentNumber(user.companyId, docTypePrefix(docType)));
     const structured = structuredDocumentForType(docType, load, documentNumber, company);
     const pdf = await persistGeneratedPdf(user.companyId, structured);
     document = await prisma.loadDocument.update({

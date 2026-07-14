@@ -433,7 +433,11 @@ export default async function LoadDetailPage({
             <p className="muted">
               Current carrier: {load.dispatchAssignment?.carrier.name ?? "Not covered"}
             </p>
-            <form action={assignCarrier} className="mt-4 grid gap-3">
+            <form
+              key={load.dispatchAssignment?.id ?? "unassigned"}
+              action={assignCarrier}
+              className="mt-4 grid gap-3"
+            >
               <input type="hidden" name="loadId" value={load.id} />
               <SearchCombobox
                 name="carrierId"

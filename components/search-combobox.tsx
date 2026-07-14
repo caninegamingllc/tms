@@ -36,6 +36,15 @@ export function SearchCombobox({
   const [open, setOpen] = useState(false);
   const rootRef = useRef<HTMLLabelElement>(null);
 
+  // Keep visible text in sync when the server default changes (e.g. unassign carrier).
+  useEffect(() => {
+    const option = options.find((item) => item.id === defaultValue);
+    setSelectedId(defaultValue ?? "");
+    setQuery(option?.label ?? "");
+    // Only react to the assigned value changing; remounting via form key also resets state.
+    // eslint-disable-next-line react-hooks/exhaustive-deps -- options identity changes every render
+  }, [defaultValue]);
+
   const filtered = useMemo(() => {
     const normalized = query.trim().toLowerCase();
     if (!normalized) {

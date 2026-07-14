@@ -1,6 +1,6 @@
 "use client";
 
-import { useState } from "react";
+import { useMemo, useState } from "react";
 import { SortableTable } from "@/components/sortable-table";
 import { StatusBadge } from "@/components/status-badge";
 import { formatDateTime } from "@/lib/format";
@@ -17,19 +17,21 @@ export function AdminUsersTable({
 }) {
   const [search, setSearch] = useState("");
 
-  const filtered = rows.filter((row) => {
+  const filtered = useMemo(() => {
     const query = search.trim().toLowerCase();
     if (!query) {
-      return true;
+      return rows;
     }
 
-    return (
-      row.userName.toLowerCase().includes(query) ||
-      row.userEmail.toLowerCase().includes(query) ||
-      row.role.toLowerCase().includes(query) ||
-      row.branchNames.join(" ").toLowerCase().includes(query)
-    );
-  });
+    return rows.filter((row) => {
+      return (
+        row.userName.toLowerCase().includes(query) ||
+        row.userEmail.toLowerCase().includes(query) ||
+        row.role.toLowerCase().includes(query) ||
+        row.branchNames.join(" ").toLowerCase().includes(query)
+      );
+    });
+  }, [rows, search]);
 
   return (
     <div>

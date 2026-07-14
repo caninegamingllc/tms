@@ -4,7 +4,8 @@ import Link from "next/link";
 import { useMemo, useState } from "react";
 import { ArrowDown, ArrowUp, ChevronsUpDown } from "lucide-react";
 import { clsx } from "clsx";
-import { useSortedRows, type SortableColumn } from "@/components/sortable-table";
+import { useSortedRows, useClientPagination, type SortableColumn } from "@/components/sortable-table";
+import { TablePagination } from "@/components/table-pagination";
 import { StatusBadge } from "@/components/status-badge";
 import {
   buildExportMeta,
@@ -124,20 +125,30 @@ export function LoadSearchResults({
     columnId: "pickup",
     direction: "desc"
   });
+  const pagination = useClientPagination(sortedData, loads);
+  const pageRows = pagination.pageRows;
+  const pageIds = pageRows.map((load) => load.id);
 
-  const allSelected = loads.length > 0 && selectedIds.size === loads.length;
+  const allPageSelected = pageIds.length > 0 && pageIds.every((id) => selectedIds.has(id));
   const selectedLoads = useMemo(
     () => loads.filter((load) => selectedIds.has(load.id)),
     [loads, selectedIds]
   );
 
-  function toggleAll() {
-    if (allSelected) {
-      setSelectedIds(new Set());
-      return;
-    }
-
-    setSelectedIds(new Set(loads.map((load) => load.id)));
+  function toggleAllPage() {
+    setSelectedIds((current) => {
+      const next = new Set(current);
+      if (allPageSelected) {
+        for (const id of pageIds) {
+          next.delete(id);
+        }
+      } else {
+        for (const id of pageIds) {
+          next.add(id);
+        }
+      }
+      return next;
+    });
   }
 
   function toggleOne(loadId: string) {
@@ -199,9 +210,10 @@ export function LoadSearchResults({
               <th>
                 <input
                   type="checkbox"
-                  aria-label="Select all loads"
-                  checked={allSelected}
-                  onChange={toggleAll}
+                  aria-label="Select all loads on this page"
+                  checked={allPageSelected}
+                  disabled={pageIds.length === 0}
+                  onChange={toggleAllPage}
                 />
               </th>
               {columns.slice(1).map((column) => {
@@ -249,8 +261,8 @@ export function LoadSearchResults({
             </tr>
           </thead>
           <tbody>
-            {sortedData.length ? (
-              sortedData.map((load) => (
+            {pageRows.length ? (
+              pageRows.map((load) => (
                 <tr key={load.id}>
                   <td>
                     <input
@@ -274,6 +286,18 @@ export function LoadSearchResults({
             )}
           </tbody>
         </table>
+      </div>
+      <div className="px-5 pb-5">
+        <TablePagination
+          page={pagination.page}
+          pageSize={pagination.pageSize}
+          total={pagination.total}
+          totalPages={pagination.totalPages}
+          start={pagination.start}
+          end={pagination.end}
+          onPageChange={pagination.setPage}
+          onPageSizeChange={pagination.setPageSize}
+        />
       </div>
     </section>
   );
