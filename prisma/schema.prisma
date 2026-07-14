@@ -696,7 +696,11 @@ model LoadNote {
   userId    String?
   user      User?    @relation(fields: [userId], references: [id])
   body      String
+  /// When true, note stays internal (never on docs, emails, or reports).
+  isPrivate Boolean  @default(false)
   createdAt DateTime @default(now())
+
+  @@index([loadId, isPrivate])
 }
 
 model LoadActivity {

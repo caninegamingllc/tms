@@ -10,6 +10,7 @@ export type LoadForDocument = Prisma.LoadGetPayload<{
     carrierPayLines: { include: { lineType: true } };
     dispatchAssignment: { include: { carrier: { include: { contacts: true } } } };
     invoices: true;
+    notes: true;
   };
 }>;
 
@@ -150,6 +151,42 @@ function mapCharges(load: LoadForDocument): DocumentCharge[] {
   return [{ label: "Linehaul", amountCents: load.revenueCents }];
 }
 
+/** Public load notes only — never include private notes on generated docs. */
+export function isPrivateLoadNote(note: { body: string; isPrivate: boolean }) {
+  return note.isPrivate || note.body.trim().toLowerCase().startsWith("[private]");
+}
+
+export function publicLoadNoteLines(load: {
+  notes?: Array<{ body: string; isPrivate: boolean; createdAt: Date }>;
+}) {
+  return [...(load.notes ?? [])]
+    .filter((note) => !isPrivateLoadNote(note))
+    .sort((a, b) => a.createdAt.getTime() - b.createdAt.getTime())
+    .map((note) => note.body.trim())
+    .filter(Boolean);
+}
+
+function publicNotesSection(
+  load: LoadForDocument
+): NonNullable<StructuredDocument["extraSections"]>[number] | null {
+  const lines = publicLoadNoteLines(load);
+  if (!lines.length) {
+    return null;
+  }
+  return { title: "Notes", lines };
+}
+
+function withPublicNotes(
+  sections: NonNullable<StructuredDocument["extraSections"]> | undefined,
+  load: LoadForDocument
+) {
+  const notes = publicNotesSection(load);
+  if (!notes) {
+    return sections;
+  }
+  return [...(sections ?? []), notes];
+}
+
 function line(label: string, value?: string | number | null) {
   return `${label}: ${value || "N/A"}`;
 }
@@ -220,17 +257,20 @@ export function buildRateConfirmationDocument(
     stops: mapStops(load),
     charges: payLines,
     totalCents,
-    extraSections: [
-      {
-        title: "Driver / Equipment",
-        lines: [
-          line("Driver", assignment?.driverName),
-          line("Driver Phone", assignment?.driverPhone),
-          line("Truck #", assignment?.truckNumber),
-          line("Trailer #", assignment?.trailerNumber)
-        ]
-      }
-    ],
+    extraSections: withPublicNotes(
+      [
+        {
+          title: "Driver / Equipment",
+          lines: [
+            line("Driver", assignment?.driverName),
+            line("Driver Phone", assignment?.driverPhone),
+            line("Truck #", assignment?.truckNumber),
+            line("Trailer #", assignment?.trailerNumber)
+          ]
+        }
+      ],
+      load
+    ),
     terms: [
       "Carrier must notify broker immediately of delays, OS&D, temperature issues, detention, or accessorials.",
       "Carrier must submit signed POD and all supporting receipts before payment.",
@@ -282,10 +322,11 @@ export function buildBolFormData(
   const assignment = load.dispatchAssignment;
   const carrier = assignment?.carrier;
   const weightLabel = load.weight ? load.weight.toLocaleString() : "";
-  const specialInstructions = stops
+  const stopInstructions = stops
     .map((stop) => stop.instructions?.trim())
-    .filter(Boolean)
-    .join(" | ");
+    .filter(Boolean);
+  const publicNotes = publicLoadNoteLines(load);
+  const specialInstructions = [...stopInstructions, ...publicNotes].join(" | ");
 
   return {
     date: formatDate(new Date()),
@@ -413,6 +454,7 @@ export function buildBillOfLadingDocument(
       { label: "Freight Terms", value: "3rd Party" }
     ],
     stops: mapStops(load),
+    extraSections: withPublicNotes(undefined, load),
     terms: [
       "Liability Limitation for loss or damage in this shipment may be applicable. See 49 U.S.C. § 14706(c)(1)(A) and (B).",
       "Driver must verify piece count, condition, seal number, and temperature if applicable.",
@@ -463,6 +505,7 @@ export function buildCustomerInvoiceDocument(
     stops: mapStops(load),
     charges,
     totalCents,
+    extraSections: withPublicNotes(undefined, load),
     terms: ["Payment is due per the terms stated above. Please reference the invoice number on remittance."],
     signatures: [],
     remittance: [
@@ -519,6 +562,7 @@ export function buildCustomerLoadConfirmationDocument(
     stops: mapStops(load),
     charges,
     totalCents: load.revenueCents,
+    extraSections: withPublicNotes(undefined, load),
     terms: [
       "Please review the schedule and contact your broker immediately with any changes.",
       "This confirmation acknowledges the load details and customer rates described above."

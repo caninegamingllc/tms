@@ -70,7 +70,8 @@ async function loadForEmail(loadId: string, user: SessionUser) {
           carrier: { include: { contacts: true } }
         }
       },
-      invoices: { orderBy: { createdAt: "desc" } }
+      invoices: { orderBy: { createdAt: "desc" } },
+      notes: { orderBy: { createdAt: "asc" } }
     }
   });
 

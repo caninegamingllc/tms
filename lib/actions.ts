@@ -62,7 +62,8 @@ async function loadForDocument(loadId: string, user: SessionUser) {
           carrier: { include: { contacts: true } }
         }
       },
-      invoices: { orderBy: { createdAt: "desc" } }
+      invoices: { orderBy: { createdAt: "desc" } },
+      notes: { orderBy: { createdAt: "asc" } }
     }
   });
 
@@ -596,6 +597,54 @@ export async function updateLoadStatus(formData: FormData) {
 
   revalidatePath("/loads");
   revalidatePath("/commissions");
+  revalidatePath(`/loads/${loadId}`);
+}
+
+export async function addLoadNote(formData: FormData) {
+  const user = await requireWriteUser();
+  const loadId = requiredString(formData, "loadId");
+  const body = requiredString(formData, "body");
+  const visibility = String(formData.get("visibility") ?? "public").trim().toLowerCase();
+  const isPrivate = visibility === "private";
+  await requireCompanyLoad(loadId, user);
+
+  await prisma.$transaction([
+    prisma.loadNote.create({
+      data: {
+        loadId,
+        userId: user.id,
+        body,
+        isPrivate
+      }
+    }),
+    prisma.loadActivity.create({
+      data: {
+        loadId,
+        userId: user.id,
+        action: isPrivate ? "Private note added" : "Public note added",
+        details: body
+      }
+    })
+  ]);
+
+  revalidatePath(`/loads/${loadId}`);
+}
+
+export async function addLoadActivityNote(formData: FormData) {
+  const user = await requireWriteUser();
+  const loadId = requiredString(formData, "loadId");
+  const body = requiredString(formData, "body");
+  await requireCompanyLoad(loadId, user);
+
+  await prisma.loadActivity.create({
+    data: {
+      loadId,
+      userId: user.id,
+      action: "Activity note",
+      details: body
+    }
+  });
+
   revalidatePath(`/loads/${loadId}`);
 }
 

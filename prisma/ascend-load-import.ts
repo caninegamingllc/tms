@@ -421,19 +421,20 @@ async function importLoad(
     };
   });
 
-  const notes: { body: string; userId: string }[] = [];
+  const notes: { body: string; userId: string; isPrivate?: boolean }[] = [];
   const publicNotes = row.Notes?.trim();
   const privateNotes = row["Private Notes"]?.trim();
   if (publicNotes) {
-    notes.push({ body: publicNotes, userId: branchContext.userId });
+    notes.push({ body: publicNotes, userId: branchContext.userId, isPrivate: false });
   }
   if (privateNotes) {
-    notes.push({ body: `[Private] ${privateNotes}`, userId: branchContext.userId });
+    notes.push({ body: privateNotes, userId: branchContext.userId, isPrivate: true });
   }
   if (equipmentRaw && equipmentRaw !== equipmentType) {
     notes.push({
       body: `[Ascend Equipment] ${equipmentRaw}`,
-      userId: branchContext.userId
+      userId: branchContext.userId,
+      isPrivate: true
     });
   }
 

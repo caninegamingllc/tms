@@ -8,6 +8,8 @@ import { CarrierPayLinesEditor } from "@/components/carrier-pay-lines-editor";
 import { StatusBadge } from "@/components/status-badge";
 import {
   addCheckCall,
+  addLoadActivityNote,
+  addLoadNote,
   assignCarrier,
   generateBillOfLading,
   generateCustomerInvoice,
@@ -38,6 +40,7 @@ import { expenseTypes, loadStatuses } from "@/lib/constants";
 import { ensureCompanyCatalogs } from "@/lib/catalogs";
 import { prisma } from "@/lib/db";
 import { commissionMethodLabel, formatDate, formatDateTime, formatMoney, humanize, marginPercent } from "@/lib/format";
+import { isPrivateLoadNote } from "@/lib/document-templates";
 import {
   pushCarrierBillToQuickbooksAction,
   pushInvoiceToQuickbooksAction
@@ -168,6 +171,9 @@ export default async function LoadDetailPage({
       .join(" - ")
   }));
 
+  const publicNotes = load.notes.filter((note) => !isPrivateLoadNote(note));
+  const privateNotes = load.notes.filter((note) => isPrivateLoadNote(note));
+
   return (
     <>
       <PageHeader
@@ -271,6 +277,87 @@ export default async function LoadDetailPage({
               ))}
             </div>
             <LoadRoutePanel loadId={load.id} />
+          </section>
+
+          <section className="card">
+            <h2 className="section-title">Notes</h2>
+            <p className="muted">
+              Public notes appear on rate confirmations, load confirmations, BOLs, invoices, and
+              related documents. Private notes stay internal only.
+            </p>
+
+            <div className="mt-4 grid gap-4 lg:grid-cols-2">
+              <div className="rounded-2xl border border-border p-4">
+                <h3 className="font-semibold text-foreground">Public Notes</h3>
+                <div className="mt-3 grid gap-3">
+                  {publicNotes.length === 0 ? (
+                    <p className="text-sm text-muted-foreground">No public notes yet.</p>
+                  ) : (
+                    publicNotes.map((note) => (
+                        <div key={note.id} className="rounded-xl bg-muted p-3 text-sm">
+                          <p className="text-slate-700 whitespace-pre-wrap">{note.body}</p>
+                          <p className="mt-2 text-xs text-muted-foreground">
+                            {note.user?.name ?? "System"} · {formatDateTime(note.createdAt)}
+                          </p>
+                        </div>
+                      ))
+                  )}
+                </div>
+                {canWrite(user) ? (
+                  <form action={addLoadNote} className="mt-4 grid gap-3">
+                    <input type="hidden" name="loadId" value={load.id} />
+                    <input type="hidden" name="visibility" value="public" />
+                    <textarea
+                      name="body"
+                      className="textarea"
+                      rows={3}
+                      placeholder="Add a public note…"
+                      required
+                    />
+                    <button type="submit" className="btn-secondary">
+                      Save Public Note
+                    </button>
+                  </form>
+                ) : null}
+              </div>
+
+              <div className="rounded-2xl border border-border p-4">
+                <h3 className="font-semibold text-foreground">Private Notes</h3>
+                <p className="mt-1 text-xs text-muted-foreground">
+                  Never shown on documents, emails, or reports.
+                </p>
+                <div className="mt-3 grid gap-3">
+                  {privateNotes.length === 0 ? (
+                    <p className="text-sm text-muted-foreground">No private notes yet.</p>
+                  ) : (
+                    privateNotes.map((note) => (
+                        <div key={note.id} className="rounded-xl bg-muted p-3 text-sm">
+                          <p className="text-slate-700 whitespace-pre-wrap">{note.body}</p>
+                          <p className="mt-2 text-xs text-muted-foreground">
+                            {note.user?.name ?? "System"} · {formatDateTime(note.createdAt)}
+                          </p>
+                        </div>
+                      ))
+                  )}
+                </div>
+                {canWrite(user) ? (
+                  <form action={addLoadNote} className="mt-4 grid gap-3">
+                    <input type="hidden" name="loadId" value={load.id} />
+                    <input type="hidden" name="visibility" value="private" />
+                    <textarea
+                      name="body"
+                      className="textarea"
+                      rows={3}
+                      placeholder="Add a private note…"
+                      required
+                    />
+                    <button type="submit" className="btn-secondary">
+                      Save Private Note
+                    </button>
+                  </form>
+                ) : null}
+              </div>
+            </div>
           </section>
 
           <section className="card">
@@ -672,14 +759,36 @@ export default async function LoadDetailPage({
 
           <section className="card">
             <h2 className="section-title">Activity Log</h2>
+            {canWrite(user) ? (
+              <form action={addLoadActivityNote} className="mt-4 grid gap-3 rounded-2xl bg-muted p-4">
+                <input type="hidden" name="loadId" value={load.id} />
+                <textarea
+                  name="body"
+                  className="textarea"
+                  rows={3}
+                  placeholder="Add a note to the activity log…"
+                  required
+                />
+                <button type="submit" className="btn-secondary">
+                  Save Activity Note
+                </button>
+              </form>
+            ) : null}
             <div className="mt-4 grid gap-3">
-              {load.activities.map((activity) => (
-                <div key={activity.id} className="rounded-2xl border border-border p-3">
-                  <p className="font-semibold text-foreground">{activity.action}</p>
-                  <p className="muted">{activity.details ?? "No details"}</p>
-                  <p className="text-xs text-muted-foreground">{formatDateTime(activity.createdAt)}</p>
-                </div>
-              ))}
+              {load.activities.length === 0 ? (
+                <p className="text-sm text-muted-foreground">No activity yet.</p>
+              ) : (
+                load.activities.map((activity) => (
+                  <div key={activity.id} className="rounded-2xl border border-border p-3">
+                    <p className="font-semibold text-foreground">{activity.action}</p>
+                    <p className="muted whitespace-pre-wrap">{activity.details ?? "No details"}</p>
+                    <p className="text-xs text-muted-foreground">
+                      {activity.user?.name ? `${activity.user.name} · ` : ""}
+                      {formatDateTime(activity.createdAt)}
+                    </p>
+                  </div>
+                ))
+              )}
             </div>
           </section>
         </aside>
