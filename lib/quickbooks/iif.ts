@@ -12,6 +12,7 @@ type IifCustomer = {
 
 type IifVendor = {
   name: string;
+  printAs?: string | null;
   address?: string | null;
   city?: string | null;
   state?: string | null;
@@ -91,13 +92,16 @@ export function buildIifFile(input: {
   }
 
   if (input.vendors.length > 0) {
-    lines.push(tabRow(["!VEND", "NAME", "BADDR1", "BADDR2", "BADDR3", "PHONE1", "EMAIL", "CONT1"]));
+    lines.push(
+      tabRow(["!VEND", "NAME", "PRINTAS", "BADDR1", "BADDR2", "BADDR3", "PHONE1", "EMAIL", "CONT1"])
+    );
     for (const vendor of input.vendors) {
       const addr = addressLines(vendor);
       lines.push(
         tabRow([
           "VEND",
           vendor.name,
+          vendor.printAs ?? vendor.name,
           addr.baddr1,
           addr.baddr2,
           addr.baddr3,

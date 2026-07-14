@@ -36,6 +36,7 @@ export default async function CarrierDetailPage({
     where: { id, companyId: user.companyId },
     include: {
       contacts: true,
+      factoringCompany: true,
       insuranceCoverages: { orderBy: [{ expiresAt: "asc" }, { coverageType: "asc" }] },
       documents: { include: { uploadedBy: true, load: true, customer: true, carrier: true } },
       assignments: { include: { load: true }, orderBy: { assignedAt: "desc" } }
@@ -45,6 +46,11 @@ export default async function CarrierDetailPage({
   if (!carrier) {
     notFound();
   }
+
+  const factoringCompanies = await prisma.factoringCompany.findMany({
+    where: { companyId: user.companyId, status: "Active" },
+    orderBy: { name: "asc" }
+  });
 
   const totalSpend = carrier.assignments.reduce((sum, assignment) => sum + assignment.rateCents, 0);
 
@@ -114,6 +120,41 @@ export default async function CarrierDetailPage({
               </select>
             </div>
             <input name="safetyRating" className="input" defaultValue={carrier.safetyRating ?? ""} placeholder="Safety rating" />
+            <div className="rounded-2xl border border-border p-4">
+              <p className="mb-3 text-sm font-semibold text-foreground">Payment & Factoring</p>
+              <div className="grid gap-3 md:grid-cols-2">
+                <input
+                  name="paymentTerms"
+                  className="input"
+                  defaultValue={carrier.paymentTerms}
+                  placeholder="Payment terms (e.g. Net 30)"
+                />
+                <input
+                  name="paymentMethod"
+                  className="input"
+                  defaultValue={carrier.paymentMethod ?? ""}
+                  placeholder="Payment method"
+                />
+              </div>
+              <select
+                name="factoringCompanyId"
+                className="select mt-3"
+                defaultValue={carrier.factoringCompanyId ?? ""}
+              >
+                <option value="">Pay carrier directly (no factor)</option>
+                {factoringCompanies.map((factor) => (
+                  <option key={factor.id} value={factor.id}>
+                    {factor.name} — check: {factor.nameOnCheck}
+                  </option>
+                ))}
+              </select>
+              {carrier.factoringCompany ? (
+                <p className="mt-2 text-xs text-muted-foreground">
+                  Payee for QuickBooks: {carrier.factoringCompany.name} · Print on check:{" "}
+                  {carrier.factoringCompany.nameOnCheck}
+                </p>
+              ) : null}
+            </div>
             <button className="btn" type="submit">
               Save Carrier
             </button>

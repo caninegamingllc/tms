@@ -304,21 +304,17 @@ async function ensureCustomer(companyId: string, customerId: string) {
   return created.Customer.Id;
 }
 
-async function ensureVendor(companyId: string, carrierId: string) {
-  const carrier = await prisma.carrier.findUniqueOrThrow({
-    where: { id: carrierId, companyId }
-  });
+async function ensureVendorForBill(companyId: string, billId: string) {
+  const { resolveBillApPayee, storePayeeQboId } = await import("@/lib/accounting-payee");
+  const payee = await resolveBillApPayee(billId, companyId);
 
-  if (carrier.externalQboId) {
-    return carrier.externalQboId;
+  if (payee.externalQboId) {
+    return payee.externalQboId;
   }
 
-  const existingId = await findEntityByDisplayName(companyId, "Vendor", carrier.name);
+  const existingId = await findEntityByDisplayName(companyId, "Vendor", payee.displayName);
   if (existingId) {
-    await prisma.carrier.update({
-      where: { id: carrier.id },
-      data: { externalQboId: existingId }
-    });
+    await storePayeeQboId(payee, existingId);
     return existingId;
   }
 
@@ -326,23 +322,20 @@ async function ensureVendor(companyId: string, carrierId: string) {
     method: "POST",
     query: { minorversion: "65" },
     body: JSON.stringify({
-      DisplayName: carrier.name,
-      PrimaryEmailAddr: carrier.email ? { Address: carrier.email } : undefined,
-      PrimaryPhone: carrier.phone ? { FreeFormNumber: carrier.phone } : undefined,
+      DisplayName: payee.displayName,
+      PrintOnCheckName: payee.nameOnCheck,
+      PrimaryEmailAddr: payee.email ? { Address: payee.email } : undefined,
+      PrimaryPhone: payee.phone ? { FreeFormNumber: payee.phone } : undefined,
       BillAddr: {
-        Line1: carrier.address ?? undefined,
-        City: carrier.city ?? undefined,
-        CountrySubDivisionCode: carrier.state ?? undefined,
-        PostalCode: carrier.postalCode ?? undefined
+        Line1: payee.address ?? undefined,
+        City: payee.city ?? undefined,
+        CountrySubDivisionCode: payee.state ?? undefined,
+        PostalCode: payee.postalCode ?? undefined
       }
     })
   });
 
-  await prisma.carrier.update({
-    where: { id: carrier.id },
-    data: { externalQboId: created.Vendor.Id }
-  });
-
+  await storePayeeQboId(payee, created.Vendor.Id);
   return created.Vendor.Id;
 }
 
@@ -495,7 +488,7 @@ export async function pushCarrierBillToQuickbooks(input: {
   });
 
   try {
-    const vendorRef = await ensureVendor(input.companyId, bill.carrierId);
+    const vendorRef = await ensureVendorForBill(input.companyId, bill.id);
     const amount = centsToAmount(bill.totalCents);
     const line = {
       Amount: amount,

@@ -6,6 +6,7 @@ import type { CarrierLookupResult } from "@/lib/carrier-lookup";
 
 type CarrierLookupFormProps = {
   action: (formData: FormData) => void | Promise<void>;
+  factoringCompanies?: { id: string; name: string; nameOnCheck: string }[];
 };
 
 type ActiveField = "mc" | "dot" | null;
@@ -14,7 +15,7 @@ function resultLabel(result: CarrierLookupResult) {
   return result.source === "local" ? "Existing carrier in TMS" : "FMCSA match";
 }
 
-export function CarrierLookupForm({ action }: CarrierLookupFormProps) {
+export function CarrierLookupForm({ action, factoringCompanies = [] }: CarrierLookupFormProps) {
   const [name, setName] = useState("");
   const [mcNumber, setMcNumber] = useState("");
   const [dotNumber, setDotNumber] = useState("");
@@ -28,6 +29,9 @@ export function CarrierLookupForm({ action }: CarrierLookupFormProps) {
   const [safetyRating, setSafetyRating] = useState("");
   const [complianceStatus, setComplianceStatus] = useState("Needs Review");
   const [status, setStatus] = useState("Active");
+  const [paymentTerms, setPaymentTerms] = useState("Net 30");
+  const [paymentMethod, setPaymentMethod] = useState("");
+  const [factoringCompanyId, setFactoringCompanyId] = useState("");
   const [insuranceExpiresAt, setInsuranceExpiresAt] = useState("");
   const [activeField, setActiveField] = useState<ActiveField>(null);
   const [results, setResults] = useState<CarrierLookupResult[]>([]);
@@ -389,6 +393,39 @@ export function CarrierLookupForm({ action }: CarrierLookupFormProps) {
           value={insuranceExpiresAt}
           onChange={(event) => setInsuranceExpiresAt(event.target.value)}
         />
+      </div>
+
+      <div className="rounded-2xl border border-border p-4">
+        <p className="mb-3 text-sm font-semibold text-foreground">Payment & Factoring</p>
+        <div className="grid gap-3 md:grid-cols-2">
+          <input
+            name="paymentTerms"
+            className="input"
+            placeholder="Payment terms (e.g. Net 30)"
+            value={paymentTerms}
+            onChange={(event) => setPaymentTerms(event.target.value)}
+          />
+          <input
+            name="paymentMethod"
+            className="input"
+            placeholder="Payment method (Check, ACH…)"
+            value={paymentMethod}
+            onChange={(event) => setPaymentMethod(event.target.value)}
+          />
+        </div>
+        <select
+          name="factoringCompanyId"
+          className="select mt-3"
+          value={factoringCompanyId}
+          onChange={(event) => setFactoringCompanyId(event.target.value)}
+        >
+          <option value="">Pay carrier directly (no factor)</option>
+          {factoringCompanies.map((factor) => (
+            <option key={factor.id} value={factor.id}>
+              {factor.name} — check: {factor.nameOnCheck}
+            </option>
+          ))}
+        </select>
       </div>
 
       <div className="rounded-2xl bg-muted p-4">

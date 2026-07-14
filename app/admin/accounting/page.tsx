@@ -1,5 +1,6 @@
 import Link from "next/link";
 import { PageHeader } from "@/components/page-header";
+import { FactoringCompaniesAdmin } from "@/components/factoring-companies-admin";
 import { requireAdmin } from "@/lib/auth";
 import { prisma } from "@/lib/db";
 import {
@@ -17,25 +18,32 @@ export default async function AdminAccountingPage({
     saved?: string;
     connected?: string;
     disconnected?: string;
+    factorSaved?: string;
     error?: string;
   }>;
 }) {
   const admin = await requireAdmin();
   const params = await searchParams;
 
-  const [company, qboAccount] = await Promise.all([
+  const [company, qboAccount, factoringCompanies] = await Promise.all([
     prisma.company.findUniqueOrThrow({ where: { id: admin.companyId } }),
     prisma.integrationAccount.findUnique({
       where: {
         companyId_provider: { companyId: admin.companyId, provider: "QUICKBOOKS" }
       }
+    }),
+    prisma.factoringCompany.findMany({
+      where: { companyId: admin.companyId },
+      orderBy: { name: "asc" },
+      include: { _count: { select: { carriers: true } } }
     })
   ]);
 
   const config = parseQuickbooksConfig(company.quickbooksConfigJson);
-  const method = company.quickbooksMethod === "ONLINE" || company.quickbooksMethod === "IIF"
-    ? company.quickbooksMethod
-    : "NONE";
+  const method =
+    company.quickbooksMethod === "ONLINE" || company.quickbooksMethod === "IIF"
+      ? company.quickbooksMethod
+      : "NONE";
   const qboConfigured = isQuickbooksOnlineConfigured();
   const qboConnected = qboAccount?.status === "Connected";
 
@@ -43,7 +51,7 @@ export default async function AdminAccountingPage({
     <>
       <PageHeader
         title="Accounting Settings"
-        description="Choose how this organization exports invoices and carrier bills to QuickBooks."
+        description="Choose how this organization exports invoices and carrier bills to QuickBooks, and manage factoring payees."
       />
 
       <div className="mb-6">
@@ -60,6 +68,11 @@ export default async function AdminAccountingPage({
       {params.saved ? (
         <div className="card mb-6 border-emerald-200 bg-emerald-50 text-sm font-semibold text-emerald-800">
           Accounting settings saved. Export history for each method is preserved.
+        </div>
+      ) : null}
+      {params.factorSaved ? (
+        <div className="card mb-6 border-emerald-200 bg-emerald-50 text-sm font-semibold text-emerald-800">
+          Factoring company saved.
         </div>
       ) : null}
       {params.connected ? (
@@ -218,6 +231,22 @@ export default async function AdminAccountingPage({
           ) : null}
         </div>
       </section>
+
+      <FactoringCompaniesAdmin
+        companies={factoringCompanies.map((row) => ({
+          id: row.id,
+          name: row.name,
+          nameOnCheck: row.nameOnCheck,
+          phone: row.phone,
+          email: row.email,
+          address: row.address,
+          city: row.city,
+          state: row.state,
+          postalCode: row.postalCode,
+          status: row.status,
+          carrierCount: row._count.carriers
+        }))}
+      />
     </>
   );
 }

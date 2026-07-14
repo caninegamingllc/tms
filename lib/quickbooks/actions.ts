@@ -8,7 +8,6 @@ import { requireAdmin } from "@/lib/auth";
 import { prisma } from "@/lib/db";
 import { requireWriteUser } from "@/lib/permissions";
 import { canAccessRecord } from "@/lib/branch-filter-server";
-import { recalculateLoadCommission } from "@/lib/commission";
 import {
   disconnectQuickbooksOnline,
   pushCarrierBillToQuickbooks,
@@ -156,18 +155,11 @@ export async function markCarrierBillPaid(formData: FormData) {
     throw new Error("Carrier bill not found.");
   }
 
-  await prisma.carrierBill.update({
-    where: { id: billId },
-    data: { status: "PAID", paidAt: new Date() }
-  });
-
-  await prisma.loadActivity.create({
-    data: {
-      loadId: bill.loadId,
-      userId: user.id,
-      action: "Carrier bill paid",
-      details: `Carrier bill ${bill.billNo} marked paid.`
-    }
+  const { applyFullCarrierBillPayment } = await import("@/lib/accounting-actions");
+  await applyFullCarrierBillPayment({
+    companyId: user.companyId,
+    userId: user.id,
+    billId
   });
 
   revalidatePath("/accounting");
@@ -175,52 +167,22 @@ export async function markCarrierBillPaid(formData: FormData) {
 }
 
 async function markInvoicePaidInternal(companyId: string, invoiceId: string, userId: string) {
-  const invoice = await prisma.invoice.findUniqueOrThrow({
-    where: { id: invoiceId, companyId },
-    include: { load: true }
+  const { applyFullInvoicePayment } = await import("@/lib/accounting-actions");
+  await applyFullInvoicePayment({
+    companyId,
+    userId,
+    invoiceId,
+    notes: "Marked paid from QuickBooks reconcile"
   });
-
-  const now = new Date();
-  await prisma.$transaction(async (tx) => {
-    await tx.invoice.update({
-      where: { id: invoiceId },
-      data: { status: "PAID", paidAt: now }
-    });
-    await tx.load.update({
-      where: { id: invoice.loadId },
-      data: {
-        status: "PAID",
-        activities: {
-          create: {
-            userId,
-            action: "Customer paid",
-            details: `Invoice ${invoice.invoiceNo} marked paid from QuickBooks reconcile.`
-          }
-        }
-      }
-    });
-  });
-
-  await recalculateLoadCommission(invoice.loadId);
 }
 
 async function markCarrierBillPaidInternal(companyId: string, billId: string, userId: string) {
-  const bill = await prisma.carrierBill.findUniqueOrThrow({
-    where: { id: billId, companyId }
-  });
-
-  await prisma.carrierBill.update({
-    where: { id: billId },
-    data: { status: "PAID", paidAt: new Date() }
-  });
-
-  await prisma.loadActivity.create({
-    data: {
-      loadId: bill.loadId,
-      userId,
-      action: "Carrier bill paid",
-      details: `Carrier bill ${bill.billNo} marked paid from QuickBooks reconcile.`
-    }
+  const { applyFullCarrierBillPayment } = await import("@/lib/accounting-actions");
+  await applyFullCarrierBillPayment({
+    companyId,
+    userId,
+    billId,
+    notes: "Marked paid from QuickBooks reconcile"
   });
 }
 

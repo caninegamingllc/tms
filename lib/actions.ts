@@ -24,6 +24,8 @@ import {
   serializeDocumentTypes
 } from "@/lib/document-types";
 import { ensureCompanyCatalogs } from "@/lib/catalogs";
+import { dueDateFromTerms, parsePaymentTermsDays } from "@/lib/accounting-aging";
+import { resolveCarrierApPayee } from "@/lib/accounting-payee";
 
 function requiredString(formData: FormData, key: string) {
   const value = String(formData.get(key) ?? "").trim();
@@ -235,6 +237,12 @@ export async function createCarrier(formData: FormData) {
   const dotNumber = optionalString(formData, "dotNumber");
   const mcNumberNormalized = normalizeCarrierNumber(mcNumber);
   const dotNumberNormalized = normalizeCarrierNumber(dotNumber);
+  const factoringCompanyId = optionalString(formData, "factoringCompanyId");
+  if (factoringCompanyId) {
+    await prisma.factoringCompany.findUniqueOrThrow({
+      where: { id: factoringCompanyId, companyId: user.companyId }
+    });
+  }
   const duplicate = await duplicateCarrierAuthority(
     user.companyId,
     mcNumberNormalized,
@@ -264,6 +272,9 @@ export async function createCarrier(formData: FormData) {
       equipmentTypes: optionalString(formData, "equipmentTypes"),
       safetyRating: optionalString(formData, "safetyRating"),
       complianceStatus: requiredString(formData, "complianceStatus"),
+      paymentTerms: optionalString(formData, "paymentTerms") ?? "Net 30",
+      paymentMethod: optionalString(formData, "paymentMethod"),
+      factoringCompanyId: factoringCompanyId || null,
       insuranceExpiresAt,
       insuranceCoverages: insuranceExpiresAt
         ? {
@@ -310,6 +321,13 @@ export async function updateCarrier(formData: FormData) {
     redirect(`/carriers/${carrierId}?error=${encodeURIComponent(duplicate)}`);
   }
 
+  const factoringCompanyId = optionalString(formData, "factoringCompanyId");
+  if (factoringCompanyId) {
+    await prisma.factoringCompany.findUniqueOrThrow({
+      where: { id: factoringCompanyId, companyId: user.companyId }
+    });
+  }
+
   await prisma.carrier.update({
     where: { id: carrierId },
     data: {
@@ -327,7 +345,10 @@ export async function updateCarrier(formData: FormData) {
       postalCode: optionalString(formData, "postalCode"),
       equipmentTypes: optionalString(formData, "equipmentTypes"),
       safetyRating: optionalString(formData, "safetyRating"),
-      complianceStatus: requiredString(formData, "complianceStatus")
+      complianceStatus: requiredString(formData, "complianceStatus"),
+      paymentTerms: optionalString(formData, "paymentTerms") ?? "Net 30",
+      paymentMethod: optionalString(formData, "paymentMethod"),
+      factoringCompanyId: factoringCompanyId || null
     }
   });
 
@@ -1096,8 +1117,7 @@ export async function generateCustomerInvoice(formData: FormData) {
   const load = await loadForDocument(loadId, user);
   const invoiceNumber = await nextInvoiceNumber(user.companyId);
   const issuedAt = new Date();
-  const dueAt = new Date();
-  dueAt.setDate(dueAt.getDate() + 30);
+  const dueAt = dueDateFromTerms(issuedAt, load.customer.paymentTerms);
 
   const invoice =
     load.invoices[0] ??
@@ -1109,6 +1129,7 @@ export async function generateCustomerInvoice(formData: FormData) {
         customerId: load.customerId,
         status: "DRAFT",
         totalCents: load.revenueCents,
+        balanceCents: load.revenueCents,
         issuedAt,
         dueAt
       }
@@ -1161,6 +1182,8 @@ export async function createInvoice(formData: FormData) {
   const user = await requireWriteUser();
   const loadId = requiredString(formData, "loadId");
   const load = await requireCompanyLoad(loadId, user);
+  const totalCents = parseMoneyToCents(formData.get("total"));
+  const status = requiredString(formData, "status");
 
   await prisma.invoice.create({
     data: {
@@ -1168,10 +1191,12 @@ export async function createInvoice(formData: FormData) {
       invoiceNo: requiredString(formData, "invoiceNo"),
       loadId,
       customerId: load.customerId,
-      status: requiredString(formData, "status"),
-      totalCents: parseMoneyToCents(formData.get("total")),
+      status,
+      totalCents,
+      balanceCents: status === "PAID" || status === "VOID" ? 0 : totalCents,
       issuedAt: optionalDate(formData, "issuedAt"),
-      dueAt: optionalDate(formData, "dueAt")
+      dueAt: optionalDate(formData, "dueAt"),
+      paidAt: status === "PAID" ? new Date() : undefined
     }
   });
 
@@ -1186,19 +1211,115 @@ export async function createCarrierBill(formData: FormData) {
   await requireCompanyLoad(loadId, user);
   await requireCompanyCarrier(carrierId, user.companyId);
 
+  const totalCents = parseMoneyToCents(formData.get("total"));
+  const status = optionalString(formData, "status") ?? "APPROVED";
+  const payee = await resolveCarrierApPayee(carrierId, user.companyId);
+  const receivedAt = optionalDate(formData, "receivedAt") ?? new Date();
+  const termsRaw = optionalString(formData, "paymentTermsDays");
+  const paymentTermsDays = termsRaw != null ? Number(termsRaw) : parsePaymentTermsDays(
+    (await prisma.carrier.findUniqueOrThrow({ where: { id: carrierId } })).paymentTerms
+  );
+  const dueAt =
+    optionalDate(formData, "dueAt") ??
+    (() => {
+      const due = new Date(receivedAt);
+      due.setDate(due.getDate() + (Number.isFinite(paymentTermsDays) ? paymentTermsDays : 30));
+      return due;
+    })();
+
+  const billNo =
+    optionalString(formData, "billNo") ??
+    (await (async () => {
+      const count = await prisma.carrierBill.count({ where: { companyId: user.companyId } });
+      return `CB-${String(count + 1001).padStart(4, "0")}`;
+    })());
+
+  const nameOnCheck = optionalString(formData, "nameOnCheck") ?? payee.nameOnCheck;
+  const payeeName = optionalString(formData, "payeeName") ?? payee.displayName;
+
   await prisma.carrierBill.create({
     data: {
       companyId: user.companyId,
-      billNo: requiredString(formData, "billNo"),
+      billNo,
       loadId,
       carrierId,
-      status: requiredString(formData, "status"),
-      totalCents: parseMoneyToCents(formData.get("total")),
-      receivedAt: optionalDate(formData, "receivedAt"),
-      dueAt: optionalDate(formData, "dueAt")
+      status,
+      totalCents,
+      balanceCents: status === "PAID" || status === "VOID" ? 0 : totalCents,
+      payeeName,
+      nameOnCheck,
+      remitAddress: optionalString(formData, "remitAddress"),
+      billReference: optionalString(formData, "billReference"),
+      paymentTermsDays: Number.isFinite(paymentTermsDays) ? paymentTermsDays : 30,
+      paymentMethod: optionalString(formData, "paymentMethod"),
+      notes: optionalString(formData, "notes"),
+      factoringCompanyId: payee.factoringCompanyId,
+      receivedAt,
+      dueAt,
+      paidAt: status === "PAID" ? new Date() : undefined
     }
   });
 
   revalidatePath("/accounting");
   revalidatePath(`/loads/${loadId}`);
+  redirect("/accounting?tab=bills&billSaved=1");
+}
+
+export async function updateCarrierBill(formData: FormData) {
+  const user = await requireWriteUser();
+  const billId = requiredString(formData, "billId");
+  const bill = await prisma.carrierBill.findUniqueOrThrow({
+    where: { id: billId, companyId: user.companyId },
+    include: { load: true }
+  });
+
+  if (!(await canAccessRecord(user, bill.load.branchId))) {
+    throw new Error("Carrier bill not found.");
+  }
+
+  if (bill.status === "PAID" || bill.status === "VOID") {
+    throw new Error("Paid or void bills cannot be edited.");
+  }
+
+  const totalCents = parseMoneyToCents(formData.get("total"));
+  const receivedAt = optionalDate(formData, "receivedAt") ?? bill.receivedAt ?? new Date();
+  const termsRaw = optionalString(formData, "paymentTermsDays");
+  const paymentTermsDays =
+    termsRaw != null && termsRaw !== ""
+      ? Number(termsRaw)
+      : bill.paymentTermsDays ?? 30;
+  const dueAt =
+    optionalDate(formData, "dueAt") ??
+    (() => {
+      const due = new Date(receivedAt);
+      due.setDate(due.getDate() + (Number.isFinite(paymentTermsDays) ? paymentTermsDays : 30));
+      return due;
+    })();
+
+  const paidSoFar = bill.totalCents - bill.balanceCents;
+  const balanceCents = Math.max(0, totalCents - paidSoFar);
+
+  await prisma.carrierBill.update({
+    where: { id: billId },
+    data: {
+      totalCents,
+      balanceCents,
+      status: balanceCents <= 0 ? "PAID" : bill.status === "DRAFT" ? "APPROVED" : bill.status,
+      nameOnCheck: optionalString(formData, "nameOnCheck") ?? bill.nameOnCheck,
+      payeeName: optionalString(formData, "payeeName") ?? bill.payeeName,
+      remitAddress: optionalString(formData, "remitAddress"),
+      billReference: optionalString(formData, "billReference"),
+      paymentTermsDays: Number.isFinite(paymentTermsDays) ? paymentTermsDays : bill.paymentTermsDays,
+      paymentMethod: optionalString(formData, "paymentMethod"),
+      notes: optionalString(formData, "notes"),
+      receivedAt,
+      dueAt,
+      paidAt: balanceCents <= 0 ? bill.paidAt ?? new Date() : null
+    }
+  });
+
+  revalidatePath("/accounting");
+  revalidatePath(`/loads/${bill.loadId}`);
+  revalidatePath(`/accounting/bills/${billId}`);
+  redirect("/accounting?tab=bills&billSaved=1");
 }

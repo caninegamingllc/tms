@@ -46,7 +46,7 @@ export async function GET(request: Request) {
     }),
     prisma.carrierBill.findMany({
       where: billWhere,
-      include: { carrier: true, load: true }
+      include: { carrier: true, load: true, factoringCompany: true }
     }),
     prisma.accountingExport.findMany({
       where: {
@@ -86,7 +86,38 @@ export async function GET(request: Request) {
   const customerMap = new Map(
     accessibleInvoices.map((invoice) => [invoice.customer.id, invoice.customer])
   );
-  const vendorMap = new Map(accessibleBills.map((bill) => [bill.carrier.id, bill.carrier]));
+
+  const vendorMap = new Map<
+    string,
+    {
+      name: string;
+      printAs?: string | null;
+      address?: string | null;
+      city?: string | null;
+      state?: string | null;
+      postalCode?: string | null;
+      phone?: string | null;
+      email?: string | null;
+    }
+  >();
+
+  for (const bill of accessibleBills) {
+    const factor = bill.factoringCompany;
+    const displayName = bill.payeeName || factor?.name || bill.carrier.name;
+    const printAs = bill.nameOnCheck || factor?.nameOnCheck || displayName;
+    if (!vendorMap.has(displayName)) {
+      vendorMap.set(displayName, {
+        name: displayName,
+        printAs,
+        address: factor?.address ?? bill.carrier.address,
+        city: factor?.city ?? bill.carrier.city,
+        state: factor?.state ?? bill.carrier.state,
+        postalCode: factor?.postalCode ?? bill.carrier.postalCode,
+        phone: factor?.phone ?? bill.carrier.phone,
+        email: factor?.email ?? bill.carrier.email
+      });
+    }
+  }
 
   const content = buildIifFile({
     customers: [...customerMap.values()],
@@ -101,7 +132,7 @@ export async function GET(request: Request) {
     bills: accessibleBills.map((bill) => ({
       docNumber: bill.billNo,
       date: bill.receivedAt ?? bill.createdAt,
-      vendorName: bill.carrier.name,
+      vendorName: bill.payeeName || bill.factoringCompany?.name || bill.carrier.name,
       amountCents: bill.totalCents,
       memo: `Load ${bill.load.loadNumber}`
     })),

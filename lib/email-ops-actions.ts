@@ -24,6 +24,7 @@ import { parseDocumentTypes } from "@/lib/document-types";
 import { getAbsolutePath } from "@/lib/document-storage";
 import { type MailAttachment, sendViaUserMailbox } from "@/lib/mail/user-mailbox";
 import { generateDocumentPdf, pdfFilenameForDocument } from "@/lib/pdf-documents";
+import { dueDateFromTerms } from "@/lib/accounting-aging";
 
 export type EmailPurpose =
   | "CARRIER_RATE_CONFIRMATION"
@@ -166,8 +167,7 @@ async function ensurePrimaryDocument(
     if (!invoice) {
       const invoiceNumber = await nextInvoiceNumber(user.companyId);
       const issuedAt = new Date();
-      const dueAt = new Date();
-      dueAt.setDate(dueAt.getDate() + 30);
+      const dueAt = dueDateFromTerms(issuedAt, load.customer.paymentTerms);
       invoice = await prisma.invoice.create({
         data: {
           companyId: user.companyId,
@@ -176,6 +176,7 @@ async function ensurePrimaryDocument(
           customerId: load.customerId,
           status: "DRAFT",
           totalCents: load.revenueCents,
+          balanceCents: load.revenueCents,
           issuedAt,
           dueAt
         }
@@ -494,6 +495,10 @@ export async function sendPreparedEmail(formData: FormData) {
   revalidatePath(`/loads/${loadId}`);
   revalidatePath("/documents");
   revalidatePath("/accounting");
+
+  if (String(formData.get("skipRedirect") ?? "").trim() === "1") {
+    return;
+  }
 
   const redirectKey =
     purpose === "CARRIER_RATE_CONFIRMATION"

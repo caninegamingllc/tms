@@ -38,6 +38,8 @@ model Company {
   documents            LoadDocument[]
   invoices             Invoice[]
   carrierBills         CarrierBill[]
+  factoringCompanies   FactoringCompany[]
+  payments             Payment[]
   integrationAccounts  IntegrationAccount[]
   accountingExports    AccountingExport[]
   auditLogs            AuditLog[]
@@ -315,6 +317,7 @@ model Customer {
   loads         Load[]
   documents     LoadDocument[]
   invoices      Invoice[]
+  payments      Payment[]
   createdAt     DateTime          @default(now())
   updatedAt     DateTime          @updatedAt
 
@@ -330,6 +333,30 @@ model CustomerContact {
   email      String?
   phone      String?
   isPrimary  Boolean  @default(false)
+}
+
+model FactoringCompany {
+  id            String        @id @default(cuid())
+  companyId     String
+  company       Company       @relation(fields: [companyId], references: [id], onDelete: Cascade)
+  name          String
+  nameOnCheck   String
+  phone         String?
+  email         String?
+  address       String?
+  city          String?
+  state         String?
+  postalCode    String?
+  status        String        @default("Active")
+  externalQboId String?
+  carriers      Carrier[]
+  carrierBills  CarrierBill[]
+  payments      Payment[]
+  createdAt     DateTime      @default(now())
+  updatedAt     DateTime      @updatedAt
+
+  @@unique([companyId, name])
+  @@index([companyId])
 }
 
 model Carrier {
@@ -352,6 +379,10 @@ model Carrier {
   safetyRating        String?
   insuranceExpiresAt  DateTime?
   complianceStatus    String                      @default("Needs Review")
+  paymentTerms        String                      @default("Net 30")
+  paymentMethod       String?
+  factoringCompanyId  String?
+  factoringCompany    FactoringCompany?           @relation(fields: [factoringCompanyId], references: [id], onDelete: SetNull)
   externalQboId       String?
   branchId            String?
   branch              Branch?                     @relation(fields: [branchId], references: [id])
@@ -361,12 +392,14 @@ model Carrier {
   assignments         DispatchAssignment[]
   documents           LoadDocument[]
   carrierBills        CarrierBill[]
+  payments            Payment[]
   createdAt           DateTime                    @default(now())
   updatedAt           DateTime                    @updatedAt
 
   @@index([companyId])
   @@index([companyId, mcNumberNormalized])
   @@index([companyId, dotNumberNormalized])
+  @@index([factoringCompanyId])
 }
 
 model CarrierContact {
@@ -678,48 +711,112 @@ model LoadActivity {
 }
 
 model Invoice {
-  id            String        @id @default(cuid())
+  id            String               @id @default(cuid())
   companyId     String
-  company       Company       @relation(fields: [companyId], references: [id], onDelete: Cascade)
+  company       Company              @relation(fields: [companyId], references: [id], onDelete: Cascade)
   invoiceNo     String
   loadId        String
-  load          Load          @relation(fields: [loadId], references: [id])
+  load          Load                 @relation(fields: [loadId], references: [id])
   customerId    String
-  customer      Customer      @relation(fields: [customerId], references: [id])
-  status        String        @default("DRAFT")
+  customer      Customer             @relation(fields: [customerId], references: [id])
+  status        String               @default("DRAFT")
   totalCents    Int
+  balanceCents  Int                  @default(0)
   issuedAt      DateTime?
   dueAt         DateTime?
   paidAt        DateTime?
   externalQboId String?
-  createdAt     DateTime      @default(now())
-  updatedAt     DateTime      @updatedAt
+  createdAt     DateTime             @default(now())
+  updatedAt     DateTime             @updatedAt
   emailThreads  EmailThread[]
+  applications  PaymentApplication[]
 
   @@unique([companyId, invoiceNo])
   @@index([companyId])
+  @@index([companyId, status])
+  @@index([companyId, dueAt])
 }
 
 model CarrierBill {
-  id            String        @id @default(cuid())
-  companyId     String
-  company       Company       @relation(fields: [companyId], references: [id], onDelete: Cascade)
-  billNo        String
-  loadId        String
-  load          Load          @relation(fields: [loadId], references: [id])
-  carrierId     String
-  carrier       Carrier       @relation(fields: [carrierId], references: [id])
-  status        String        @default("DRAFT")
-  totalCents    Int
-  receivedAt    DateTime?
-  dueAt         DateTime?
-  paidAt        DateTime?
-  externalQboId String?
-  createdAt     DateTime      @default(now())
-  updatedAt     DateTime      @updatedAt
+  id                 String               @id @default(cuid())
+  companyId          String
+  company            Company              @relation(fields: [companyId], references: [id], onDelete: Cascade)
+  billNo             String
+  loadId             String
+  load               Load                 @relation(fields: [loadId], references: [id])
+  carrierId          String
+  carrier            Carrier              @relation(fields: [carrierId], references: [id])
+  status             String               @default("DRAFT")
+  totalCents         Int
+  balanceCents       Int                  @default(0)
+  /// Snapshot of payee at bill creation (factor or carrier)
+  payeeName          String?
+  nameOnCheck        String?
+  remitAddress       String?
+  billReference      String?
+  paymentTermsDays   Int?
+  paymentMethod      String?
+  notes              String?
+  factoringCompanyId String?
+  factoringCompany   FactoringCompany?    @relation(fields: [factoringCompanyId], references: [id], onDelete: SetNull)
+  receivedAt         DateTime?
+  dueAt              DateTime?
+  paidAt             DateTime?
+  externalQboId      String?
+  createdAt          DateTime             @default(now())
+  updatedAt          DateTime             @updatedAt
+  applications       PaymentApplication[]
 
   @@unique([companyId, billNo])
   @@index([companyId])
+  @@index([companyId, status])
+  @@index([companyId, dueAt])
+  @@index([factoringCompanyId])
+}
+
+/// AR (customer) or AP (carrier/factor) cash receipt / disbursement
+model Payment {
+  id                 String               @id @default(cuid())
+  companyId          String
+  company            Company              @relation(fields: [companyId], references: [id], onDelete: Cascade)
+  /// AR | AP
+  direction          String
+  amountCents        Int
+  paidAt             DateTime             @default(now())
+  method             String               @default("CHECK")
+  reference          String?
+  notes              String?
+  customerId         String?
+  customer           Customer?            @relation(fields: [customerId], references: [id], onDelete: SetNull)
+  carrierId          String?
+  carrier            Carrier?             @relation(fields: [carrierId], references: [id], onDelete: SetNull)
+  factoringCompanyId String?
+  factoringCompany   FactoringCompany?    @relation(fields: [factoringCompanyId], references: [id], onDelete: SetNull)
+  createdByUserId    String?
+  applications       PaymentApplication[]
+  createdAt          DateTime             @default(now())
+  updatedAt          DateTime             @updatedAt
+
+  @@index([companyId])
+  @@index([companyId, direction])
+  @@index([customerId])
+  @@index([carrierId])
+}
+
+model PaymentApplication {
+  id            String       @id @default(cuid())
+  paymentId     String
+  payment       Payment      @relation(fields: [paymentId], references: [id], onDelete: Cascade)
+  invoiceId     String?
+  invoice       Invoice?     @relation(fields: [invoiceId], references: [id], onDelete: Cascade)
+  carrierBillId String?
+  carrierBill   CarrierBill? @relation(fields: [carrierBillId], references: [id], onDelete: Cascade)
+  amountCents   Int
+  createdAt     DateTime     @default(now())
+
+  @@index([paymentId])
+  @@index([invoiceId])
+  @@index([carrierBillId])
 }
 
 model IntegrationAccount {

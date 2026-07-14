@@ -11,6 +11,7 @@ import {
 import { getBranchScope } from "@/lib/branch-filter-server";
 import { isSearchSubmitted } from "@/lib/list-search";
 import { requireTmsAccess } from "@/lib/permissions";
+import { prisma } from "@/lib/db";
 
 export default async function CarriersPage({
   searchParams
@@ -24,7 +25,14 @@ export default async function CarriersPage({
   const showResults = isSearchSubmitted(params);
 
   const scope = await getBranchScope(user);
-  const carriers = showResults ? await searchCarriers(scope, filters) : [];
+  const [carriers, factoringCompanies] = await Promise.all([
+    showResults ? searchCarriers(scope, filters) : Promise.resolve([]),
+    prisma.factoringCompany.findMany({
+      where: { companyId: user.companyId, status: "Active" },
+      orderBy: { name: "asc" },
+      select: { id: true, name: true, nameOnCheck: true }
+    })
+  ]);
 
   const rows = carriers.map((carrier) => {
     const totalSpend = carrier.assignments.reduce((sum, assignment) => sum + assignment.rateCents, 0);
@@ -87,7 +95,7 @@ export default async function CarriersPage({
 
         <section className="card">
           <h2 className="section-title">Add Carrier</h2>
-          <CarrierLookupForm action={createCarrier} />
+          <CarrierLookupForm action={createCarrier} factoringCompanies={factoringCompanies} />
         </section>
       </div>
     </>

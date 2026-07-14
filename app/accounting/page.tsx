@@ -1,8 +1,13 @@
 import Link from "next/link";
-import { CarrierBillsTable, InvoicesTable } from "@/components/accounting-tables";
+import {
+  AccountingBillsPanel,
+  AccountingInvoicesPanel
+} from "@/components/accounting-bulk-tables";
+import { AccountingAgingReport } from "@/components/accounting-aging-report";
 import { MetricCard } from "@/components/metric-card";
 import { PageHeader } from "@/components/page-header";
-import { createCarrierBill, createInvoice, generateCustomerInvoice } from "@/lib/actions";
+import { createInvoice, generateCustomerInvoice } from "@/lib/actions";
+import { recomputeOverdueStatuses } from "@/lib/accounting-actions";
 import { getBranchScope } from "@/lib/branch-filter-server";
 import { requireTmsAccess } from "@/lib/permissions";
 import { paymentStatuses } from "@/lib/constants";
@@ -16,49 +21,133 @@ import {
 } from "@/lib/quickbooks/exports";
 import type { AccountingExportMethod, QuickbooksMethod } from "@/lib/quickbooks/types";
 
+const TABS = [
+  { id: "invoices", label: "Invoices" },
+  { id: "bills", label: "Bills" },
+  { id: "report", label: "AR/AP Report" }
+] as const;
+
+type TabId = (typeof TABS)[number]["id"];
+
+function resolveTab(value?: string): TabId {
+  if (value === "bills" || value === "report") {
+    return value;
+  }
+  return "invoices";
+}
+
+function formatRemitTo(parts: {
+  payeeName?: string | null;
+  nameOnCheck?: string | null;
+  factorName?: string | null;
+  carrierName: string;
+}) {
+  return parts.payeeName || parts.factorName || parts.nameOnCheck || parts.carrierName;
+}
+
 export default async function AccountingPage({
   searchParams
 }: {
   searchParams: Promise<{
+    tab?: string;
     reconciled?: string;
     invoices?: string;
     bills?: string;
     error?: string;
+    paymentReceived?: string;
+    paymentRecorded?: string;
+    emailed?: string;
+    qbPushed?: string;
+    billSaved?: string;
   }>;
 }) {
   const user = await requireTmsAccess();
   const params = await searchParams;
+  const tab = resolveTab(params.tab);
   const loadScope = await getBranchScope(user);
+  await recomputeOverdueStatuses(user.companyId);
+
   const quickbooksMethod = await getCompanyQuickbooksMethod(user.companyId);
   const activeExportMethod: AccountingExportMethod | null =
     quickbooksMethod === "ONLINE" || quickbooksMethod === "IIF" ? quickbooksMethod : null;
 
-  const [loads, invoices, carrierBills, carriers, qboAccount] = await Promise.all([
+  const [loads, invoices, carrierBills, qboAccount] = await Promise.all([
     prisma.load.findMany({
       where: loadScope,
       orderBy: { loadNumber: "desc" },
-      include: { customer: true, dispatchAssignment: true }
+      include: {
+        customer: true,
+        expenses: true,
+        dispatchAssignment: {
+          include: {
+            carrier: { include: { factoringCompany: true } }
+          }
+        },
+        stops: { orderBy: { sequence: "asc" } },
+        carrierBills: {
+          include: { factoringCompany: true },
+          orderBy: { createdAt: "desc" }
+        }
+      }
     }),
     prisma.invoice.findMany({
       where: { companyId: user.companyId, load: loadScope },
       orderBy: { createdAt: "desc" },
       include: {
         customer: true,
-        load: { include: { commission: true } }
+        load: {
+          include: {
+            commission: true,
+            stops: { orderBy: { sequence: "asc" } }
+          }
+        }
       }
     }),
     prisma.carrierBill.findMany({
       where: { companyId: user.companyId, load: loadScope },
       orderBy: { createdAt: "desc" },
-      include: { carrier: true, load: true }
+      include: { carrier: true, load: true, factoringCompany: true }
     }),
-    prisma.carrier.findMany({ where: loadScope, orderBy: { name: "asc" } }),
     prisma.integrationAccount.findUnique({
       where: {
         companyId_provider: { companyId: user.companyId, provider: "QUICKBOOKS" }
       }
     })
   ]);
+
+  for (const invoice of invoices) {
+    if (
+      invoice.balanceCents === 0 &&
+      invoice.status !== "PAID" &&
+      invoice.status !== "VOID" &&
+      invoice.totalCents > 0
+    ) {
+      await prisma.invoice.update({
+        where: { id: invoice.id },
+        data: { balanceCents: invoice.totalCents }
+      });
+      invoice.balanceCents = invoice.totalCents;
+    }
+  }
+  for (const bill of carrierBills) {
+    if (
+      bill.balanceCents === 0 &&
+      bill.status !== "PAID" &&
+      bill.status !== "VOID" &&
+      bill.totalCents > 0
+    ) {
+      await prisma.carrierBill.update({
+        where: { id: bill.id },
+        data: {
+          balanceCents: bill.totalCents,
+          payeeName: bill.payeeName ?? bill.carrier.name,
+          nameOnCheck: bill.nameOnCheck ?? bill.carrier.name
+        }
+      });
+      bill.balanceCents = bill.totalCents;
+      bill.payeeName = bill.payeeName ?? bill.carrier.name;
+    }
+  }
 
   const invoiceExports = activeExportMethod
     ? await getExportsForEntities({
@@ -79,11 +168,11 @@ export default async function AccountingPage({
     : new Map();
 
   const openAr = invoices
-    .filter((invoice) => invoice.status !== "PAID" && invoice.status !== "VOID")
-    .reduce((sum, invoice) => sum + invoice.totalCents, 0);
+    .filter((invoice) => invoice.status !== "VOID")
+    .reduce((sum, invoice) => sum + invoice.balanceCents, 0);
   const openAp = carrierBills
-    .filter((bill) => bill.status !== "PAID" && bill.status !== "VOID")
-    .reduce((sum, bill) => sum + bill.totalCents, 0);
+    .filter((bill) => bill.status !== "VOID")
+    .reduce((sum, bill) => sum + bill.balanceCents, 0);
   const grossMargin = loads.reduce(
     (sum, load) => sum + load.revenueCents - load.carrierCostCents,
     0
@@ -96,49 +185,125 @@ export default async function AccountingPage({
     const exportView = activeExportMethod
       ? toExportStatusView(activeExportMethod, invoiceExports.get(invoice.id) ?? null)
       : null;
+    const deliveryStop = [...invoice.load.stops].reverse().find((stop) => stop.type === "DELIVERY");
     return {
       id: invoice.id,
       invoiceNo: invoice.invoiceNo,
       loadId: invoice.loadId,
       loadNumber: invoice.load.loadNumber,
+      referenceNumber: invoice.load.referenceNumber ?? null,
+      customerId: invoice.customerId,
       customerName: invoice.customer.name,
       status: invoice.status,
       totalCents: invoice.totalCents,
+      balanceCents: invoice.balanceCents,
+      issuedAt: invoice.issuedAt?.toISOString() ?? null,
       dueAt: invoice.dueAt?.toISOString() ?? null,
-      commissionCents: invoice.load.commission?.branchShareCents ?? null,
-      canMarkPaid: invoice.status !== "PAID" && invoice.status !== "VOID",
+      deliveryAt:
+        deliveryStop?.appointmentAt?.toISOString() ??
+        invoice.load.deliveryDate?.toISOString() ??
+        null,
+      sentLabel:
+        invoice.status === "SENT" ||
+        invoice.status === "PARTIAL" ||
+        invoice.status === "OVERDUE" ||
+        invoice.status === "PAID"
+          ? invoice.issuedAt
+            ? `Sent On ${invoice.issuedAt.toLocaleDateString()}`
+            : "Sent"
+          : "Unsent",
       exportLabel: exportView?.label ?? null,
-      canPushOnline:
-        method === "ONLINE" &&
-        qboConnected &&
-        invoice.status !== "VOID"
+      canMarkPaid: invoice.balanceCents > 0 && invoice.status !== "VOID",
+      canPushOnline: method === "ONLINE" && qboConnected && invoice.status !== "VOID"
     };
   });
 
-  const carrierBillRows = carrierBills.map((bill) => {
-    const exportView = activeExportMethod
-      ? toExportStatusView(activeExportMethod, billExports.get(bill.id) ?? null)
-      : null;
-    return {
+  const apLoadRows = loads
+    .filter((load) => load.dispatchAssignment?.carrier)
+    .map((load) => {
+      const carrier = load.dispatchAssignment!.carrier;
+      const bill = load.carrierBills.find((entry) => entry.status !== "VOID") ?? null;
+      const exportView =
+        bill && activeExportMethod
+          ? toExportStatusView(activeExportMethod, billExports.get(bill.id) ?? null)
+          : null;
+      const expenseCents =
+        load.carrierCostCents + load.expenses.reduce((sum, expense) => sum + expense.amountCents, 0);
+      const deliveryStop = [...load.stops].reverse().find((stop) => stop.type === "DELIVERY");
+
+      return {
+        rowKey: bill?.id ?? `load-${load.id}`,
+        loadId: load.id,
+        loadNumber: load.loadNumber,
+        loadStatus: load.status,
+        referenceNumber: load.referenceNumber ?? null,
+        carrierId: carrier.id,
+        carrierName: carrier.name,
+        deliveryAt:
+          deliveryStop?.appointmentAt?.toISOString() ?? load.deliveryDate?.toISOString() ?? null,
+        loadExpenseCents: expenseCents,
+        billId: bill?.id ?? null,
+        billNo: bill?.billNo ?? null,
+        billReference: bill?.billReference ?? null,
+        billStatus: bill?.status ?? null,
+        receivedAt: bill?.receivedAt?.toISOString() ?? null,
+        dueAt: bill?.dueAt?.toISOString() ?? null,
+        amountBilledCents: bill?.totalCents ?? 0,
+        balanceCents: bill?.balanceCents ?? 0,
+        remitTo: formatRemitTo({
+          payeeName: bill?.payeeName,
+          nameOnCheck: bill?.nameOnCheck,
+          factorName: bill?.factoringCompany?.name ?? carrier.factoringCompany?.name,
+          carrierName: carrier.name
+        }),
+        exportLabel: exportView?.label ?? null,
+        canMarkPaid: Boolean(bill && bill.balanceCents > 0 && bill.status !== "VOID"),
+        canPushOnline: Boolean(
+          bill && method === "ONLINE" && qboConnected && bill.status !== "VOID"
+        )
+      };
+    });
+
+  const arReportRows = invoices
+    .filter((invoice) => invoice.balanceCents > 0 && invoice.status !== "VOID")
+    .map((invoice) => ({
+      id: invoice.id,
+      entityName: invoice.customer.name,
+      invoiceNo: invoice.invoiceNo,
+      loadId: invoice.loadId,
+      loadNumber: invoice.load.loadNumber,
+      referenceNumber: invoice.load.referenceNumber ?? null,
+      paymentTerms: invoice.customer.paymentTerms,
+      issuedAt: invoice.issuedAt?.toISOString() ?? null,
+      dueAt: invoice.dueAt?.toISOString() ?? null,
+      totalCents: invoice.totalCents,
+      paidCents: Math.max(0, invoice.totalCents - invoice.balanceCents),
+      balanceCents: invoice.balanceCents
+    }));
+
+  const apReportRows = carrierBills
+    .filter((bill) => bill.balanceCents > 0 && bill.status !== "VOID")
+    .map((bill) => ({
       id: bill.id,
+      entityName: bill.payeeName ?? bill.factoringCompany?.name ?? bill.carrier.name,
       billNo: bill.billNo,
       loadId: bill.loadId,
       loadNumber: bill.load.loadNumber,
-      carrierName: bill.carrier.name,
-      status: bill.status,
-      totalCents: bill.totalCents,
+      referenceNumber: bill.billReference ?? null,
+      paymentTerms:
+        bill.paymentTermsDays != null ? `Net ${bill.paymentTermsDays}` : bill.carrier.paymentTerms,
+      issuedAt: bill.receivedAt?.toISOString() ?? null,
       dueAt: bill.dueAt?.toISOString() ?? null,
-      exportLabel: exportView?.label ?? null,
-      canPushOnline: method === "ONLINE" && qboConnected && bill.status !== "VOID",
-      canMarkPaid: bill.status !== "PAID" && bill.status !== "VOID"
-    };
-  });
+      totalCents: bill.totalCents,
+      paidCents: Math.max(0, bill.totalCents - bill.balanceCents),
+      balanceCents: bill.balanceCents
+    }));
 
   return (
     <>
       <PageHeader
         title="Accounting"
-        description="Manage customer invoices, carrier bills, gross margin, receivables, payables, and settlement readiness."
+        description="Manage customer invoices, carrier bills, aging, receivables, payables, and QuickBooks export."
       />
 
       {params.error ? (
@@ -152,6 +317,31 @@ export default async function AccountingPage({
           Online.
         </div>
       ) : null}
+      {params.paymentReceived ? (
+        <div className="card mb-6 border-emerald-200 bg-emerald-50 text-sm font-semibold text-emerald-800">
+          Customer payment applied.
+        </div>
+      ) : null}
+      {params.paymentRecorded ? (
+        <div className="card mb-6 border-emerald-200 bg-emerald-50 text-sm font-semibold text-emerald-800">
+          Carrier bill payment recorded.
+        </div>
+      ) : null}
+      {params.billSaved ? (
+        <div className="card mb-6 border-emerald-200 bg-emerald-50 text-sm font-semibold text-emerald-800">
+          Carrier bill saved.
+        </div>
+      ) : null}
+      {params.emailed ? (
+        <div className="card mb-6 border-emerald-200 bg-emerald-50 text-sm font-semibold text-emerald-800">
+          Emailed {params.emailed} invoice(s).
+        </div>
+      ) : null}
+      {params.qbPushed ? (
+        <div className="card mb-6 border-emerald-200 bg-emerald-50 text-sm font-semibold text-emerald-800">
+          Pushed {params.qbPushed} document(s) to QuickBooks.
+        </div>
+      ) : null}
 
       {method !== "NONE" ? (
         <section className="card mb-6">
@@ -163,7 +353,7 @@ export default async function AccountingPage({
                 <span className="font-semibold text-foreground">
                   {method === "ONLINE" ? "QuickBooks Online" : "IIF (Desktop)"}
                 </span>
-                . Export status below is for this method only.
+                .
               </p>
             </div>
             <div className="flex flex-wrap gap-2">
@@ -192,139 +382,120 @@ export default async function AccountingPage({
               </Link>
             </div>
           </div>
-          {method === "IIF" ? (
-            <p className="mt-3 text-sm text-slate-700">
-              After downloading, back up your QuickBooks Desktop company file, then use File → Utilities → Import →
-              IIF.
-            </p>
-          ) : null}
-          {method === "ONLINE" && !qboConnected ? (
-            <p className="mt-3 text-sm text-amber-800">
-              Connect QuickBooks Online under{" "}
-              <Link href="/admin/accounting" className="font-semibold underline">
-                Admin Accounting Settings
-              </Link>{" "}
-              before pushing documents.
-            </p>
-          ) : null}
         </section>
       ) : null}
 
       <div className="grid gap-4 md:grid-cols-3">
-        <MetricCard label="Open AR" value={formatMoney(openAr)} detail="Customer invoices outstanding" />
-        <MetricCard label="Open AP" value={formatMoney(openAp)} detail="Carrier bills not yet paid" />
+        <MetricCard label="Open AR" value={formatMoney(openAr)} detail="Customer invoice balances" />
+        <MetricCard label="Open AP" value={formatMoney(openAp)} detail="Carrier bill balances" />
         <MetricCard label="Gross Margin" value={formatMoney(grossMargin)} detail="Revenue minus carrier cost" />
       </div>
 
-      <div className="mt-6 grid gap-6 xl:grid-cols-2">
-        <section className="card overflow-hidden p-0">
-          <div className="border-b border-border p-5">
-            <h2 className="section-title">Customer Invoices</h2>
-            <p className="muted">Invoices are tied directly to customer loads. Click column headers to sort.</p>
-          </div>
-          <div className="overflow-x-auto">
-            <InvoicesTable invoices={invoiceRows} quickbooksMethod={method} />
-          </div>
-        </section>
-
-        <section className="card overflow-hidden p-0">
-          <div className="border-b border-border p-5">
-            <h2 className="section-title">Carrier Bills</h2>
-            <p className="muted">Track AP, quick pay, and settlement-style payables. Click column headers to sort.</p>
-          </div>
-          <div className="overflow-x-auto">
-            <CarrierBillsTable bills={carrierBillRows} quickbooksMethod={method} />
-          </div>
-        </section>
+      <div className="mt-6 flex flex-wrap gap-2 border-b border-border pb-3">
+        {TABS.map((item) => (
+          <Link
+            key={item.id}
+            href={`/accounting?tab=${item.id}`}
+            className={
+              tab === item.id
+                ? "rounded-full bg-primary px-4 py-2 text-sm font-semibold text-primary-foreground"
+                : "rounded-full bg-muted px-4 py-2 text-sm font-semibold text-foreground"
+            }
+          >
+            {item.label}
+          </Link>
+        ))}
       </div>
 
-      <div className="mt-6 grid gap-6 xl:grid-cols-2">
-        <section className="card">
-          <h2 className="section-title">Generate Customer Invoice Document</h2>
-          <p className="muted">Create a printable invoice from the selected load customer, lane, and charges.</p>
-          <form action={generateCustomerInvoice} className="mt-4 grid gap-3">
-            <select name="loadId" className="select" required>
-              <option value="">Select load</option>
-              {loads.map((load) => (
-                <option key={load.id} value={load.id}>
-                  {load.loadNumber} - {load.customer.name} - {formatMoney(load.revenueCents)}
-                </option>
-              ))}
-            </select>
-            <button type="submit" className="btn">
-              Generate Printable Invoice
-            </button>
-          </form>
-        </section>
-
-        <section className="card">
-          <h2 className="section-title">Create Invoice</h2>
-          <form action={createInvoice} className="mt-4 grid gap-3">
-            <input name="invoiceNo" className="input" placeholder="INV-1003" required />
-            <select name="loadId" className="select" required>
-              <option value="">Select load</option>
-              {loads.map((load) => (
-                <option key={load.id} value={load.id}>
-                  {load.loadNumber} - {load.customer.name}
-                </option>
-              ))}
-            </select>
-            <select name="status" className="select" defaultValue="DRAFT">
-              {paymentStatuses.map((status) => (
-                <option key={status} value={status}>
-                  {humanize(status)}
-                </option>
-              ))}
-            </select>
-            <div className="grid gap-3 md:grid-cols-3">
-              <input name="total" className="input" placeholder="Total" required />
-              <input name="issuedAt" className="input" type="date" />
-              <input name="dueAt" className="input" type="date" />
+      {tab === "invoices" ? (
+        <div className="mt-6 grid gap-6">
+          <section className="card overflow-hidden p-0">
+            <div className="border-b border-border p-5">
+              <h2 className="section-title">Customer Invoices</h2>
+              <p className="muted">
+                Click column headers to sort. Select invoices for bulk email, payment receipt, or QuickBooks
+                export.
+              </p>
             </div>
-            <button type="submit" className="btn">
-              Save Invoice
-            </button>
-          </form>
-        </section>
-
-        <section className="card">
-          <h2 className="section-title">Create Carrier Bill</h2>
-          <form action={createCarrierBill} className="mt-4 grid gap-3">
-            <input name="billNo" className="input" placeholder="CB-1003" required />
-            <select name="loadId" className="select" required>
-              <option value="">Select load</option>
-              {loads.map((load) => (
-                <option key={load.id} value={load.id}>
-                  {load.loadNumber} - {load.customer.name}
-                </option>
-              ))}
-            </select>
-            <select name="carrierId" className="select" required>
-              <option value="">Select carrier</option>
-              {carriers.map((carrier) => (
-                <option key={carrier.id} value={carrier.id}>
-                  {carrier.name}
-                </option>
-              ))}
-            </select>
-            <select name="status" className="select" defaultValue="DRAFT">
-              {paymentStatuses.map((status) => (
-                <option key={status} value={status}>
-                  {humanize(status)}
-                </option>
-              ))}
-            </select>
-            <div className="grid gap-3 md:grid-cols-3">
-              <input name="total" className="input" placeholder="Total" required />
-              <input name="receivedAt" className="input" type="date" />
-              <input name="dueAt" className="input" type="date" />
+            <div className="p-5">
+              <AccountingInvoicesPanel invoices={invoiceRows} quickbooksMethod={method} />
             </div>
-            <button type="submit" className="btn">
-              Save Carrier Bill
-            </button>
-          </form>
-        </section>
-      </div>
+          </section>
+
+          <div className="grid gap-6 xl:grid-cols-2">
+            <section className="card">
+              <h2 className="section-title">Generate Customer Invoice Document</h2>
+              <p className="muted">Create a printable invoice from the selected load.</p>
+              <form action={generateCustomerInvoice} className="mt-4 grid gap-3">
+                <select name="loadId" className="select" required>
+                  <option value="">Select load</option>
+                  {loads.map((load) => (
+                    <option key={load.id} value={load.id}>
+                      {load.loadNumber} - {load.customer.name} - {formatMoney(load.revenueCents)}
+                    </option>
+                  ))}
+                </select>
+                <button type="submit" className="btn">
+                  Generate Printable Invoice
+                </button>
+              </form>
+            </section>
+
+            <section className="card">
+              <h2 className="section-title">Create Invoice</h2>
+              <form action={createInvoice} className="mt-4 grid gap-3">
+                <input name="invoiceNo" className="input" placeholder="INV-1003" required />
+                <select name="loadId" className="select" required>
+                  <option value="">Select load</option>
+                  {loads.map((load) => (
+                    <option key={load.id} value={load.id}>
+                      {load.loadNumber} - {load.customer.name}
+                    </option>
+                  ))}
+                </select>
+                <select name="status" className="select" defaultValue="DRAFT">
+                  {paymentStatuses.map((status) => (
+                    <option key={status} value={status}>
+                      {humanize(status)}
+                    </option>
+                  ))}
+                </select>
+                <div className="grid gap-3 md:grid-cols-3">
+                  <input name="total" className="input" placeholder="Total" required />
+                  <input name="issuedAt" className="input" type="date" />
+                  <input name="dueAt" className="input" type="date" />
+                </div>
+                <button type="submit" className="btn">
+                  Save Invoice
+                </button>
+              </form>
+            </section>
+          </div>
+        </div>
+      ) : null}
+
+      {tab === "bills" ? (
+        <div className="mt-6 grid gap-6">
+          <section className="card overflow-hidden p-0">
+            <div className="border-b border-border p-5">
+              <h2 className="section-title">Carrier Bills</h2>
+              <p className="muted">
+                Covered loads appear here. Expand a row to record a carrier invoice, or select billed rows to
+                edit, pay, or export. Click column headers to sort.
+              </p>
+            </div>
+            <div className="p-5">
+              <AccountingBillsPanel rows={apLoadRows} quickbooksMethod={method} />
+            </div>
+          </section>
+        </div>
+      ) : null}
+
+      {tab === "report" ? (
+        <div className="mt-6">
+          <AccountingAgingReport arRows={arReportRows} apRows={apReportRows} />
+        </div>
+      ) : null}
     </>
   );
 }

@@ -46,30 +46,12 @@ export async function markInvoicePaid(formData: FormData) {
     throw new Error("Invoice not found.");
   }
 
-  const now = new Date();
-
-  await prisma.$transaction(async (tx) => {
-    await tx.invoice.update({
-      where: { id: invoiceId },
-      data: { status: "PAID", paidAt: now }
-    });
-
-    await tx.load.update({
-      where: { id: invoice.loadId },
-      data: {
-        status: "PAID",
-        activities: {
-          create: {
-            userId: user.id,
-            action: "Customer paid",
-            details: `Invoice ${invoice.invoiceNo} marked paid.`
-          }
-        }
-      }
-    });
+  const { applyFullInvoicePayment } = await import("@/lib/accounting-actions");
+  await applyFullInvoicePayment({
+    companyId: user.companyId,
+    userId: user.id,
+    invoiceId
   });
-
-  await recalculateLoadCommission(invoice.loadId);
 
   revalidatePath("/accounting");
   revalidatePath("/commissions");
