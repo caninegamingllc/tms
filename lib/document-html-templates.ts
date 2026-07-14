@@ -367,8 +367,8 @@ export function renderDocumentHtml(
     body {
       margin: 0;
       padding: ${options?.forPrint ? "0.5in" : "24px"};
-      font-family: "Segoe UI", Arial, Helvetica, sans-serif;
-      color: #1e293b;
+      font-family: "Source Sans 3", "Segoe UI", Arial, Helvetica, sans-serif;
+      color: #1b2433;
       font-size: 12px;
       line-height: 1.45;
       background: #fff;
@@ -379,7 +379,7 @@ export function renderDocumentHtml(
       gap: 20px;
       align-items: flex-start;
       justify-content: space-between;
-      border-bottom: 2px solid #0f172a;
+      border-bottom: 3px solid #2b6b80;
       padding-bottom: 16px;
       margin-bottom: 20px;
     }
@@ -400,22 +400,36 @@ export function renderDocumentHtml(
       text-transform: uppercase;
       letter-spacing: 0.08em;
     }
-    .company-name { font-size: 18px; font-weight: 700; margin: 0 0 4px; color: #0f172a; }
+    .company-name {
+      font-family: Georgia, "Times New Roman", serif;
+      font-size: 20px;
+      font-weight: 700;
+      margin: 0 0 4px;
+      color: #1b2433;
+      letter-spacing: -0.02em;
+    }
     .meta-block { text-align: right; min-width: 180px; }
-    .doc-title { font-size: 16px; font-weight: 700; margin: 0 0 6px; letter-spacing: 0.02em; }
+    .doc-title {
+      font-family: Georgia, "Times New Roman", serif;
+      font-size: 16px;
+      font-weight: 700;
+      margin: 0 0 6px;
+      letter-spacing: -0.01em;
+      color: #2b6b80;
+    }
     .grid-2 { display: grid; grid-template-columns: 1fr 1fr; gap: 16px; margin-bottom: 18px; }
     .panel {
       border: 1px solid #e2e8f0;
-      border-radius: 8px;
+      border-radius: 6px;
       padding: 12px 14px;
-      background: #f8fafc;
+      background: #f7f9fb;
     }
     .panel h2, section h2 {
       margin: 0 0 8px;
-      font-size: 11px;
+      font-size: 10.5px;
       text-transform: uppercase;
-      letter-spacing: 0.08em;
-      color: #475569;
+      letter-spacing: 0.12em;
+      color: #64748b;
     }
     table { width: 100%; border-collapse: collapse; margin-bottom: 16px; }
     table.details th {
@@ -429,20 +443,20 @@ export function renderDocumentHtml(
     table.details td { padding: 4px 0; }
     table.stops th, table.charges th {
       text-align: left;
-      background: #0f172a;
+      background: #2b6b80;
       color: #fff;
-      padding: 8px 10px;
-      font-size: 11px;
+      padding: 7px 10px;
+      font-size: 10.5px;
       text-transform: uppercase;
-      letter-spacing: 0.06em;
+      letter-spacing: 0.1em;
     }
     table.stops td, table.charges td {
       border-bottom: 1px solid #e2e8f0;
-      padding: 8px 10px;
+      padding: 7px 10px;
       vertical-align: top;
     }
     .num { text-align: right; white-space: nowrap; }
-    tr.total td { font-weight: 700; border-top: 2px solid #0f172a; }
+    tr.total td { font-weight: 700; border-top: 2px solid #2b6b80; }
     .muted { color: #64748b; }
     .pre { margin: 0; white-space: pre-wrap; }
     ul { margin: 0; padding-left: 18px; }

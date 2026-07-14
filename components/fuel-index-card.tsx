@@ -32,7 +32,7 @@ const REGION_META: Array<{
   color: string;
   defaultVisible: boolean;
 }> = [
-  { key: "us", label: "U.S.", shortLabel: "U.S.", color: "#5d87ff", defaultVisible: true },
+  { key: "us", label: "U.S.", shortLabel: "U.S.", color: "#2b6b80", defaultVisible: true },
   { key: "eastCoast", label: "East Coast", shortLabel: "East", color: "#49beff", defaultVisible: true },
   { key: "midwest", label: "Midwest", shortLabel: "Midwest", color: "#ffae1f", defaultVisible: true },
   { key: "gulfCoast", label: "Gulf Coast", shortLabel: "Gulf", color: "#13deb9", defaultVisible: false },
@@ -161,7 +161,9 @@ export function FuelIndexCard({ data }: FuelIndexCardProps) {
 
       <div className="mt-5 flex flex-wrap items-end gap-x-6 gap-y-2">
         <div>
-          <p className="text-3xl font-bold text-foreground">{formatPrice(data.summary.latestUs)}</p>
+          <p className="font-display text-[1.75rem] font-semibold text-foreground tabular">
+            {formatPrice(data.summary.latestUs)}
+          </p>
           <p className="muted">U.S. Average</p>
         </div>
         {delta ? (
@@ -224,8 +226,8 @@ export function FuelIndexCard({ data }: FuelIndexCardProps) {
           <ComposedChart data={chartData} margin={{ top: 8, right: 12, left: 0, bottom: 0 }}>
             <defs>
               <linearGradient id="usDieselFill" x1="0" y1="0" x2="0" y2="1">
-                <stop offset="0%" stopColor="#5d87ff" stopOpacity={0.22} />
-                <stop offset="100%" stopColor="#5d87ff" stopOpacity={0.02} />
+                <stop offset="0%" stopColor="#2b6b80" stopOpacity={0.22} />
+                <stop offset="100%" stopColor="#2b6b80" stopOpacity={0.02} />
               </linearGradient>
             </defs>
             <CartesianGrid strokeDasharray="3 3" stroke="#dfe5ef" vertical={false} />

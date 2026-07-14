@@ -1,13 +1,18 @@
 import type { Metadata } from "next";
-import { DM_Sans } from "next/font/google";
+import { Fraunces, Source_Sans_3 } from "next/font/google";
 import "./globals.css";
 import { AppShell } from "@/components/app-shell";
 import { getCurrentUser } from "@/lib/auth";
 import { getBranchSwitcherData } from "@/lib/branch-filter-server";
 
-const dmSans = DM_Sans({
+const sourceSans = Source_Sans_3({
   subsets: ["latin"],
-  variable: "--font-dm-sans"
+  variable: "--font-source-sans"
+});
+
+const fraunces = Fraunces({
+  subsets: ["latin"],
+  variable: "--font-fraunces"
 });
 
 export const metadata: Metadata = {
@@ -22,7 +27,7 @@ export default async function RootLayout({ children }: { children: React.ReactNo
 
   return (
     <html lang="en">
-      <body className={`${dmSans.variable} font-sans antialiased`}>
+      <body className={`${sourceSans.variable} ${fraunces.variable} font-sans antialiased`}>
         <AppShell currentUser={currentUser} branchSwitcher={branchSwitcher}>
           {children}
         </AppShell>

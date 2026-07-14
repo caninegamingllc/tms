@@ -1,29 +1,37 @@
 @import "tailwindcss";
 
 @theme {
-  --color-background: #ffffff;
-  --color-foreground: #2a3547;
+  --color-background: #f7f9fb;
+  --color-foreground: #1b2433;
   --color-card: #ffffff;
-  --color-border: #dfe5ef;
-  --color-muted: #f5f5f5;
-  --color-muted-foreground: #5a6a85;
-  --color-primary: #5d87ff;
-  --color-primary-foreground: #ffffff;
-  --color-secondary: #49beff;
-  --color-lightprimary: #5d87ff1f;
-  --color-lightinfo: #539bff1f;
-  --color-sidebar-foreground: #2a3547;
-  --color-success: #13deb9;
-  --color-warning: #ffae1f;
-  --color-error: #fa896b;
-  --color-info: #539bff;
-  --shadow-card: 0 1px 3px rgba(0, 0, 0, 0.06);
-  --radius-lg: 0.75rem;
+  --color-border: #e2e8f0;
+  --color-muted: #f1f5f9;
+  --color-muted-foreground: #64748b;
+  --color-primary: #2b6b80;
+  --color-primary-foreground: #f8fafc;
+  --color-secondary: #3d9ba8;
+  --color-lightprimary: #2b6b801f;
+  --color-lightinfo: #4a8bbf1f;
+  --color-sidebar-foreground: #cbd5e1;
+  --color-rail: #1a2332;
+  --color-rail-foreground: #cbd5e1;
+  --color-rail-accent: #3d9ba8;
+  --color-success: #2a9b8f;
+  --color-warning: #e5a84b;
+  --color-error: #d4563a;
+  --color-info: #4a8bbf;
+  --shadow-card: 0 1px 0 rgba(15, 23, 42, 0.04), 0 1px 2px rgba(15, 23, 42, 0.04);
+  --radius-lg: 0.5rem;
+  --font-sans: var(--font-source-sans), ui-sans-serif, system-ui, sans-serif;
+  --font-display: var(--font-fraunces), ui-serif, Georgia, serif;
 }
 
 :root {
   color-scheme: light;
-  --primary-emphasis: #4a6ecc;
+  --primary-emphasis: #1f5466;
+  --gradient-brand: linear-gradient(135deg, #1e3a5f 0%, #2b6b80 55%, #3d9ba8 100%);
+  --gradient-rail: linear-gradient(180deg, #1e293b 0%, #141c28 100%);
+  --shadow-lifted: 0 8px 24px -12px rgba(15, 23, 42, 0.18);
   background: var(--color-background);
   color: var(--color-foreground);
 }
@@ -36,7 +44,9 @@ body {
   margin: 0;
   min-height: 100vh;
   background: var(--color-background);
-  font-size: 0.875rem;
+  font-family: var(--font-sans);
+  font-size: 0.8125rem;
+  -webkit-font-smoothing: antialiased;
 }
 
 a {
@@ -49,51 +59,76 @@ textarea::placeholder {
   color: var(--color-muted-foreground);
 }
 
+.font-display {
+  font-family: var(--font-display);
+  font-optical-sizing: auto;
+  letter-spacing: -0.02em;
+}
+
+.brand-gradient {
+  background: var(--gradient-brand);
+}
+
+.rail-gradient {
+  background: var(--gradient-rail);
+}
+
+.surface-grid {
+  background-image:
+    linear-gradient(to right, rgba(27, 36, 51, 0.06) 1px, transparent 1px),
+    linear-gradient(to bottom, rgba(27, 36, 51, 0.06) 1px, transparent 1px);
+  background-size: 32px 32px;
+}
+
+.tabular {
+  font-variant-numeric: tabular-nums;
+}
+
 @layer components {
   .card {
-    @apply rounded-xl border border-border bg-card p-5 shadow-card;
+    @apply rounded-lg border border-border bg-card p-4 shadow-card;
   }
 
   .section-title {
-    @apply text-lg font-semibold text-foreground;
+    @apply font-display text-base font-semibold text-foreground;
   }
 
   .muted {
-    @apply text-sm text-muted-foreground;
+    @apply text-[13px] text-muted-foreground;
   }
 
   .btn {
-    @apply inline-flex items-center justify-center rounded-lg bg-primary px-4 py-2 text-sm font-semibold text-primary-foreground transition hover:opacity-90;
+    @apply inline-flex items-center justify-center rounded-md bg-primary px-3 py-1.5 text-[13px] font-semibold text-primary-foreground transition hover:opacity-90;
   }
 
   .btn-secondary {
-    @apply inline-flex items-center justify-center rounded-lg border border-border bg-card px-4 py-2 text-sm font-semibold text-foreground transition hover:bg-muted;
+    @apply inline-flex items-center justify-center rounded-md border border-border bg-card px-3 py-1.5 text-[13px] font-semibold text-foreground transition hover:bg-muted;
   }
 
   .btn-danger {
-    @apply inline-flex items-center justify-center rounded-lg border border-red-200 bg-red-50 px-4 py-2 text-sm font-semibold text-red-700 transition hover:bg-red-100 disabled:cursor-not-allowed disabled:opacity-50;
+    @apply inline-flex items-center justify-center rounded-md border border-red-200 bg-red-50 px-3 py-1.5 text-[13px] font-semibold text-red-700 transition hover:bg-red-100 disabled:cursor-not-allowed disabled:opacity-50;
   }
 
   .input,
   .select,
   .textarea {
-    @apply w-full rounded-lg border border-border bg-card px-3 py-2 text-sm text-foreground outline-none transition focus:border-primary focus:ring-4 focus:ring-lightprimary;
+    @apply w-full rounded-md border border-border bg-card px-2.5 py-1.5 text-[13px] text-foreground outline-none transition focus:border-primary focus:ring-2 focus:ring-lightprimary;
   }
 
   .label {
-    @apply text-xs font-semibold uppercase tracking-wide text-muted-foreground;
+    @apply text-[10.5px] font-semibold uppercase tracking-[0.14em] text-muted-foreground;
   }
 
   .table {
-    @apply w-full border-separate border-spacing-0 text-left text-sm;
+    @apply w-full border-separate border-spacing-0 text-left text-[12.5px];
   }
 
   .table th {
-    @apply border-b border-border px-3 py-3 text-xs font-semibold uppercase tracking-wide text-muted-foreground;
+    @apply border-b border-border bg-muted/80 px-3 py-2 text-[10.5px] font-semibold uppercase tracking-[0.12em] text-muted-foreground;
   }
 
   .table th.sortable button {
-    @apply w-full cursor-pointer uppercase tracking-wide;
+    @apply w-full cursor-pointer uppercase tracking-[0.12em];
   }
 
   .table th.sortable {
@@ -105,11 +140,11 @@ textarea::placeholder {
   }
 
   .table th.sortable[data-active="true"] .sort-icon {
-    @apply opacity-100 text-foreground;
+    @apply text-foreground opacity-100;
   }
 
   .table td {
-    @apply border-b border-border px-3 py-3 align-top;
+    @apply border-b border-border px-3 py-1.5 align-middle;
   }
 
   .table tbody tr.table-row-link {
@@ -122,7 +157,7 @@ textarea::placeholder {
   }
 
   .badge {
-    @apply inline-flex rounded-full px-2.5 py-1 text-xs font-semibold;
+    @apply inline-flex items-center gap-1 rounded border px-1.5 py-0.5 text-[10.5px] font-semibold uppercase tracking-wide;
   }
 }
 
@@ -135,19 +170,21 @@ textarea::placeholder {
   display: inline-flex;
   align-items: center;
   justify-content: center;
-  width: 28px;
-  height: 28px;
+  width: 26px;
+  height: 26px;
   border-radius: 9999px;
-  background: #5d87ff;
+  background: #2b6b80;
   color: #ffffff;
   border: 2px solid #ffffff;
   box-shadow: 0 1px 4px rgba(0, 0, 0, 0.2);
-  font-size: 12px;
+  font-size: 11px;
   font-weight: 700;
 }
 
 @media print {
-  aside {
+  aside,
+  .app-rail,
+  .app-topbar {
     display: none !important;
   }
 

@@ -78,7 +78,7 @@ export function LoadRouteMap({ stops, path }: LoadRouteMapProps) {
           url="https://{s}.tile.openstreetmap.org/{z}/{x}/{y}.png"
         />
         {polyline.length > 1 ? (
-          <Polyline positions={polyline} pathOptions={{ color: "#5d87ff", weight: 4, opacity: 0.9 }} />
+          <Polyline positions={polyline} pathOptions={{ color: "#2b6b80", weight: 4, opacity: 0.9 }} />
         ) : null}
         {stops.map((stop) => (
           <Marker

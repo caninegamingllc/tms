@@ -169,6 +169,22 @@ async function requireCompanyCustomer(customerId: string, user: SessionUser) {
   return customer;
 }
 
+function summarizeFieldChanges(
+  before: Record<string, string | number | null | undefined>,
+  after: Record<string, string | number | null | undefined>,
+  labels: Record<string, string>
+) {
+  const changed = Object.keys(after).filter(
+    (key) => String(before[key] ?? "") !== String(after[key] ?? "")
+  );
+
+  if (changed.length === 0) {
+    return "No field changes detected.";
+  }
+
+  return `Updated ${changed.map((key) => labels[key] ?? key).join(", ")}.`;
+}
+
 async function facilitySnapshot(formData: FormData, prefix: "pickup" | "delivery", companyId: string) {
   const facilityId = optionalString(formData, `${prefix}FacilityId`);
 
@@ -224,12 +240,154 @@ export async function createCustomer(formData: FormData) {
           phone: optionalString(formData, "contactPhone"),
           isPrimary: true
         }
+      },
+      activities: {
+        create: {
+          userId: user.id,
+          action: "Customer created",
+          details: "Created from the TMS customer entry form."
+        }
       }
     }
   });
 
   revalidatePath("/customers");
   redirect("/customers?saved=1");
+}
+
+export async function updateCustomer(formData: FormData) {
+  const user = await requireWriteUser();
+  const customerId = requiredString(formData, "customerId");
+  const existing = await requireCompanyCustomer(customerId, user);
+  const hasBranchField = formData.has("branchId");
+  const requestedBranchId = optionalString(formData, "branchId");
+  const branchId = hasBranchField
+    ? requestedBranchId
+      ? await resolveBranchId(user, requestedBranchId, prisma)
+      : null
+    : existing.branchId;
+  const next = {
+    name: requiredString(formData, "name"),
+    status: requiredString(formData, "status"),
+    creditLimit: parseMoneyToCents(formData.get("creditLimit")),
+    paymentTerms: requiredString(formData, "paymentTerms"),
+    industry: optionalString(formData, "industry") ?? null,
+    phone: optionalString(formData, "phone") ?? null,
+    email: optionalString(formData, "email") ?? null,
+    address: optionalString(formData, "address") ?? null,
+    city: optionalString(formData, "city") ?? null,
+    state: optionalString(formData, "state") ?? null,
+    postalCode: optionalString(formData, "postalCode") ?? null,
+    branchId,
+    ...(formData.has("rateConfirmationTerms")
+      ? { rateConfirmationTerms: optionalString(formData, "rateConfirmationTerms") ?? null }
+      : {})
+  };
+
+  const contactTitle = optionalString(formData, "contactTitle") ?? null;
+  const contactEmail = optionalString(formData, "contactEmail") ?? null;
+  const contactPhone = optionalString(formData, "contactPhone") ?? null;
+
+  const primaryContact = await prisma.customerContact.findFirst({
+    where: { customerId },
+    orderBy: [{ isPrimary: "desc" }, { name: "asc" }]
+  });
+
+  const resolvedContactName = optionalString(formData, "contactName") ?? primaryContact?.name ?? "Primary Contact";
+
+  const details = summarizeFieldChanges(
+    {
+      name: existing.name,
+      status: existing.status,
+      creditLimit: existing.creditLimit,
+      paymentTerms: existing.paymentTerms,
+      ...(formData.has("rateConfirmationTerms")
+        ? { rateConfirmationTerms: existing.rateConfirmationTerms }
+        : {}),
+      industry: existing.industry,
+      phone: existing.phone,
+      email: existing.email,
+      address: existing.address,
+      city: existing.city,
+      state: existing.state,
+      postalCode: existing.postalCode,
+      branchId: existing.branchId,
+      contactName: primaryContact?.name,
+      contactTitle: primaryContact?.title,
+      contactEmail: primaryContact?.email,
+      contactPhone: primaryContact?.phone
+    },
+    {
+      ...next,
+      contactName: resolvedContactName,
+      contactTitle,
+      contactEmail,
+      contactPhone
+    },
+    {
+      name: "name",
+      status: "status",
+      creditLimit: "credit limit",
+      paymentTerms: "payment terms",
+      rateConfirmationTerms: "rate confirmation terms",
+      industry: "industry",
+      phone: "phone",
+      email: "email",
+      address: "address",
+      city: "city",
+      state: "state",
+      postalCode: "postal code",
+      branchId: "branch",
+      contactName: "primary contact",
+      contactTitle: "contact title",
+      contactEmail: "contact email",
+      contactPhone: "contact phone"
+    }
+  );
+
+  await prisma.$transaction(async (tx) => {
+    await tx.customer.update({
+      where: { id: customerId },
+      data: next
+    });
+
+    if (primaryContact) {
+      await tx.customerContact.update({
+        where: { id: primaryContact.id },
+        data: {
+          name: resolvedContactName,
+          title: contactTitle,
+          email: contactEmail,
+          phone: contactPhone,
+          isPrimary: true
+        }
+      });
+    } else {
+      await tx.customerContact.create({
+        data: {
+          customerId,
+          name: resolvedContactName,
+          title: contactTitle,
+          email: contactEmail,
+          phone: contactPhone,
+          isPrimary: true
+        }
+      });
+    }
+
+    await tx.customerActivity.create({
+      data: {
+        customerId,
+        userId: user.id,
+        action: "Customer updated",
+        details
+      }
+    });
+  });
+
+  revalidatePath("/customers");
+  revalidatePath(`/customers/${customerId}`);
+  redirect(`/customers/${customerId}?saved=1`);
 }
 
 export async function updateCustomerRateConfirmationTerms(formData: FormData) {
@@ -240,10 +398,39 @@ export async function updateCustomerRateConfirmationTerms(formData: FormData) {
 
   await prisma.customer.update({
     where: { id: customerId },
-    data: { rateConfirmationTerms: terms }
+    data: {
+      rateConfirmationTerms: terms,
+      activities: {
+        create: {
+          userId: user.id,
+          action: "Rate confirmation terms updated",
+          details: terms?.trim()
+            ? "Customer default rate confirmation terms were saved."
+            : "Customer default rate confirmation terms were cleared."
+        }
+      }
+    }
   });
 
   revalidatePath("/customers");
+  revalidatePath(`/customers/${customerId}`);
+}
+
+export async function addCustomerActivityNote(formData: FormData) {
+  const user = await requireWriteUser();
+  const customerId = requiredString(formData, "customerId");
+  const body = requiredString(formData, "body");
+  await requireCompanyCustomer(customerId, user);
+
+  await prisma.customerActivity.create({
+    data: {
+      customerId,
+      userId: user.id,
+      action: "Activity note",
+      details: body
+    }
+  });
+
   revalidatePath(`/customers/${customerId}`);
 }
 
@@ -311,6 +498,13 @@ export async function createCarrier(formData: FormData) {
           phone: optionalString(formData, "contactPhone"),
           isPrimary: true
         }
+      },
+      activities: {
+        create: {
+          userId: user.id,
+          action: "Carrier created",
+          details: "Created from the TMS carrier entry form."
+        }
       }
     }
   });
@@ -322,7 +516,7 @@ export async function createCarrier(formData: FormData) {
 export async function updateCarrier(formData: FormData) {
   const user = await requireWriteUser();
   const carrierId = requiredString(formData, "carrierId");
-  await requireCompanyCarrier(carrierId, user.companyId);
+  const existing = await requireCompanyCarrier(carrierId, user.companyId);
   const mcNumber = optionalString(formData, "mcNumber");
   const dotNumber = optionalString(formData, "dotNumber");
   const mcNumberNormalized = normalizeCarrierNumber(mcNumber);
@@ -345,33 +539,119 @@ export async function updateCarrier(formData: FormData) {
     });
   }
 
+  const next = {
+    name: requiredString(formData, "name"),
+    status: requiredString(formData, "status"),
+    mcNumber: mcNumber ?? null,
+    mcNumberNormalized: mcNumberNormalized ?? null,
+    dotNumber: dotNumber ?? null,
+    dotNumberNormalized: dotNumberNormalized ?? null,
+    phone: optionalString(formData, "phone") ?? null,
+    email: optionalString(formData, "email") ?? null,
+    address: optionalString(formData, "address") ?? null,
+    city: optionalString(formData, "city") ?? null,
+    state: optionalString(formData, "state") ?? null,
+    postalCode: optionalString(formData, "postalCode") ?? null,
+    equipmentTypes: optionalString(formData, "equipmentTypes") ?? null,
+    safetyRating: optionalString(formData, "safetyRating") ?? null,
+    complianceStatus: requiredString(formData, "complianceStatus"),
+    paymentTerms: optionalString(formData, "paymentTerms") ?? "Net 30",
+    paymentMethod: optionalString(formData, "paymentMethod") ?? null,
+    factoringCompanyId: factoringCompanyId || null
+  };
+
+  const details = summarizeFieldChanges(
+    {
+      name: existing.name,
+      status: existing.status,
+      mcNumber: existing.mcNumber,
+      dotNumber: existing.dotNumber,
+      phone: existing.phone,
+      email: existing.email,
+      address: existing.address,
+      city: existing.city,
+      state: existing.state,
+      postalCode: existing.postalCode,
+      equipmentTypes: existing.equipmentTypes,
+      safetyRating: existing.safetyRating,
+      complianceStatus: existing.complianceStatus,
+      paymentTerms: existing.paymentTerms,
+      paymentMethod: existing.paymentMethod,
+      factoringCompanyId: existing.factoringCompanyId
+    },
+    {
+      name: next.name,
+      status: next.status,
+      mcNumber: next.mcNumber,
+      dotNumber: next.dotNumber,
+      phone: next.phone,
+      email: next.email,
+      address: next.address,
+      city: next.city,
+      state: next.state,
+      postalCode: next.postalCode,
+      equipmentTypes: next.equipmentTypes,
+      safetyRating: next.safetyRating,
+      complianceStatus: next.complianceStatus,
+      paymentTerms: next.paymentTerms,
+      paymentMethod: next.paymentMethod,
+      factoringCompanyId: next.factoringCompanyId
+    },
+    {
+      name: "name",
+      status: "status",
+      mcNumber: "MC number",
+      dotNumber: "USDOT number",
+      phone: "phone",
+      email: "email",
+      address: "address",
+      city: "city",
+      state: "state",
+      postalCode: "postal code",
+      equipmentTypes: "equipment types",
+      safetyRating: "safety rating",
+      complianceStatus: "compliance status",
+      paymentTerms: "payment terms",
+      paymentMethod: "payment method",
+      factoringCompanyId: "factoring company"
+    }
+  );
+
   await prisma.carrier.update({
     where: { id: carrierId },
     data: {
-      name: requiredString(formData, "name"),
-      status: requiredString(formData, "status"),
-      mcNumber,
-      mcNumberNormalized,
-      dotNumber,
-      dotNumberNormalized,
-      phone: optionalString(formData, "phone"),
-      email: optionalString(formData, "email"),
-      address: optionalString(formData, "address"),
-      city: optionalString(formData, "city"),
-      state: optionalString(formData, "state"),
-      postalCode: optionalString(formData, "postalCode"),
-      equipmentTypes: optionalString(formData, "equipmentTypes"),
-      safetyRating: optionalString(formData, "safetyRating"),
-      complianceStatus: requiredString(formData, "complianceStatus"),
-      paymentTerms: optionalString(formData, "paymentTerms") ?? "Net 30",
-      paymentMethod: optionalString(formData, "paymentMethod"),
-      factoringCompanyId: factoringCompanyId || null
+      ...next,
+      activities: {
+        create: {
+          userId: user.id,
+          action: "Carrier updated",
+          details
+        }
+      }
     }
   });
 
   revalidatePath("/carriers");
   revalidatePath(`/carriers/${carrierId}`);
   redirect(`/carriers/${carrierId}?saved=1`);
+}
+
+export async function addCarrierActivityNote(formData: FormData) {
+  const user = await requireWriteUser();
+  const carrierId = requiredString(formData, "carrierId");
+  const body = requiredString(formData, "body");
+  await requireCompanyCarrier(carrierId, user.companyId);
+
+  await prisma.carrierActivity.create({
+    data: {
+      carrierId,
+      userId: user.id,
+      action: "Activity note",
+      details: body
+    }
+  });
+
+  revalidatePath(`/carriers/${carrierId}`);
 }
 
 export async function createCarrierInsuranceCoverage(formData: FormData) {

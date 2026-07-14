@@ -9,7 +9,8 @@ const config: Config = {
   theme: {
     extend: {
       fontFamily: {
-        sans: ["var(--font-dm-sans)", "system-ui", "sans-serif"]
+        sans: ["var(--font-source-sans)", "system-ui", "sans-serif"],
+        display: ["var(--font-fraunces)", "Georgia", "serif"]
       },
       colors: {
         background: "var(--color-background)",
@@ -26,13 +27,19 @@ const config: Config = {
         lightprimary: "var(--color-lightprimary)",
         lightinfo: "var(--color-lightinfo)",
         "sidebar-foreground": "var(--color-sidebar-foreground)",
+        rail: {
+          DEFAULT: "var(--color-rail)",
+          foreground: "var(--color-rail-foreground)",
+          accent: "var(--color-rail-accent)"
+        },
         success: "var(--color-success)",
         warning: "var(--color-warning)",
         error: "var(--color-error)",
         info: "var(--color-info)"
       },
       boxShadow: {
-        card: "var(--shadow-card)"
+        card: "var(--shadow-card)",
+        lifted: "var(--shadow-lifted)"
       },
       borderRadius: {
         lg: "var(--radius-lg)"

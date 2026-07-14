@@ -15,8 +15,8 @@ export default async function SelectOrganizationPage({
     return (
       <main className="flex min-h-screen items-center justify-center bg-background px-5">
         <div className="card max-w-md text-center">
-          <p className="text-lg font-bold text-primary">Simple Source</p>
-          <h1 className="mt-3 text-2xl font-bold text-foreground">No organizations to select</h1>
+          <p className="font-display text-lg font-semibold text-primary">Simple Source</p>
+          <h1 className="mt-3 font-display text-2xl font-semibold text-foreground">No organizations to select</h1>
           <Link href="/" className="btn mt-4 inline-flex">
             Continue
           </Link>

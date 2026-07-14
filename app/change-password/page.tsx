@@ -1,3 +1,4 @@
+import { AuthBrandPanel, AuthMobileBrand } from "@/components/auth-brand-panel";
 import { changeOwnPassword } from "@/lib/auth";
 
 export default async function ChangePasswordPage({
@@ -8,12 +9,17 @@ export default async function ChangePasswordPage({
   const { error } = await searchParams;
 
   return (
-    <main className="flex min-h-screen items-center justify-center bg-background px-5 py-10">
-      <section className="card w-full max-w-md overflow-hidden p-0">
-        <div className="h-1 bg-primary" />
-        <div className="p-6">
-          <p className="text-lg font-bold text-primary">Simple Source</p>
-          <h1 className="mt-1 text-2xl font-bold text-foreground">Change password</h1>
+    <main className="grid min-h-screen grid-cols-1 bg-background lg:grid-cols-[1.15fr_1fr]">
+      <AuthBrandPanel />
+      <section className="flex items-center justify-center px-6 py-10 lg:px-16">
+        <div className="w-full max-w-md">
+          <AuthMobileBrand />
+          <p className="text-[11px] font-semibold uppercase tracking-[0.22em] text-muted-foreground">
+            Security
+          </p>
+          <h1 className="font-display mt-1 text-[2rem] font-semibold tracking-tight text-foreground">
+            Change password
+          </h1>
           <p className="mt-2 text-sm text-muted-foreground">
             Your administrator requires a password change before you continue.
           </p>

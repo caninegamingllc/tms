@@ -2,19 +2,31 @@ import type { ReactNode } from "react";
 
 type PageHeaderProps = {
   title: string;
-  description: string;
+  description?: string;
   action?: ReactNode;
+  eyebrow?: string;
 };
 
-export function PageHeader({ title, description, action }: PageHeaderProps) {
+export function PageHeader({
+  title,
+  description,
+  action,
+  eyebrow = "Simple Source TMS"
+}: PageHeaderProps) {
   return (
-    <div className="mb-6 flex flex-col gap-4 md:flex-row md:items-end md:justify-between">
-      <div>
-        <p className="text-sm font-semibold uppercase tracking-wide text-primary">Simple Source TMS</p>
-        <h1 className="mt-1 text-3xl font-bold tracking-tight text-foreground">{title}</h1>
-        <p className="mt-2 max-w-3xl text-sm text-muted-foreground">{description}</p>
+    <div className="mb-4 flex flex-col gap-3 border-b border-border pb-4 md:flex-row md:items-end md:justify-between">
+      <div className="min-w-0">
+        <p className="text-[10.5px] font-semibold uppercase tracking-[0.18em] text-muted-foreground">
+          {eyebrow}
+        </p>
+        <h1 className="font-display mt-0.5 text-[1.75rem] font-semibold leading-tight tracking-tight text-foreground md:text-[2rem]">
+          {title}
+        </h1>
+        {description ? (
+          <p className="mt-1 max-w-2xl text-[13px] text-muted-foreground">{description}</p>
+        ) : null}
       </div>
-      {action}
+      {action ? <div className="flex shrink-0 flex-wrap items-center gap-2">{action}</div> : null}
     </div>
   );
 }

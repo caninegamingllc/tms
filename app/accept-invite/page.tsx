@@ -16,8 +16,8 @@ export default async function AcceptInvitePage({
     return (
       <main className="flex min-h-screen items-center justify-center bg-background px-5">
         <div className="card max-w-md text-center">
-          <p className="text-lg font-bold text-primary">Simple Source</p>
-          <h1 className="mt-3 text-2xl font-bold text-foreground">Invalid invite link</h1>
+          <p className="font-display text-lg font-semibold text-primary">Simple Source</p>
+          <h1 className="mt-3 font-display text-2xl font-semibold text-foreground">Invalid invite link</h1>
           <p className="mt-2 text-sm text-muted-foreground">
             Ask your administrator to send a new invite.
           </p>

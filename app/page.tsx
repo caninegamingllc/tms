@@ -14,8 +14,9 @@ export default async function DashboardPage() {
   return (
     <>
       <PageHeader
-        title="Operations Dashboard"
-        description="Monitor active loads, margin, customer billing, carrier payables, and recent check calls from one brokerage command center."
+        title="Command center"
+        description="Live pulse across loads, margin, AR, and check calls."
+        eyebrow="Operations"
         action={
           <Link href="/loads/new" className="btn">
             Create Load
@@ -23,43 +24,45 @@ export default async function DashboardPage() {
         }
       />
 
-      <div className="grid gap-4 md:grid-cols-2 xl:grid-cols-4">
-        <MetricCard
-          label="Active Loads"
-          value={data.activeLoads.length}
-          detail={`${data.loads.length} total loads in the system`}
-          icon={<ClipboardList className="h-5 w-5" />}
-        />
-        <MetricCard
-          label="Booked Revenue"
-          value={formatMoney(data.revenueCents)}
-          detail={`Margin ${formatMoney(data.marginCents)} across visible loads`}
-          icon={<Banknote className="h-5 w-5" />}
-        />
-        <MetricCard
-          label="Open AR"
-          value={formatMoney(data.openArCents)}
-          detail="Customer invoices not yet paid"
-          icon={<AlertCircle className="h-5 w-5" />}
-        />
-        <MetricCard
-          label="Carrier Network"
-          value={data.carriers}
-          detail={`${data.customers} active customer accounts`}
-          icon={<Truck className="h-5 w-5" />}
-        />
+      <div className="overflow-hidden rounded-lg border border-border bg-card">
+        <div className="grid md:grid-cols-2 xl:grid-cols-4 xl:[&>*:nth-child(4n)]:border-r-0">
+          <MetricCard
+            label="Active Loads"
+            value={data.activeLoads.length}
+            detail={`${data.loads.length} total loads in the system`}
+            icon={<ClipboardList className="h-4 w-4" />}
+          />
+          <MetricCard
+            label="Booked Revenue"
+            value={formatMoney(data.revenueCents)}
+            detail={`Margin ${formatMoney(data.marginCents)} across visible loads`}
+            icon={<Banknote className="h-4 w-4" />}
+          />
+          <MetricCard
+            label="Open AR"
+            value={formatMoney(data.openArCents)}
+            detail="Customer invoices not yet paid"
+            icon={<AlertCircle className="h-4 w-4" />}
+          />
+          <MetricCard
+            label="Carrier Network"
+            value={data.carriers}
+            detail={`${data.customers} active customer accounts`}
+            icon={<Truck className="h-4 w-4" />}
+          />
+        </div>
       </div>
 
-      <div className="mt-6">
+      <div className="mt-4">
         <FuelIndexCard data={dieselPrices} />
       </div>
 
-      <div className="mt-6 grid gap-6 xl:grid-cols-[1.5fr_1fr]">
+      <div className="mt-4 grid gap-4 xl:grid-cols-[1.5fr_1fr]">
         <section className="card overflow-hidden p-0">
-          <div className="flex items-center justify-between border-b border-border p-5">
+          <div className="flex items-center justify-between border-b border-border px-4 py-3 md:px-5">
             <div>
-              <h2 className="section-title">Load Board Snapshot</h2>
-              <p className="muted">Most recent freight, coverage, and margin. Click column headers to sort.</p>
+              <h2 className="section-title">Load board snapshot</h2>
+              <p className="muted">Most recent freight, coverage, and margin.</p>
             </div>
             <Link href="/loads" className="btn-secondary">
               View All
@@ -85,22 +88,26 @@ export default async function DashboardPage() {
           </div>
         </section>
 
-        <section className="card">
-          <h2 className="section-title">Recent Check Calls</h2>
+        <section className="card !p-4">
+          <h2 className="section-title">Recent check calls</h2>
           <p className="muted">Latest driver and carrier updates.</p>
-          <div className="mt-4 grid gap-3">
+          <div className="mt-3 grid gap-2">
             {data.checkCalls.map((call) => (
-              <div key={call.id} className="rounded-2xl border border-border bg-muted p-4">
+              <div key={call.id} className="rounded-md border border-border bg-muted/40 px-3 py-2.5">
                 <div className="flex items-start justify-between gap-3">
                   <div>
-                    <p className="font-semibold text-foreground">{call.assignment.load.loadNumber}</p>
-                    <p className="muted">{call.assignment.carrier.name}</p>
+                    <p className="text-[13px] font-semibold text-foreground">
+                      {call.assignment.load.loadNumber}
+                    </p>
+                    <p className="text-[12px] text-muted-foreground">{call.assignment.carrier.name}</p>
                   </div>
-                  <span className="text-xs text-muted-foreground">{formatDateTime(call.occurredAt)}</span>
+                  <span className="text-[11px] text-muted-foreground tabular">
+                    {formatDateTime(call.occurredAt)}
+                  </span>
                 </div>
-                <p className="mt-2 text-sm font-semibold text-foreground">{call.status}</p>
-                <p className="text-sm text-muted-foreground">{call.location}</p>
-                {call.notes ? <p className="mt-2 text-sm text-slate-600">{call.notes}</p> : null}
+                <p className="mt-1.5 text-[13px] font-semibold text-foreground">{call.status}</p>
+                <p className="text-[12px] text-muted-foreground">{call.location}</p>
+                {call.notes ? <p className="mt-1 text-[12px] text-slate-600">{call.notes}</p> : null}
               </div>
             ))}
           </div>

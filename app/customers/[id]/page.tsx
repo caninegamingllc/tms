@@ -3,16 +3,27 @@ import { notFound } from "next/navigation";
 import { DocumentUploadForm } from "@/components/document-upload-form";
 import { DocumentsTable } from "@/components/documents-table";
 import { PageHeader } from "@/components/page-header";
-import { updateCustomerRateConfirmationTerms } from "@/lib/actions";
+import {
+  addCustomerActivityNote,
+  updateCustomer,
+  updateCustomerRateConfirmationTerms
+} from "@/lib/actions";
 import { canAccessRecord } from "@/lib/branch-filter-server";
 import { requireTmsAccess } from "@/lib/permissions";
-import { canWrite } from "@/lib/scope";
+import { canPickBranch, canWrite, isAdminRole } from "@/lib/scope";
 import { toDocumentTableRows } from "@/lib/document-rows";
 import { prisma } from "@/lib/db";
-import { formatMoney } from "@/lib/format";
+import { formatDateTime, formatMoney } from "@/lib/format";
 
-export default async function CustomerDetailPage({ params }: { params: Promise<{ id: string }> }) {
+export default async function CustomerDetailPage({
+  params,
+  searchParams
+}: {
+  params: Promise<{ id: string }>;
+  searchParams: Promise<{ saved?: string }>;
+}) {
   const { id } = await params;
+  const { saved } = await searchParams;
   const user = await requireTmsAccess();
   const customer = await prisma.customer.findUnique({
     where: { id, companyId: user.companyId },
@@ -21,7 +32,8 @@ export default async function CustomerDetailPage({ params }: { params: Promise<{
       contacts: true,
       loads: { select: { id: true } },
       invoices: true,
-      documents: { include: { uploadedBy: true, load: true, customer: true, carrier: true } }
+      documents: { include: { uploadedBy: true, load: true, customer: true, carrier: true } },
+      activities: { orderBy: { createdAt: "desc" }, include: { user: true } }
     }
   });
 
@@ -33,6 +45,17 @@ export default async function CustomerDetailPage({ params }: { params: Promise<{
   const openAr = customer.invoices
     .filter((invoice) => invoice.status !== "PAID" && invoice.status !== "VOID")
     .reduce((sum, invoice) => sum + invoice.totalCents, 0);
+  const writable = canWrite(user);
+  const showBranchPicker = canPickBranch(user);
+  const branches = showBranchPicker
+    ? await prisma.branch.findMany({
+        where: {
+          companyId: user.companyId,
+          ...(isAdminRole(user.role) ? {} : { id: { in: user.branchIds } })
+        },
+        orderBy: { name: "asc" }
+      })
+    : [];
 
   return (
     <>
@@ -46,41 +69,158 @@ export default async function CustomerDetailPage({ params }: { params: Promise<{
         }
       />
 
+      {saved ? (
+        <div className="mb-6 rounded-2xl border border-emerald-200 bg-emerald-50 p-4 text-sm font-semibold text-emerald-800">
+          Customer saved successfully.
+        </div>
+      ) : null}
+
       <div className="grid gap-6 xl:grid-cols-[0.9fr_1.1fr]">
         <div className="grid gap-6">
           <section className="card">
-            <h2 className="section-title">Customer Summary</h2>
-            <div className="mt-4 grid gap-3 rounded-2xl bg-muted p-4 text-sm">
-              <div>
-                <p className="label">Location</p>
-                <p className="font-semibold text-foreground">
-                  {customer.city ?? "No city"}, {customer.state ?? "No state"}
-                </p>
+            <h2 className="section-title">Customer Profile</h2>
+            {writable ? (
+              <form action={updateCustomer} className="mt-4 grid gap-3">
+                <input type="hidden" name="customerId" value={customer.id} />
+                <input name="name" className="input" defaultValue={customer.name} required />
+                <input name="address" className="input" defaultValue={customer.address ?? ""} placeholder="Address" />
+                <div className="grid gap-3 md:grid-cols-3">
+                  <input name="city" className="input" defaultValue={customer.city ?? ""} placeholder="City" />
+                  <input
+                    name="state"
+                    className="input"
+                    defaultValue={customer.state ?? ""}
+                    placeholder="State"
+                    maxLength={2}
+                  />
+                  <input
+                    name="postalCode"
+                    className="input"
+                    defaultValue={customer.postalCode ?? ""}
+                    placeholder="Zip"
+                  />
+                </div>
+                <div className="grid gap-3 md:grid-cols-2">
+                  <input name="phone" className="input" defaultValue={customer.phone ?? ""} placeholder="Main phone" />
+                  <input
+                    name="email"
+                    className="input"
+                    defaultValue={customer.email ?? ""}
+                    placeholder="Main email"
+                    type="email"
+                  />
+                </div>
+                <div className="grid gap-3 md:grid-cols-2">
+                  <input
+                    name="industry"
+                    className="input"
+                    defaultValue={customer.industry ?? ""}
+                    placeholder="Industry"
+                  />
+                  <select name="status" className="select" defaultValue={customer.status}>
+                    <option>Active</option>
+                    <option>Prospect</option>
+                    <option>Credit Hold</option>
+                    <option>Inactive</option>
+                  </select>
+                </div>
+                {showBranchPicker ? (
+                  <label className="grid gap-2">
+                    <span className="label">Branch</span>
+                    <select name="branchId" className="select" defaultValue={customer.branchId ?? ""}>
+                      <option value="">Unassigned</option>
+                      {branches.map((branch) => (
+                        <option key={branch.id} value={branch.id}>
+                          {branch.name}
+                        </option>
+                      ))}
+                    </select>
+                  </label>
+                ) : null}
+                <div className="grid gap-3 md:grid-cols-2">
+                  <input
+                    name="creditLimit"
+                    className="input"
+                    defaultValue={String(customer.creditLimit / 100)}
+                    placeholder="Credit limit"
+                  />
+                  <input name="paymentTerms" className="input" defaultValue={customer.paymentTerms} />
+                </div>
+                <div className="rounded-2xl bg-muted p-4">
+                  <p className="mb-3 text-sm font-semibold text-foreground">Primary Contact</p>
+                  <div className="grid gap-3">
+                    <input
+                      name="contactName"
+                      className="input"
+                      defaultValue={primaryContact?.name ?? ""}
+                      placeholder="Contact name"
+                    />
+                    <input
+                      name="contactTitle"
+                      className="input"
+                      defaultValue={primaryContact?.title ?? ""}
+                      placeholder="Title"
+                    />
+                    <input
+                      name="contactEmail"
+                      className="input"
+                      defaultValue={primaryContact?.email ?? ""}
+                      placeholder="Email"
+                      type="email"
+                    />
+                    <input
+                      name="contactPhone"
+                      className="input"
+                      defaultValue={primaryContact?.phone ?? ""}
+                      placeholder="Phone"
+                    />
+                  </div>
+                </div>
+                <div className="grid gap-3 rounded-2xl bg-muted p-4 text-sm">
+                  <div>
+                    <p className="label">Loads / Open AR</p>
+                    <p className="font-semibold text-foreground">
+                      {customer.loads.length} loads - {formatMoney(openAr)} open AR
+                    </p>
+                  </div>
+                </div>
+                <button className="btn" type="submit">
+                  Save Customer
+                </button>
+              </form>
+            ) : (
+              <div className="mt-4 grid gap-3 rounded-2xl bg-muted p-4 text-sm">
+                <div>
+                  <p className="label">Location</p>
+                  <p className="font-semibold text-foreground">
+                    {customer.city ?? "No city"}, {customer.state ?? "No state"}
+                  </p>
+                </div>
+                <div>
+                  <p className="label">Branch</p>
+                  <p className="font-semibold text-foreground">{customer.branch?.name ?? "Unassigned"}</p>
+                </div>
+                <div>
+                  <p className="label">Primary Contact</p>
+                  <p className="font-semibold text-foreground">{primaryContact?.name ?? "No contact"}</p>
+                  <p className="muted">{primaryContact?.email ?? customer.email ?? "No email"}</p>
+                </div>
+                <div>
+                  <p className="label">Payment Terms</p>
+                  <p className="font-semibold text-foreground">{customer.paymentTerms}</p>
+                </div>
+                <div>
+                  <p className="label">Credit Limit</p>
+                  <p className="font-semibold text-foreground">{formatMoney(customer.creditLimit)}</p>
+                </div>
+                <div>
+                  <p className="label">Loads / Open AR</p>
+                  <p className="font-semibold text-foreground">
+                    {customer.loads.length} loads - {formatMoney(openAr)} open AR
+                  </p>
+                </div>
               </div>
-              <div>
-                <p className="label">Branch</p>
-                <p className="font-semibold text-foreground">{customer.branch?.name ?? "Unassigned"}</p>
-              </div>
-              <div>
-                <p className="label">Primary Contact</p>
-                <p className="font-semibold text-foreground">{primaryContact?.name ?? "No contact"}</p>
-                <p className="muted">{primaryContact?.email ?? customer.email ?? "No email"}</p>
-              </div>
-              <div>
-                <p className="label">Payment Terms</p>
-                <p className="font-semibold text-foreground">{customer.paymentTerms}</p>
-              </div>
-              <div>
-                <p className="label">Credit Limit</p>
-                <p className="font-semibold text-foreground">{formatMoney(customer.creditLimit)}</p>
-              </div>
-              <div>
-                <p className="label">Loads / Open AR</p>
-                <p className="font-semibold text-foreground">
-                  {customer.loads.length} loads - {formatMoney(openAr)} open AR
-                </p>
-              </div>
-            </div>
+            )}
           </section>
 
           <section className="card">
@@ -89,7 +229,7 @@ export default async function CustomerDetailPage({ params }: { params: Promise<{
               Default terms appended to built-in rate confirmation language for this customer&apos;s
               loads. Individual loads can override.
             </p>
-            {canWrite(user) ? (
+            {writable ? (
               <form action={updateCustomerRateConfirmationTerms} className="mt-4 grid gap-3">
                 <input type="hidden" name="customerId" value={customer.id} />
                 <textarea
@@ -108,6 +248,41 @@ export default async function CustomerDetailPage({ params }: { params: Promise<{
                 {customer.rateConfirmationTerms?.trim() || "No custom rate confirmation terms set."}
               </p>
             )}
+          </section>
+
+          <section className="card">
+            <h2 className="section-title">Activity Log</h2>
+            {writable ? (
+              <form action={addCustomerActivityNote} className="mt-4 grid gap-3 rounded-2xl bg-muted p-4">
+                <input type="hidden" name="customerId" value={customer.id} />
+                <textarea
+                  name="body"
+                  className="textarea"
+                  rows={3}
+                  placeholder="Add a note to the activity log…"
+                  required
+                />
+                <button type="submit" className="btn-secondary">
+                  Save Activity Note
+                </button>
+              </form>
+            ) : null}
+            <div className="mt-4 grid gap-3">
+              {customer.activities.length === 0 ? (
+                <p className="text-sm text-muted-foreground">No activity yet.</p>
+              ) : (
+                customer.activities.map((activity) => (
+                  <div key={activity.id} className="rounded-2xl border border-border p-3">
+                    <p className="font-semibold text-foreground">{activity.action}</p>
+                    <p className="muted whitespace-pre-wrap">{activity.details ?? "No details"}</p>
+                    <p className="text-xs text-muted-foreground">
+                      {activity.user?.name ? `${activity.user.name} · ` : ""}
+                      {formatDateTime(activity.createdAt)}
+                    </p>
+                  </div>
+                ))
+              )}
+            </div>
           </section>
         </div>
 

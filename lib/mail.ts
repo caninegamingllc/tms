@@ -60,14 +60,15 @@ function passwordResetContent(resetUrl: string) {
   ].join("\n");
 
   const html = `
-    <div style="font-family:Arial,sans-serif;line-height:1.5;color:#0f172a;max-width:560px">
-      <p style="font-size:12px;font-weight:700;letter-spacing:0.08em;text-transform:uppercase;color:#5d87ff">
+    <div style="font-family:'Source Sans 3',Arial,sans-serif;line-height:1.5;color:#1b2433;max-width:560px">
+      <div style="height:3px;background:linear-gradient(90deg,#1e3a5f,#2b6b80,#3d9ba8);border-radius:2px;margin-bottom:18px"></div>
+      <p style="font-size:11px;font-weight:700;letter-spacing:0.16em;text-transform:uppercase;color:#2b6b80;margin:0">
         Simple Source TMS
       </p>
-      <h1 style="font-size:24px;margin:12px 0 8px">Reset your password</h1>
+      <h1 style="font-family:Georgia,serif;font-size:26px;margin:10px 0 8px;letter-spacing:-0.02em">Reset your password</h1>
       <p>We received a request to reset your TMS password. Use the button below to choose a new one.</p>
       <p style="margin:24px 0">
-        <a href="${resetUrl}" style="display:inline-block;background:#5d87ff;color:#fff;text-decoration:none;padding:12px 18px;border-radius:8px;font-weight:700">
+        <a href="${resetUrl}" style="display:inline-block;background:#2b6b80;color:#fff;text-decoration:none;padding:11px 18px;border-radius:6px;font-weight:700">
           Reset Password
         </a>
       </p>
@@ -109,16 +110,17 @@ function inviteContent(options: InviteEmailOptions) {
   ].join("\n");
 
   const html = `
-    <div style="font-family:Arial,sans-serif;line-height:1.5;color:#0f172a;max-width:560px">
-      <p style="font-size:12px;font-weight:700;letter-spacing:0.08em;text-transform:uppercase;color:#5d87ff">
+    <div style="font-family:'Source Sans 3',Arial,sans-serif;line-height:1.5;color:#1b2433;max-width:560px">
+      <div style="height:3px;background:linear-gradient(90deg,#1e3a5f,#2b6b80,#3d9ba8);border-radius:2px;margin-bottom:18px"></div>
+      <p style="font-size:11px;font-weight:700;letter-spacing:0.16em;text-transform:uppercase;color:#2b6b80;margin:0">
         Simple Source TMS
       </p>
-      <h1 style="font-size:24px;margin:12px 0 8px">You're invited</h1>
+      <h1 style="font-family:Georgia,serif;font-size:26px;margin:10px 0 8px;letter-spacing:-0.02em">You're invited</h1>
       <p>Hi ${inviteeName},</p>
       <p><strong>${inviterName}</strong> invited you to join <strong>${companyName}</strong> as a <strong>${roleLabel}</strong>.</p>
       <p>Use the button below to set your password and activate your account.</p>
       <p style="margin:24px 0">
-        <a href="${inviteUrl}" style="display:inline-block;background:#5d87ff;color:#fff;text-decoration:none;padding:12px 18px;border-radius:8px;font-weight:700">
+        <a href="${inviteUrl}" style="display:inline-block;background:#2b6b80;color:#fff;text-decoration:none;padding:11px 18px;border-radius:6px;font-weight:700">
           Accept Invite
         </a>
       </p>

@@ -118,6 +118,8 @@ model User {
   memberships            CompanyMembership[]
   notes                  LoadNote[]
   activities             LoadActivity[]
+  customerActivities     CustomerActivity[]
+  carrierActivities      CarrierActivity[]
   sessions               Session[]
   auditLogs              AuditLog[]          @relation("AuditActor")
   targetAuditLogs        AuditLog[]          @relation("AuditTargetUser")
@@ -320,10 +322,24 @@ model Customer {
   documents     LoadDocument[]
   invoices      Invoice[]
   payments      Payment[]
+  activities    CustomerActivity[]
   createdAt     DateTime          @default(now())
   updatedAt     DateTime          @updatedAt
 
   @@index([companyId])
+}
+
+model CustomerActivity {
+  id         String   @id @default(cuid())
+  customerId String
+  customer   Customer @relation(fields: [customerId], references: [id], onDelete: Cascade)
+  userId     String?
+  user       User?    @relation(fields: [userId], references: [id])
+  action     String
+  details    String?
+  createdAt  DateTime @default(now())
+
+  @@index([customerId])
 }
 
 model CustomerContact {
@@ -395,6 +411,7 @@ model Carrier {
   documents           LoadDocument[]
   carrierBills        CarrierBill[]
   payments            Payment[]
+  activities          CarrierActivity[]
   createdAt           DateTime                    @default(now())
   updatedAt           DateTime                    @updatedAt
 
@@ -402,6 +419,19 @@ model Carrier {
   @@index([companyId, mcNumberNormalized])
   @@index([companyId, dotNumberNormalized])
   @@index([factoringCompanyId])
+}
+
+model CarrierActivity {
+  id        String   @id @default(cuid())
+  carrierId String
+  carrier   Carrier  @relation(fields: [carrierId], references: [id], onDelete: Cascade)
+  userId    String?
+  user      User?    @relation(fields: [userId], references: [id])
+  action    String
+  details   String?
+  createdAt DateTime @default(now())
+
+  @@index([carrierId])
 }
 
 model CarrierContact {

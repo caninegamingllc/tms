@@ -745,5 +745,5 @@ export function plainTextToHtml(text: string) {
     .replace(/&/g, "&amp;")
     .replace(/</g, "&lt;")
     .replace(/>/g, "&gt;");
-  return `<div style="font-family:Arial,sans-serif;white-space:pre-wrap;line-height:1.5;color:#0f172a">${escaped}</div>`;
+  return `<div style="font-family:'Source Sans 3',Arial,sans-serif;white-space:pre-wrap;line-height:1.5;color:#1b2433">${escaped}</div>`;
 }

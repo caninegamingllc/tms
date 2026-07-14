@@ -96,8 +96,8 @@ function drawHeader(pdf: jsPDF, doc: StructuredDocument, logo: Awaited<ReturnTyp
     metaY += 4.5;
   }
 
-  pdf.setDrawColor(15, 23, 42);
-  pdf.setLineWidth(0.6);
+  pdf.setDrawColor(43, 107, 128);
+  pdf.setLineWidth(0.8);
   pdf.line(14, 36, pageWidth - 14, 36);
   return 42;
 }
@@ -172,7 +172,7 @@ export async function generateDocumentPdf(doc: StructuredDocument): Promise<Buff
       }`
     ]),
     styles: { fontSize: 8, cellPadding: 2.5, textColor: [30, 41, 59] },
-    headStyles: { fillColor: [15, 23, 42], textColor: 255, fontStyle: "bold" },
+    headStyles: { fillColor: [43, 107, 128], textColor: 255, fontStyle: "bold" },
     columnStyles: { 0: { cellWidth: 10 }, 1: { cellWidth: 24 } },
     margin: { left: 14, right: 14 }
   });
@@ -213,7 +213,7 @@ export async function generateDocumentPdf(doc: StructuredDocument): Promise<Buff
         ...(doc.totalCents != null ? [["Total", formatMoney(doc.totalCents)]] : [])
       ],
       styles: { fontSize: 9, cellPadding: 2.5 },
-      headStyles: { fillColor: [15, 23, 42], textColor: 255 },
+      headStyles: { fillColor: [43, 107, 128], textColor: 255 },
       columnStyles: { 1: { halign: "right", cellWidth: 35 } },
       margin: { left: 14, right: 14 },
       didParseCell: (data) => {
