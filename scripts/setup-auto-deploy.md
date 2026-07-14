@@ -45,8 +45,10 @@ The webhook only deploys when the push targets `main`.
 | `/etc/webhook.conf` | Webhook listener config |
 | `/etc/nginx/sites-available/tms.simple-source.com` | nginx reverse proxy (HTTPS via certbot) |
 | `/usr/local/bin/tms-deploy.sh` | Symlink to repo deploy script |
-| `/var/www/tms/scripts/tms-deploy.sh` | Deploy script from this repo |
+| `/var/www/tms/scripts/tms-deploy.sh` | Deploy script from this repo (must stay mode `100755` / executable) |
 | `/var/log/tms-deploy.log` | Deploy log |
+
+Webhook should invoke the script via `/bin/bash /usr/local/bin/tms-deploy.sh` (or the script must remain executable). A `git reset --hard` otherwise strips `+x` when the file is tracked as `100644`, and later webhook triggers return HTTP 200 without running a deploy.
 
 ## Manual deploy / SSH
 

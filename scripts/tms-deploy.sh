@@ -19,6 +19,9 @@ pm2 stop "$PM2_APP" 2>/dev/null || true
 git fetch origin "$BRANCH"
 git reset --hard "origin/$BRANCH"
 
+# Keep the hook target executable after hard reset (git file mode 100755).
+chmod +x "$APP_DIR/scripts/tms-deploy.sh"
+
 # NODE_ENV=production causes npm ci to skip devDependencies (prisma CLI, typescript, dotenv).
 npm ci --include=dev
 npx prisma generate
