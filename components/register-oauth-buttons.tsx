@@ -46,7 +46,7 @@ export function RegisterOAuthButtons({
           <a
             href={canStart ? href("google") : undefined}
             aria-disabled={!canStart}
-            className={`inline-flex items-center justify-center rounded-lg bg-black px-4 py-2 text-center text-sm font-semibold text-white transition hover:bg-neutral-800 ${!canStart ? "pointer-events-none opacity-50" : ""}`}
+            className={`inline-flex items-center justify-center rounded-lg bg-black px-4 py-2 text-center text-sm font-semibold text-red-500 transition hover:bg-neutral-800 [text-shadow:-1px_-1px_0_#fff,1px_-1px_0_#fff,-1px_1px_0_#fff,1px_1px_0_#fff] ${!canStart ? "pointer-events-none opacity-50" : ""}`}
           >
             Continue with Google
           </a>
@@ -55,7 +55,7 @@ export function RegisterOAuthButtons({
           <a
             href={canStart ? href("microsoft") : undefined}
             aria-disabled={!canStart}
-            className={`inline-flex items-center justify-center rounded-lg bg-black px-4 py-2 text-center text-sm font-semibold text-white transition hover:bg-neutral-800 ${!canStart ? "pointer-events-none opacity-50" : ""}`}
+            className={`inline-flex items-center justify-center rounded-lg bg-black px-4 py-2 text-center text-sm font-semibold text-red-500 transition hover:bg-neutral-800 [text-shadow:-1px_-1px_0_#fff,1px_-1px_0_#fff,-1px_1px_0_#fff,1px_1px_0_#fff] ${!canStart ? "pointer-events-none opacity-50" : ""}`}
           >
             Continue with Microsoft 365
           </a>

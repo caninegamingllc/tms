@@ -41,7 +41,7 @@ export function OAuthButtons({
         {googleConfigured ? (
           <Link
             href={href("google")}
-            className="inline-flex items-center justify-center rounded-lg bg-black px-4 py-2 text-center text-sm font-semibold text-white transition hover:bg-neutral-800"
+            className="inline-flex items-center justify-center rounded-lg bg-black px-4 py-2 text-center text-sm font-semibold text-red-500 transition hover:bg-neutral-800 [text-shadow:-1px_-1px_0_#fff,1px_-1px_0_#fff,-1px_1px_0_#fff,1px_1px_0_#fff]"
           >
             Continue with Google
           </Link>
@@ -49,7 +49,7 @@ export function OAuthButtons({
         {microsoftConfigured ? (
           <Link
             href={href("microsoft")}
-            className="inline-flex items-center justify-center rounded-lg bg-black px-4 py-2 text-center text-sm font-semibold text-white transition hover:bg-neutral-800"
+            className="inline-flex items-center justify-center rounded-lg bg-black px-4 py-2 text-center text-sm font-semibold text-red-500 transition hover:bg-neutral-800 [text-shadow:-1px_-1px_0_#fff,1px_-1px_0_#fff,-1px_1px_0_#fff,1px_1px_0_#fff]"
           >
             Continue with Microsoft 365
           </Link>
