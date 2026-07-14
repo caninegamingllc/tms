@@ -1,6 +1,7 @@
 "use client";
 
 import { useMemo, useState } from "react";
+import { GoogleSignInButton, MicrosoftSignInButton } from "@/components/oauth-branded-buttons";
 
 type Props = {
   initialCompanyName?: string;
@@ -41,24 +42,16 @@ export function RegisterOAuthButtons({
           placeholder="Required before continuing"
         />
       </label>
-      <div className="grid gap-2">
+      <div className="grid gap-3">
         {googleConfigured ? (
-          <a
-            href={canStart ? href("google") : undefined}
-            aria-disabled={!canStart}
-            className={`inline-flex items-center justify-center rounded-lg bg-black px-4 py-2 text-center text-sm font-semibold text-red-500 transition hover:bg-neutral-800 [text-shadow:-1px_-1px_0_#fff,1px_-1px_0_#fff,-1px_1px_0_#fff,1px_1px_0_#fff] ${!canStart ? "pointer-events-none opacity-50" : ""}`}
-          >
-            Continue with Google
-          </a>
+          <GoogleSignInButton href={href("google")} disabled={!canStart}>
+            Sign in with Google
+          </GoogleSignInButton>
         ) : null}
         {microsoftConfigured ? (
-          <a
-            href={canStart ? href("microsoft") : undefined}
-            aria-disabled={!canStart}
-            className={`inline-flex items-center justify-center rounded-lg bg-black px-4 py-2 text-center text-sm font-semibold text-red-500 transition hover:bg-neutral-800 [text-shadow:-1px_-1px_0_#fff,1px_-1px_0_#fff,-1px_1px_0_#fff,1px_1px_0_#fff] ${!canStart ? "pointer-events-none opacity-50" : ""}`}
-          >
-            Continue with Microsoft 365
-          </a>
+          <MicrosoftSignInButton href={href("microsoft")} disabled={!canStart}>
+            Sign in with Microsoft
+          </MicrosoftSignInButton>
         ) : null}
       </div>
       {!canStart ? (
