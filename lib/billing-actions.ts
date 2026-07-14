@@ -1,70 +1,62 @@
 "use server";
 
+import { headers } from "next/headers";
 import { redirect } from "next/navigation";
 import type Stripe from "stripe";
-import { appBaseUrl } from "@/lib/app-url";
+import { resolvePublicAppUrl } from "@/lib/app-url";
 import { requireAdmin } from "@/lib/auth";
 import { prisma } from "@/lib/db";
 import { autoAssignOwnerOnPurchase } from "@/lib/seats";
 import { getSeatPriceId, getStripe, isStripeConfigured } from "@/lib/stripe";
 
-export async function createSeatCheckoutSession(formData: FormData) {
-  const actor = await requireAdmin();
+async function publicBillingBaseUrl() {
+  const headerStore = await headers();
+  const host = headerStore.get("x-forwarded-host") ?? headerStore.get("host");
+  const proto = headerStore.get("x-forwarded-proto") ?? "https";
+  const origin = host ? `${proto}://${host}` : null;
+  return resolvePublicAppUrl(origin);
+}
 
-  if (!isStripeConfigured()) {
-    redirect("/admin/billing?error=Stripe%20is%20not%20configured");
-  }
+function redirectBillingError(message: string): never {
+  redirect(`/admin/billing?error=${encodeURIComponent(message)}`);
+}
 
-  const quantity = Number(formData.get("quantity"));
-  const promoCode = String(formData.get("promoCode") ?? "").trim();
-
-  if (!Number.isInteger(quantity) || quantity < 1) {
-    redirect("/admin/billing?error=Quantity%20must%20be%20at%20least%201");
+async function ensureStripeCustomer(
+  companyId: string,
+  actor: { email: string; name: string },
+  existingCustomerId: string | null | undefined
+) {
+  if (existingCustomerId) {
+    return existingCustomerId;
   }
 
   const stripe = getStripe();
-  const priceId = getSeatPriceId();
-
-  let subscription = await prisma.seatSubscription.findUnique({
-    where: { companyId: actor.companyId }
+  const customer = await stripe.customers.create({
+    email: actor.email,
+    name: actor.name,
+    metadata: { companyId }
   });
 
-  if (!subscription) {
-    subscription = await prisma.seatSubscription.create({
-      data: { companyId: actor.companyId, status: "NONE", seatQuantity: 0 }
-    });
-  }
+  await prisma.seatSubscription.upsert({
+    where: { companyId },
+    create: {
+      companyId,
+      stripeCustomerId: customer.id,
+      status: "NONE",
+      seatQuantity: 0
+    },
+    update: { stripeCustomerId: customer.id }
+  });
 
-  let customerId = subscription.stripeCustomerId;
+  return customer.id;
+}
 
-  if (!customerId) {
-    const customer = await stripe.customers.create({
-      email: actor.email,
-      name: actor.name,
-      metadata: { companyId: actor.companyId }
-    });
-    customerId = customer.id;
-
-    await prisma.seatSubscription.update({
-      where: { companyId: actor.companyId },
-      data: { stripeCustomerId: customerId }
-    });
-  }
-
-  const sessionParams: Stripe.Checkout.SessionCreateParams = {
-    mode: "subscription",
-    customer: customerId,
-    line_items: [{ price: priceId, quantity }],
-    success_url: `${appBaseUrl()}/admin/billing?success=1`,
-    cancel_url: `${appBaseUrl()}/admin/billing?canceled=1`,
-    metadata: { companyId: actor.companyId, membershipId: actor.membershipId },
-    subscription_data: {
-      metadata: { companyId: actor.companyId }
-    }
-  };
-
+async function applyPromoToCheckout(
+  sessionParams: Stripe.Checkout.SessionCreateParams,
+  promoCode: string
+) {
   if (promoCode) {
-    const promoCodes = await stripe.promotionCodes.list({
+    const promoCodes = await getStripe().promotionCodes.list({
       code: promoCode,
       active: true,
       limit: 1
@@ -72,39 +64,151 @@ export async function createSeatCheckoutSession(formData: FormData) {
 
     if (promoCodes.data[0]) {
       sessionParams.discounts = [{ promotion_code: promoCodes.data[0].id }];
-    } else {
-      redirect("/admin/billing?error=Invalid%20promo%20code");
+      return;
     }
-  } else if (process.env.STRIPE_DEV_PROMO_CODE) {
-    try {
-      const promoCodes = await stripe.promotionCodes.list({
-        code: process.env.STRIPE_DEV_PROMO_CODE,
-        active: true,
-        limit: 1
+
+    redirectBillingError("Invalid promo code");
+  }
+
+  // Only auto-apply the dev promo outside production / public hosts.
+  const baseUrl = await publicBillingBaseUrl();
+  const allowDevPromo =
+    process.env.NODE_ENV !== "production" || /localhost|127\.0\.0\.1/i.test(baseUrl);
+
+  if (!allowDevPromo || !process.env.STRIPE_DEV_PROMO_CODE) {
+    return;
+  }
+
+  try {
+    const promoCodes = await getStripe().promotionCodes.list({
+      code: process.env.STRIPE_DEV_PROMO_CODE,
+      active: true,
+      limit: 1
+    });
+
+    if (promoCodes.data[0]) {
+      sessionParams.discounts = [{ promotion_code: promoCodes.data[0].id }];
+    }
+  } catch {
+    // Promo lookup is optional during development.
+  }
+}
+
+export async function createSeatCheckoutSession(formData: FormData) {
+  const actor = await requireAdmin();
+
+  if (!isStripeConfigured()) {
+    redirectBillingError("Stripe is not configured");
+  }
+
+  const quantity = Number(formData.get("quantity"));
+  const promoCode = String(formData.get("promoCode") ?? "").trim();
+
+  if (!Number.isInteger(quantity) || quantity < 1) {
+    redirectBillingError("Quantity must be at least 1");
+  }
+
+  try {
+    const stripe = getStripe();
+    const priceId = getSeatPriceId();
+    const baseUrl = await publicBillingBaseUrl();
+
+    let subscription = await prisma.seatSubscription.findUnique({
+      where: { companyId: actor.companyId }
+    });
+
+    if (!subscription) {
+      subscription = await prisma.seatSubscription.create({
+        data: { companyId: actor.companyId, status: "NONE", seatQuantity: 0 }
       });
-
-      if (promoCodes.data[0]) {
-        sessionParams.discounts = [{ promotion_code: promoCodes.data[0].id }];
-      }
-    } catch {
-      // Promo lookup is optional during development.
     }
+
+    const customerId = await ensureStripeCustomer(
+      actor.companyId,
+      actor,
+      subscription.stripeCustomerId
+    );
+
+    // Prefer updating an existing active/past_due subscription instead of
+    // creating a second one — sync would otherwise keep only the newest qty.
+    if (subscription.stripeSubscriptionId) {
+      try {
+        const existing = await stripe.subscriptions.retrieve(subscription.stripeSubscriptionId, {
+          expand: ["items.data.price"]
+        });
+
+        if (existing.status === "active" || existing.status === "trialing" || existing.status === "past_due") {
+          const item = existing.items.data[0];
+          if (!item) {
+            redirectBillingError("Existing subscription has no billable items");
+          }
+
+          if (promoCode) {
+            redirectBillingError(
+              "Promo codes apply to new checkouts only. Update seat quantity without a promo, or manage billing in the portal."
+            );
+          }
+
+          const updated = await stripe.subscriptions.update(existing.id, {
+            items: [
+              {
+                id: item.id,
+                price: priceId,
+                quantity
+              }
+            ],
+            proration_behavior: "create_prorations",
+            metadata: { companyId: actor.companyId }
+          });
+
+          await syncSeatSubscriptionFromStripe(updated, actor.companyId);
+          await autoAssignOwnerOnPurchase(actor.companyId, actor.membershipId);
+          redirect("/admin/billing?success=1");
+        }
+      } catch (error) {
+        if (error && typeof error === "object" && "digest" in error) {
+          throw error;
+        }
+        // Stale subscription id — fall through to a fresh checkout.
+      }
+    }
+
+    const sessionParams: Stripe.Checkout.SessionCreateParams = {
+      mode: "subscription",
+      customer: customerId,
+      line_items: [{ price: priceId, quantity }],
+      success_url: `${baseUrl}/admin/billing?success=1`,
+      cancel_url: `${baseUrl}/admin/billing?canceled=1`,
+      metadata: { companyId: actor.companyId, membershipId: actor.membershipId },
+      subscription_data: {
+        metadata: { companyId: actor.companyId }
+      }
+    };
+
+    await applyPromoToCheckout(sessionParams, promoCode);
+
+    const session = await stripe.checkout.sessions.create(sessionParams);
+
+    if (!session.url) {
+      redirectBillingError("Failed to create checkout session");
+    }
+
+    redirect(session.url);
+  } catch (error) {
+    if (error && typeof error === "object" && "digest" in error) {
+      throw error;
+    }
+
+    const message = error instanceof Error ? error.message : "Checkout failed";
+    redirectBillingError(message);
   }
-
-  const session = await stripe.checkout.sessions.create(sessionParams);
-
-  if (!session.url) {
-    redirect("/admin/billing?error=Failed%20to%20create%20checkout%20session");
-  }
-
-  redirect(session.url);
 }
 
 export async function createBillingPortalSession() {
   const actor = await requireAdmin();
 
   if (!isStripeConfigured()) {
-    redirect("/admin/billing?error=Stripe%20is%20not%20configured");
+    redirectBillingError("Stripe is not configured");
   }
 
   const subscription = await prisma.seatSubscription.findUnique({
@@ -112,16 +216,26 @@ export async function createBillingPortalSession() {
   });
 
   if (!subscription?.stripeCustomerId) {
-    redirect("/admin/billing?error=No%20billing%20account%20found");
+    redirectBillingError("No billing account found");
   }
 
-  const stripe = getStripe();
-  const portalSession = await stripe.billingPortal.sessions.create({
-    customer: subscription.stripeCustomerId,
-    return_url: `${appBaseUrl()}/admin/billing`
-  });
+  try {
+    const stripe = getStripe();
+    const baseUrl = await publicBillingBaseUrl();
+    const portalSession = await stripe.billingPortal.sessions.create({
+      customer: subscription.stripeCustomerId,
+      return_url: `${baseUrl}/admin/billing`
+    });
 
-  redirect(portalSession.url);
+    redirect(portalSession.url);
+  } catch (error) {
+    if (error && typeof error === "object" && "digest" in error) {
+      throw error;
+    }
+
+    const message = error instanceof Error ? error.message : "Billing portal failed";
+    redirectBillingError(message);
+  }
 }
 
 export async function syncSeatSubscriptionFromStripe(
@@ -225,6 +339,15 @@ export async function syncSeatSubscriptionForCompany(companyId: string) {
       subscription = await stripe.subscriptions.retrieve(local.stripeSubscriptionId, {
         expand: ["items.data.price"]
       });
+
+      // Prefer the stored subscription when it is still usable.
+      if (
+        subscription.status === "canceled" ||
+        subscription.status === "incomplete_expired" ||
+        subscription.status === "unpaid"
+      ) {
+        subscription = null;
+      }
     } catch {
       // Subscription id may be stale after a new checkout.
     }
@@ -242,8 +365,17 @@ export async function syncSeatSubscriptionForCompany(companyId: string) {
       (item) => item.status === "active" || item.status === "trialing"
     );
 
+    // Prefer the highest seat quantity among active subscriptions so a
+    // stray qty-1 checkout cannot silently shrink licensed seats.
     subscription =
-      activeSubscriptions.sort((left, right) => right.created - left.created)[0] ??
+      activeSubscriptions.sort((left, right) => {
+        const leftQty = left.items.data[0]?.quantity ?? 0;
+        const rightQty = right.items.data[0]?.quantity ?? 0;
+        if (rightQty !== leftQty) {
+          return rightQty - leftQty;
+        }
+        return right.created - left.created;
+      })[0] ??
       subscriptions.data.sort((left, right) => right.created - left.created)[0] ??
       null;
   }

@@ -1,5 +1,6 @@
 import type { Company, Prisma } from "@prisma/client";
 import { formatDate, formatDateTime, formatMoney } from "@/lib/format";
+import type { BolFormData } from "@/lib/bol-types";
 
 export type LoadForDocument = Prisma.LoadGetPayload<{
   include: {
@@ -67,6 +68,8 @@ export type StructuredDocument = {
   terms: string[];
   signatures: string[];
   remittance?: string[];
+  /** VICS-style Bill of Lading fields (when type === "BOL"). */
+  bol?: BolFormData;
 };
 
 function companyAddressLines(company: CompanyBranding) {
@@ -237,44 +240,189 @@ export function buildRateConfirmationDocument(
   };
 }
 
+function cityStateZip(city?: string | null, state?: string | null, postalCode?: string | null) {
+  const cityState = [city, state].filter(Boolean).join(", ");
+  return [cityState, postalCode].filter(Boolean).join(" ");
+}
+
+function stopToParty(
+  stop:
+    | {
+        facilityName: string;
+        address?: string | null;
+        city: string;
+        state: string;
+        postalCode?: string | null;
+      }
+    | undefined,
+  fallbackName: string
+) {
+  if (!stop) {
+    return { name: fallbackName, address: "", cityStateZip: "" };
+  }
+  return {
+    name: stop.facilityName || fallbackName,
+    address: stop.address || "",
+    cityStateZip: cityStateZip(stop.city, stop.state, stop.postalCode)
+  };
+}
+
+export function buildBolFormData(
+  load: LoadForDocument,
+  documentNumber: string,
+  company: CompanyBranding
+): BolFormData {
+  const stops = [...load.stops].sort((a, b) => a.sequence - b.sequence);
+  const pickup =
+    stops.find((stop) => stop.type.toUpperCase().includes("PICK")) ?? stops[0];
+  const delivery =
+    [...stops].reverse().find((stop) => stop.type.toUpperCase().includes("DELIV")) ??
+    stops[stops.length - 1];
+
+  const assignment = load.dispatchAssignment;
+  const carrier = assignment?.carrier;
+  const weightLabel = load.weight ? load.weight.toLocaleString() : "";
+  const specialInstructions = stops
+    .map((stop) => stop.instructions?.trim())
+    .filter(Boolean)
+    .join(" | ");
+
+  return {
+    date: formatDate(new Date()),
+    bolNumber: documentNumber,
+    pageLabel: "Page 1 of 1",
+    shipFrom: stopToParty(pickup, load.customer.name),
+    shipTo: stopToParty(delivery, `${load.deliveryCity}, ${load.deliveryState}`),
+    carrierName: carrier?.name || "",
+    trailerNumber: assignment?.trailerNumber || "",
+    sealNumbers: "",
+    scac: "",
+    proNumber: "",
+    billTo: {
+      name: company.name,
+      address: company.address || "",
+      cityStateZip: cityStateZip(company.city, company.state, company.postalCode)
+    },
+    freightChargeTerms: "THIRD_PARTY",
+    specialInstructions,
+    masterBol: false,
+    customerOrders: [
+      {
+        orderNumber: load.referenceNumber || load.loadNumber,
+        pkgs: "",
+        weight: weightLabel,
+        palletSlip: "",
+        additionalInfo: load.equipmentType || ""
+      }
+    ],
+    handlingUnitQty: "",
+    handlingUnitType: "PLT",
+    packageQty: "",
+    packageType: "",
+    weight: weightLabel,
+    hazardous: false,
+    commodity: load.commodity || "",
+    nmfc: "",
+    freightClass: "",
+    declaredValue: "",
+    declaredValuePer: "",
+    codAmount: ""
+  };
+}
+
+function bolFormToPlainText(bol: BolFormData) {
+  return [
+    "BILL OF LADING",
+    line("Date", bol.date),
+    line("Bill of Lading Number", bol.bolNumber),
+    bol.pageLabel,
+    "",
+    "SHIP FROM",
+    line("Name", bol.shipFrom.name),
+    line("Address", bol.shipFrom.address),
+    line("City/State/Zip", bol.shipFrom.cityStateZip),
+    "",
+    "SHIP TO",
+    line("Name", bol.shipTo.name),
+    line("Address", bol.shipTo.address),
+    line("City/State/Zip", bol.shipTo.cityStateZip),
+    "",
+    "CARRIER",
+    line("Carrier Name", bol.carrierName),
+    line("Trailer number", bol.trailerNumber),
+    line("Seal number(s)", bol.sealNumbers),
+    line("SCAC", bol.scac),
+    line("Pro number", bol.proNumber),
+    "",
+    "THIRD PARTY FREIGHT CHARGES BILL TO",
+    line("Name", bol.billTo.name),
+    line("Address", bol.billTo.address),
+    line("City/State/Zip", bol.billTo.cityStateZip),
+    line("Freight Charge Terms", bol.freightChargeTerms.replace("_", " ")),
+    "",
+    "SPECIAL INSTRUCTIONS",
+    bol.specialInstructions || "N/A",
+    "",
+    "CUSTOMER ORDER INFORMATION",
+    ...bol.customerOrders.map(
+      (row) =>
+        `${row.orderNumber} | Pkgs: ${row.pkgs || "—"} | Weight: ${row.weight || "—"} | ${row.additionalInfo || ""}`
+    ),
+    "",
+    "CARRIER INFORMATION",
+    line("Handling Unit", [bol.handlingUnitQty, bol.handlingUnitType].filter(Boolean).join(" ") || "N/A"),
+    line("Package", [bol.packageQty, bol.packageType].filter(Boolean).join(" ") || "N/A"),
+    line("Weight", bol.weight),
+    line("Commodity", bol.commodity),
+    line("NMFC #", bol.nmfc),
+    line("Class", bol.freightClass),
+    "",
+    "NOTE Liability Limitation for loss or damage in this shipment may be applicable. See 49 U.S.C. § 14706(c)(1)(A) and (B).",
+    "",
+    "SHIPPER SIGNATURE / DATE: ______________________________",
+    "CARRIER SIGNATURE / PICKUP DATE: ______________________________"
+  ].join("\n");
+}
+
 export function buildBillOfLadingDocument(
   load: LoadForDocument,
   documentNumber: string,
   company: CompanyBranding
 ): StructuredDocument {
+  const bol = buildBolFormData(load, documentNumber, company);
+  const pickup = bol.shipFrom;
+  const delivery = bol.shipTo;
+
   return {
     type: "BOL",
     title: "Bill of Lading",
     documentNumber,
     loadNumber: load.loadNumber,
     dateLabel: "Date",
-    issuedDate: formatDate(new Date()),
+    issuedDate: bol.date,
     company: brandingFromCompany(company),
-    partyTitle: "Shipper / Consignee",
-    partyLines: [
-      load.customer.name,
-      load.customer.phone ? `Phone: ${load.customer.phone}` : "",
-      load.customer.email ? `Email: ${load.customer.email}` : ""
-    ].filter(Boolean),
+    partyTitle: "Ship From",
+    partyLines: [pickup.name, pickup.address, pickup.cityStateZip].filter(Boolean),
     details: [
-      { label: "Customer Reference", value: load.referenceNumber || "N/A" },
-      { label: "Commodity", value: load.commodity || "N/A" },
-      { label: "Equipment", value: load.equipmentType || "N/A" },
-      {
-        label: "Weight",
-        value: load.weight ? `${load.weight.toLocaleString()} lbs` : "N/A"
-      }
+      { label: "Ship To", value: [delivery.name, delivery.address, delivery.cityStateZip].filter(Boolean).join(", ") },
+      { label: "Carrier", value: bol.carrierName || "N/A" },
+      { label: "Customer Order", value: bol.customerOrders[0]?.orderNumber || load.loadNumber },
+      { label: "Commodity", value: bol.commodity || "N/A" },
+      { label: "Weight", value: bol.weight ? `${bol.weight} lbs` : "N/A" },
+      { label: "Trailer #", value: bol.trailerNumber || "N/A" },
+      { label: "Freight Terms", value: "3rd Party" }
     ],
     stops: mapStops(load),
     terms: [
+      "Liability Limitation for loss or damage in this shipment may be applicable. See 49 U.S.C. § 14706(c)(1)(A) and (B).",
       "Driver must verify piece count, condition, seal number, and temperature if applicable.",
       "Signed POD must be returned to broker after delivery."
     ],
     signatures: [
-      "Shipper: ______________________________ Date: _______________",
-      "Carrier: ______________________________ Date: _______________",
-      "Consignee: ____________________________ Date: _______________"
-    ]
+      "Shipper Signature / Date: ______________________________",
+      "Carrier Signature / Pickup Date: ______________________________"
+    ],
+    bol
   };
 }
 
@@ -454,7 +602,7 @@ export function buildBillOfLading(
   documentNumber: string,
   company: CompanyBranding
 ) {
-  return structuredToPlainText(buildBillOfLadingDocument(load, documentNumber, company));
+  return bolFormToPlainText(buildBolFormData(load, documentNumber, company));
 }
 
 export function buildCustomerInvoice(

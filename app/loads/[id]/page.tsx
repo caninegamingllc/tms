@@ -12,6 +12,7 @@ import {
   generateBillOfLading,
   generateCustomerInvoice,
   generateRateConfirmation,
+  unassignCarrier,
   updateLoadStatus
 } from "@/lib/actions";
 import {
@@ -53,10 +54,10 @@ export default async function LoadDetailPage({
   searchParams
 }: {
   params: Promise<{ id: string }>;
-  searchParams: Promise<{ emailed?: string; saved?: string }>;
+  searchParams: Promise<{ emailed?: string; saved?: string; error?: string }>;
 }) {
   const { id } = await params;
-  const { emailed, saved } = await searchParams;
+  const { emailed, saved, error } = await searchParams;
   const user = await requireTmsAccess();
   await ensureCompanyCatalogs(user.companyId);
   const [load, carriers, commissionProfiles, mailbox, payLineTypes] = await Promise.all([
@@ -182,6 +183,12 @@ export default async function LoadDetailPage({
       {saved ? (
         <div className="mb-4 rounded-lg border border-emerald-200 bg-emerald-50 p-3 text-sm font-semibold text-emerald-700">
           Load saved successfully.
+        </div>
+      ) : null}
+
+      {error ? (
+        <div className="mb-4 rounded-lg border border-rose-200 bg-rose-50 p-3 text-sm font-semibold text-rose-700">
+          {error}
         </div>
       ) : null}
 
@@ -464,6 +471,14 @@ export default async function LoadDetailPage({
                 Save Assignment
               </button>
             </form>
+            {load.dispatchAssignment && canWrite(user) && !["INVOICED", "PAID"].includes(load.status) ? (
+              <form action={unassignCarrier} className="mt-3">
+                <input type="hidden" name="loadId" value={load.id} />
+                <button type="submit" className="btn-secondary w-full">
+                  Unassign Carrier
+                </button>
+              </form>
+            ) : null}
           </section>
 
           {load.dispatchAssignment ? (

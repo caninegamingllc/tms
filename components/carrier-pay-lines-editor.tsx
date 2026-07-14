@@ -136,7 +136,7 @@ export function CarrierPayLinesEditor({
   }
 
   function removeLine(key: string) {
-    setLines((prev) => (prev.length <= 1 ? prev : prev.filter((line) => line.key !== key)));
+    setLines((prev) => prev.filter((line) => line.key !== key));
   }
 
   const computed = lines.map((line) => {
@@ -170,6 +170,11 @@ export function CarrierPayLinesEditor({
     <div className="grid gap-3">
       <input type="hidden" name="payLinesJson" value={JSON.stringify(payload)} />
       <div className="grid gap-3">
+        {computed.length === 0 ? (
+          <p className="rounded-2xl border border-dashed border-border px-4 py-6 text-sm text-muted-foreground">
+            No pay line items. Add a line item below, or unassign the carrier if this load should be uncovered.
+          </p>
+        ) : null}
         {computed.map((line) => (
           <div
             key={line.key}
@@ -211,7 +216,6 @@ export function CarrierPayLinesEditor({
                   type="button"
                   className="btn-secondary"
                   onClick={() => removeLine(line.key)}
-                  disabled={computed.length <= 1}
                 >
                   Remove
                 </button>

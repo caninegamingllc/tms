@@ -9,3 +9,4 @@ tsconfig.tsbuildinfo
 *.db
 *.db-journal
 uploads
+templates/

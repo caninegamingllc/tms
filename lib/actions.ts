@@ -766,6 +766,53 @@ export async function assignCarrier(formData: FormData) {
   revalidatePath(`/loads/${loadId}`);
 }
 
+export async function unassignCarrier(formData: FormData) {
+  const user = await requireWriteUser();
+  const loadId = requiredString(formData, "loadId");
+  const load = await requireCompanyLoad(loadId, user);
+
+  const assignment = await prisma.dispatchAssignment.findUnique({ where: { loadId } });
+  if (!assignment) {
+    redirect(`/loads/${loadId}?error=${encodeURIComponent("No carrier is assigned to this load.")}`);
+  }
+
+  if (["INVOICED", "PAID"].includes(load.status)) {
+    redirect(
+      `/loads/${loadId}?error=${encodeURIComponent("Cannot unassign a carrier from an invoiced or paid load.")}`
+    );
+  }
+
+  const nextStatus = load.status === "COVERED" || load.status === "DISPATCHED" ? "AVAILABLE" : load.status;
+
+  await prisma.$transaction(async (tx) => {
+    await tx.carrierPayLine.deleteMany({ where: { loadId } });
+    await tx.dispatchAssignment.delete({ where: { loadId } });
+
+    await tx.load.update({
+      where: { id: loadId },
+      data: {
+        status: nextStatus,
+        carrierCostCents: 0,
+        activities: {
+          create: {
+            userId: user.id,
+            action: "Carrier unassigned",
+            details: "Carrier assignment and pay line items were removed."
+          }
+        }
+      }
+    });
+  });
+
+  await recalculateLoadCommission(loadId);
+
+  revalidatePath("/dispatch");
+  revalidatePath("/loads");
+  revalidatePath("/commissions");
+  revalidatePath(`/loads/${loadId}`);
+  redirect(`/loads/${loadId}?saved=1`);
+}
+
 export async function addCheckCall(formData: FormData) {
   const user = await requireWriteUser();
   const assignmentId = requiredString(formData, "assignmentId");

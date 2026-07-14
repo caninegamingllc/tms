@@ -53,6 +53,10 @@ export async function assignSeat(membershipId: string, companyId: string) {
     throw new Error("Membership does not belong to this organization.");
   }
 
+  if (membership.status === "INVITED") {
+    throw new Error("Pending invites cannot receive a seat until accepted.");
+  }
+
   if (membership.seatAssignedAt) {
     throw new Error("This member already has a seat assigned.");
   }

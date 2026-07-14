@@ -21,6 +21,25 @@ function isLocalhostUrl(value: string) {
 }
 
 /**
+ * Prefer the public request origin when APP_BASE_URL is still localhost
+ * (common production misconfiguration that breaks Stripe return URLs).
+ */
+export function resolvePublicAppUrl(requestOrigin?: string | null) {
+  const configured = appBaseUrl();
+  const origin = requestOrigin?.trim().replace(/\/$/, "");
+
+  if (!origin) {
+    return configured;
+  }
+
+  if (isLocalhostUrl(configured) && !isLocalhostUrl(origin)) {
+    return origin;
+  }
+
+  return configured;
+}
+
+/**
  * Resolve an OAuth redirect URI for the current deployment.
  * Explicit env overrides are honored, except leftover localhost values when
  * APP_BASE_URL points at a public host (common prod misconfiguration).

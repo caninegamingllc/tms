@@ -542,17 +542,29 @@ export async function assignSeatToMember(formData: FormData) {
   const actor = await requireAdmin();
   const membershipId = requiredString(formData, "membershipId");
 
-  const membership = await assignSeat(membershipId, actor.companyId);
+  try {
+    const { refreshSeatSubscriptionFromStripe } = await import("@/lib/billing-actions");
+    await refreshSeatSubscriptionFromStripe(actor.companyId, { force: true });
 
-  await audit(
-    actor.companyId,
-    actor.id,
-    "ASSIGN_SEAT",
-    "CompanyMembership",
-    membership.id,
-    `Assigned seat to membership ${membership.id}.`,
-    membership.userId
-  );
+    const membership = await assignSeat(membershipId, actor.companyId);
+
+    await audit(
+      actor.companyId,
+      actor.id,
+      "ASSIGN_SEAT",
+      "CompanyMembership",
+      membership.id,
+      `Assigned seat to membership ${membership.id}.`,
+      membership.userId
+    );
+  } catch (error) {
+    if (error && typeof error === "object" && "digest" in error) {
+      throw error;
+    }
+    const message = error instanceof Error ? error.message : "Failed to assign seat";
+    redirect(`/admin?error=${encodeURIComponent(message)}`);
+  }
+
   revalidatePath("/admin");
   revalidatePath("/admin/billing");
 }
@@ -561,17 +573,26 @@ export async function unassignSeatFromMember(formData: FormData) {
   const actor = await requireAdmin();
   const membershipId = requiredString(formData, "membershipId");
 
-  const membership = await unassignSeat(membershipId, actor.companyId);
+  try {
+    const membership = await unassignSeat(membershipId, actor.companyId);
 
-  await audit(
-    actor.companyId,
-    actor.id,
-    "UNASSIGN_SEAT",
-    "CompanyMembership",
-    membership.id,
-    `Unassigned seat from membership ${membership.id}.`,
-    membership.userId
-  );
+    await audit(
+      actor.companyId,
+      actor.id,
+      "UNASSIGN_SEAT",
+      "CompanyMembership",
+      membership.id,
+      `Unassigned seat from membership ${membership.id}.`,
+      membership.userId
+    );
+  } catch (error) {
+    if (error && typeof error === "object" && "digest" in error) {
+      throw error;
+    }
+    const message = error instanceof Error ? error.message : "Failed to unassign seat";
+    redirect(`/admin?error=${encodeURIComponent(message)}`);
+  }
+
   revalidatePath("/admin");
   revalidatePath("/admin/billing");
 }

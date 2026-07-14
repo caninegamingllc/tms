@@ -9,7 +9,8 @@ const publicPaths = [
   "/forgot-password",
   "/reset-password",
   "/hooks",
-  "/api/auth/oauth"
+  "/api/auth/oauth",
+  "/api/stripe/webhook"
 ];
 
 export function proxy(request: NextRequest) {

@@ -4,6 +4,7 @@ import autoTable from "jspdf-autotable";
 import { formatMoney } from "@/lib/format";
 import { getAbsolutePath } from "@/lib/document-storage";
 import type { StructuredDocument } from "@/lib/document-templates";
+import { generateBillOfLadingPdf } from "@/lib/pdf-bol";
 
 type JsPdfWithAutoTable = jsPDF & {
   lastAutoTable?: { finalY: number };
@@ -111,6 +112,10 @@ function ensureSpace(pdf: jsPDF, y: number, needed: number) {
 }
 
 export async function generateDocumentPdf(doc: StructuredDocument): Promise<Buffer> {
+  if (doc.type === "BOL" && doc.bol) {
+    return generateBillOfLadingPdf(doc.bol);
+  }
+
   const pdf = new jsPDF({ unit: "mm", format: "letter" }) as JsPdfWithAutoTable;
   const logo = await loadLogoData(doc);
   let y = drawHeader(pdf, doc, logo);

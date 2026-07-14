@@ -93,7 +93,10 @@ export default async function BillingPage({
 
         <section className="card">
           <h2 className="section-title">Purchase Seats</h2>
-          <p className="muted">$25 per seat per month. Seats belong to this organization only.</p>
+          <p className="muted">
+            $25 per seat per month. Enter the total seats your organization should have (not an add-on
+            count). Seats belong to this organization only.
+          </p>
 
           {!stripeReady ? (
             <p className="mt-4 rounded-xl bg-amber-50 px-4 py-3 text-sm text-amber-800">
@@ -103,7 +106,14 @@ export default async function BillingPage({
             <form action={createSeatCheckoutSession} className="mt-4 grid gap-3">
               <label className="grid gap-2">
                 <span className="label">Number of seats</span>
-                <input name="quantity" className="input" type="number" min={1} defaultValue={1} required />
+                <input
+                  name="quantity"
+                  className="input"
+                  type="number"
+                  min={1}
+                  defaultValue={Math.max(1, seatSummary.purchased || 1)}
+                  required
+                />
               </label>
               <label className="grid gap-2">
                 <span className="label">Promo code (optional)</span>
