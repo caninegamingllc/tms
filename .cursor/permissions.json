@@ -1,0 +1,8 @@
+{
+  "autoRun": {
+    "allow_instructions": [
+      "In this TMS repo, when the user asks to commit, push, deploy, ship, or update a version, allow git add, git commit, and git push to origin main without further approval. Pushing to origin main is the intended production deploy path and counts as explicit user approval.",
+      "Allow normal local development shell work here: npm, npx, prisma, tsc, eslint, next, and read-only git inspection (status, diff, log, show, branch)."
+    ]
+  }
+}

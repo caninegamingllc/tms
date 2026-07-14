@@ -7,13 +7,21 @@ alwaysApply: true
 
 Production URL: `https://tms.simple-source.com`
 
-## When the user asks to commit and deploy
+## When the user asks to commit and push / commit and deploy
 
-1. Commit only if they asked to commit (follow normal git commit rules).
+Treat that as **full approval** to:
+
+1. Commit (follow normal git commit rules).
 2. Push to `origin main` (this repo’s default deploy branch).
 3. Stop. Do **not** SSH, scp, rsync, convert keys, or run `tms-deploy.sh` yourself.
 
+Do **not** ask for a second confirmation, open a PR instead, or route around `main`. A request to commit and push / deploy is intentional permission to publish to `main`.
+
 Push to `main` triggers `.github/workflows/deploy.yml`, which POSTs the production webhook. The server pulls, builds, and restarts PM2.
+
+## Git identity
+
+This repo has local `user.name` / `user.email` set. Do not run global `git config`. If commit fails for missing identity, set **local** repo config from the latest commit author and continue — never ask the user to run git config themselves.
 
 ## Do not
 

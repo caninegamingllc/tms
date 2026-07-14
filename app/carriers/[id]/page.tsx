@@ -4,15 +4,17 @@ import { DocumentUploadForm } from "@/components/document-upload-form";
 import { DocumentsTable } from "@/components/documents-table";
 import { PageHeader } from "@/components/page-header";
 import {
+  addCarrierActivityNote,
   createCarrierInsuranceCoverage,
   updateCarrier,
   updateCarrierInsuranceCoverage
 } from "@/lib/actions";
 import { requireTmsAccess } from "@/lib/permissions";
+import { canWrite } from "@/lib/scope";
 import { insuranceCoverageTypes } from "@/lib/constants";
 import { toDocumentTableRows } from "@/lib/document-rows";
 import { prisma } from "@/lib/db";
-import { formatDate, formatMoney, humanize } from "@/lib/format";
+import { formatDate, formatDateTime, formatMoney, humanize } from "@/lib/format";
 
 function dateInputValue(date?: Date | string | null) {
   if (!date) {
@@ -39,7 +41,8 @@ export default async function CarrierDetailPage({
       factoringCompany: true,
       insuranceCoverages: { orderBy: [{ expiresAt: "asc" }, { coverageType: "asc" }] },
       documents: { include: { uploadedBy: true, load: true, customer: true, carrier: true } },
-      assignments: { include: { load: true }, orderBy: { assignedAt: "desc" } }
+      assignments: { include: { load: true }, orderBy: { assignedAt: "desc" } },
+      activities: { orderBy: { createdAt: "desc" }, include: { user: true } }
     }
   });
 
@@ -53,6 +56,7 @@ export default async function CarrierDetailPage({
   });
 
   const totalSpend = carrier.assignments.reduce((sum, assignment) => sum + assignment.rateCents, 0);
+  const writable = canWrite(user);
 
   return (
     <>
@@ -79,100 +83,159 @@ export default async function CarrierDetailPage({
       ) : null}
 
       <div className="grid gap-6 xl:grid-cols-[0.95fr_1.2fr]">
-        <section className="card">
-          <h2 className="section-title">Carrier Profile</h2>
-          <form action={updateCarrier} className="mt-4 grid gap-3">
-            <input type="hidden" name="carrierId" value={carrier.id} />
-            <input name="name" className="input" defaultValue={carrier.name} required />
-            <div className="grid gap-3 md:grid-cols-2">
-              <input name="mcNumber" className="input" defaultValue={carrier.mcNumber ?? ""} placeholder="MC number" />
-              <input name="dotNumber" className="input" defaultValue={carrier.dotNumber ?? ""} placeholder="USDOT number" />
-            </div>
-            <div className="grid gap-3 md:grid-cols-2">
-              <input name="phone" className="input" defaultValue={carrier.phone ?? ""} placeholder="Phone" />
-              <input name="email" className="input" defaultValue={carrier.email ?? ""} placeholder="Email" type="email" />
-            </div>
-            <input name="address" className="input" defaultValue={carrier.address ?? ""} placeholder="Address" />
-            <div className="grid gap-3 md:grid-cols-3">
-              <input name="city" className="input" defaultValue={carrier.city ?? ""} placeholder="City" />
-              <input
-                name="state"
-                className="input"
-                defaultValue={carrier.state ?? ""}
-                placeholder="State"
-                maxLength={2}
-              />
-              <input name="postalCode" className="input" defaultValue={carrier.postalCode ?? ""} placeholder="Zip" />
-            </div>
-            <input name="equipmentTypes" className="input" defaultValue={carrier.equipmentTypes ?? ""} placeholder="Equipment types" />
-            <div className="grid gap-3 md:grid-cols-2">
-              <select name="status" className="select" defaultValue={carrier.status}>
-                <option>Active</option>
-                <option>Prospect</option>
-                <option>Do Not Use</option>
-                <option>Inactive</option>
-              </select>
-              <select name="complianceStatus" className="select" defaultValue={carrier.complianceStatus}>
-                <option>Approved</option>
-                <option>Needs Review</option>
-                <option>Review Soon</option>
-                <option>Blocked</option>
-              </select>
-            </div>
-            <input name="safetyRating" className="input" defaultValue={carrier.safetyRating ?? ""} placeholder="Safety rating" />
-            <div className="rounded-2xl border border-border p-4">
-              <p className="mb-3 text-sm font-semibold text-foreground">Payment & Factoring</p>
-              <div className="grid gap-3 md:grid-cols-2">
-                <input
-                  name="paymentTerms"
-                  className="input"
-                  defaultValue={carrier.paymentTerms}
-                  placeholder="Payment terms (e.g. Net 30)"
-                />
-                <input
-                  name="paymentMethod"
-                  className="input"
-                  defaultValue={carrier.paymentMethod ?? ""}
-                  placeholder="Payment method"
-                />
+        <div className="grid gap-6">
+          <section className="card">
+            <h2 className="section-title">Carrier Profile</h2>
+            {writable ? (
+              <form action={updateCarrier} className="mt-4 grid gap-3">
+                <input type="hidden" name="carrierId" value={carrier.id} />
+                <input name="name" className="input" defaultValue={carrier.name} required />
+                <div className="grid gap-3 md:grid-cols-2">
+                  <input name="mcNumber" className="input" defaultValue={carrier.mcNumber ?? ""} placeholder="MC number" />
+                  <input name="dotNumber" className="input" defaultValue={carrier.dotNumber ?? ""} placeholder="USDOT number" />
+                </div>
+                <div className="grid gap-3 md:grid-cols-2">
+                  <input name="phone" className="input" defaultValue={carrier.phone ?? ""} placeholder="Phone" />
+                  <input name="email" className="input" defaultValue={carrier.email ?? ""} placeholder="Email" type="email" />
+                </div>
+                <input name="address" className="input" defaultValue={carrier.address ?? ""} placeholder="Address" />
+                <div className="grid gap-3 md:grid-cols-3">
+                  <input name="city" className="input" defaultValue={carrier.city ?? ""} placeholder="City" />
+                  <input
+                    name="state"
+                    className="input"
+                    defaultValue={carrier.state ?? ""}
+                    placeholder="State"
+                    maxLength={2}
+                  />
+                  <input name="postalCode" className="input" defaultValue={carrier.postalCode ?? ""} placeholder="Zip" />
+                </div>
+                <input name="equipmentTypes" className="input" defaultValue={carrier.equipmentTypes ?? ""} placeholder="Equipment types" />
+                <div className="grid gap-3 md:grid-cols-2">
+                  <select name="status" className="select" defaultValue={carrier.status}>
+                    <option>Active</option>
+                    <option>Prospect</option>
+                    <option>Do Not Use</option>
+                    <option>Inactive</option>
+                  </select>
+                  <select name="complianceStatus" className="select" defaultValue={carrier.complianceStatus}>
+                    <option>Approved</option>
+                    <option>Needs Review</option>
+                    <option>Review Soon</option>
+                    <option>Blocked</option>
+                  </select>
+                </div>
+                <input name="safetyRating" className="input" defaultValue={carrier.safetyRating ?? ""} placeholder="Safety rating" />
+                <div className="rounded-2xl border border-border p-4">
+                  <p className="mb-3 text-sm font-semibold text-foreground">Payment & Factoring</p>
+                  <div className="grid gap-3 md:grid-cols-2">
+                    <input
+                      name="paymentTerms"
+                      className="input"
+                      defaultValue={carrier.paymentTerms}
+                      placeholder="Payment terms (e.g. Net 30)"
+                    />
+                    <input
+                      name="paymentMethod"
+                      className="input"
+                      defaultValue={carrier.paymentMethod ?? ""}
+                      placeholder="Payment method"
+                    />
+                  </div>
+                  <select
+                    name="factoringCompanyId"
+                    className="select mt-3"
+                    defaultValue={carrier.factoringCompanyId ?? ""}
+                  >
+                    <option value="">Pay carrier directly (no factor)</option>
+                    {factoringCompanies.map((factor) => (
+                      <option key={factor.id} value={factor.id}>
+                        {factor.name} — check: {factor.nameOnCheck}
+                      </option>
+                    ))}
+                  </select>
+                  {carrier.factoringCompany ? (
+                    <p className="mt-2 text-xs text-muted-foreground">
+                      Payee for QuickBooks: {carrier.factoringCompany.name} · Print on check:{" "}
+                      {carrier.factoringCompany.nameOnCheck}
+                    </p>
+                  ) : null}
+                </div>
+                <button className="btn" type="submit">
+                  Save Carrier
+                </button>
+              </form>
+            ) : (
+              <div className="mt-4 grid gap-3 rounded-2xl bg-muted p-4 text-sm">
+                <div>
+                  <p className="label">Authority</p>
+                  <p className="font-semibold text-foreground">
+                    MC {carrier.mcNumber ?? "—"} · USDOT {carrier.dotNumber ?? "—"}
+                  </p>
+                </div>
+                <div>
+                  <p className="label">Status</p>
+                  <p className="font-semibold text-foreground">
+                    {carrier.status} · {carrier.complianceStatus}
+                  </p>
+                </div>
+                <div>
+                  <p className="label">Contact</p>
+                  <p className="font-semibold text-foreground">{carrier.phone ?? "No phone"}</p>
+                  <p className="muted">{carrier.email ?? "No email"}</p>
+                </div>
               </div>
-              <select
-                name="factoringCompanyId"
-                className="select mt-3"
-                defaultValue={carrier.factoringCompanyId ?? ""}
-              >
-                <option value="">Pay carrier directly (no factor)</option>
-                {factoringCompanies.map((factor) => (
-                  <option key={factor.id} value={factor.id}>
-                    {factor.name} — check: {factor.nameOnCheck}
-                  </option>
-                ))}
-              </select>
-              {carrier.factoringCompany ? (
-                <p className="mt-2 text-xs text-muted-foreground">
-                  Payee for QuickBooks: {carrier.factoringCompany.name} · Print on check:{" "}
-                  {carrier.factoringCompany.nameOnCheck}
-                </p>
-              ) : null}
-            </div>
-            <button className="btn" type="submit">
-              Save Carrier
-            </button>
-          </form>
+            )}
 
-          <div className="mt-6 grid gap-3 rounded-2xl bg-muted p-4 text-sm">
-            <div>
-              <p className="label">Insurance Summary</p>
-              <p className="font-semibold text-foreground">{formatDate(carrier.insuranceExpiresAt)}</p>
+            <div className="mt-6 grid gap-3 rounded-2xl bg-muted p-4 text-sm">
+              <div>
+                <p className="label">Insurance Summary</p>
+                <p className="font-semibold text-foreground">{formatDate(carrier.insuranceExpiresAt)}</p>
+              </div>
+              <div>
+                <p className="label">Load History</p>
+                <p className="font-semibold text-foreground">
+                  {carrier.assignments.length} loads - {formatMoney(totalSpend)} spend
+                </p>
+              </div>
             </div>
-            <div>
-              <p className="label">Load History</p>
-              <p className="font-semibold text-foreground">
-                {carrier.assignments.length} loads - {formatMoney(totalSpend)} spend
-              </p>
+          </section>
+
+          <section className="card">
+            <h2 className="section-title">Activity Log</h2>
+            {writable ? (
+              <form action={addCarrierActivityNote} className="mt-4 grid gap-3 rounded-2xl bg-muted p-4">
+                <input type="hidden" name="carrierId" value={carrier.id} />
+                <textarea
+                  name="body"
+                  className="textarea"
+                  rows={3}
+                  placeholder="Add a note to the activity log…"
+                  required
+                />
+                <button type="submit" className="btn-secondary">
+                  Save Activity Note
+                </button>
+              </form>
+            ) : null}
+            <div className="mt-4 grid gap-3">
+              {carrier.activities.length === 0 ? (
+                <p className="text-sm text-muted-foreground">No activity yet.</p>
+              ) : (
+                carrier.activities.map((activity) => (
+                  <div key={activity.id} className="rounded-2xl border border-border p-3">
+                    <p className="font-semibold text-foreground">{activity.action}</p>
+                    <p className="muted whitespace-pre-wrap">{activity.details ?? "No details"}</p>
+                    <p className="text-xs text-muted-foreground">
+                      {activity.user?.name ? `${activity.user.name} · ` : ""}
+                      {formatDateTime(activity.createdAt)}
+                    </p>
+                  </div>
+                ))
+              )}
             </div>
-          </div>
-        </section>
+          </section>
+        </div>
 
         <section className="card">
           <h2 className="section-title">Insurance Coverages</h2>
