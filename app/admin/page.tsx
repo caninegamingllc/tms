@@ -1,4 +1,5 @@
 import { AdminBranchesTable } from "@/components/admin-branches-table";
+import { AdminCatalogSettings } from "@/components/admin-catalog-settings";
 import { AdminConsole } from "@/components/admin-console";
 import { AuditLogTable } from "@/components/audit-log-table";
 import { PageHeader } from "@/components/page-header";
@@ -6,6 +7,7 @@ import { createBranch, updateCompanyBranding, updateLoadNumberSettings } from "@
 import { InviteLinkBanner } from "@/components/invite-link-banner";
 import { refreshSeatSubscriptionFromStripe } from "@/lib/billing-actions";
 import { requireAdmin } from "@/lib/auth";
+import { ensureCompanyCatalogs } from "@/lib/catalogs";
 import { prisma } from "@/lib/db";
 import { getSeatSummary } from "@/lib/seats";
 import Link from "next/link";
@@ -20,41 +22,52 @@ export default async function AdminPage({
   const activeTab = tab === "branches" || tab === "settings" || tab === "audit" ? tab : "users";
 
   await refreshSeatSubscriptionFromStripe(currentUser.companyId);
-  const [company, memberships, branches, auditLogs, seatSummary] = await Promise.all([
-    prisma.company.findUniqueOrThrow({ where: { id: currentUser.companyId } }),
-    prisma.companyMembership.findMany({
-      where: { companyId: currentUser.companyId },
-      include: {
-        user: {
-          include: {
-            _count: {
-              select: { notes: true, activities: true }
+  await ensureCompanyCatalogs(currentUser.companyId);
+  const [company, memberships, branches, auditLogs, seatSummary, commodities, payLineTypes] =
+    await Promise.all([
+      prisma.company.findUniqueOrThrow({ where: { id: currentUser.companyId } }),
+      prisma.companyMembership.findMany({
+        where: { companyId: currentUser.companyId },
+        include: {
+          user: {
+            include: {
+              _count: {
+                select: { notes: true, activities: true }
+              }
             }
-          }
+          },
+          branch: true,
+          assignedBranches: { include: { branch: true } }
         },
-        branch: true,
-        assignedBranches: { include: { branch: true } }
-      },
-      orderBy: { user: { name: "asc" } }
-    }),
-    prisma.branch.findMany({
-      where: { companyId: currentUser.companyId },
-      include: {
-        memberships: true,
-        membershipBranches: true,
-        customers: true,
-        carriers: true,
-        loads: true
-      }
-    }),
-    prisma.auditLog.findMany({
-      where: { companyId: currentUser.companyId },
-      orderBy: { createdAt: "desc" },
-      include: { actorUser: true, targetUser: true },
-      take: 50
-    }),
-    getSeatSummary(currentUser.companyId)
-  ]);
+        orderBy: { user: { name: "asc" } }
+      }),
+      prisma.branch.findMany({
+        where: { companyId: currentUser.companyId },
+        include: {
+          memberships: true,
+          membershipBranches: true,
+          customers: true,
+          carriers: true,
+          loads: true
+        }
+      }),
+      prisma.auditLog.findMany({
+        where: { companyId: currentUser.companyId },
+        orderBy: { createdAt: "desc" },
+        include: { actorUser: true, targetUser: true },
+        take: 50
+      }),
+      getSeatSummary(currentUser.companyId),
+      prisma.commodityOption.findMany({
+        where: { companyId: currentUser.companyId },
+        orderBy: [{ sortOrder: "asc" }, { name: "asc" }]
+      }),
+      prisma.carrierPayLineType.findMany({
+        where: { companyId: currentUser.companyId },
+        include: { _count: { select: { payLines: true } } },
+        orderBy: [{ sortOrder: "asc" }, { name: "asc" }]
+      })
+    ]);
 
   const branchNameById = new Map(branches.map((branch) => [branch.id, branch.name]));
   const ownerCount = memberships.filter(
@@ -378,6 +391,24 @@ export default async function AdminPage({
               </Link>
             </div>
           </section>
+
+          <AdminCatalogSettings
+            commodities={commodities.map((item) => ({
+              id: item.id,
+              name: item.name,
+              active: item.active,
+              sortOrder: item.sortOrder
+            }))}
+            payLineTypes={payLineTypes.map((item) => ({
+              id: item.id,
+              name: item.name,
+              calculationMethod: item.calculationMethod,
+              active: item.active,
+              sortOrder: item.sortOrder,
+              isSystem: item.isSystem,
+              usageCount: item._count.payLines
+            }))}
+          />
         </div>
       ) : null}
 

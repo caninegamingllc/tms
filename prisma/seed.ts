@@ -2,6 +2,7 @@ import { PrismaClient } from "@prisma/client";
 import { randomBytes, scryptSync } from "crypto";
 import { mkdir, writeFile } from "fs/promises";
 import path from "path";
+import { seedCompanyCatalogs } from "../lib/catalogs";
 
 const prisma = new PrismaClient();
 const seedPassword = "ChangeMe123!";
@@ -154,6 +155,8 @@ async function main() {
       status: "ACTIVE"
     }
   });
+
+  await seedCompanyCatalogs(company.id, prisma);
 
   const customer = await prisma.customer.create({
     data: {

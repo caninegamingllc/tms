@@ -71,6 +71,26 @@ export const commissionCalculationMethods = [
 
 export const expenseTypes = ["Lumper", "Detention", "TONU", "Other"] as const;
 
+export const carrierPayCalculationMethods = ["FLAT", "PER_MILE", "HOURLY"] as const;
+
+export type CarrierPayCalculationMethod = (typeof carrierPayCalculationMethods)[number];
+
+export const defaultCommodityNames = [
+  "General Freight",
+  "Produce",
+  "Steel",
+  "Retail"
+] as const;
+
+export const defaultCarrierPayLineTypes = [
+  { name: "Flat Rate", calculationMethod: "FLAT" as const, isSystem: true },
+  { name: "Rate Per Mile", calculationMethod: "PER_MILE" as const, isSystem: true },
+  { name: "Hourly Rate", calculationMethod: "HOURLY" as const, isSystem: true },
+  { name: "Detention Pay", calculationMethod: "FLAT" as const, isSystem: true },
+  { name: "Stop Off Pay", calculationMethod: "FLAT" as const, isSystem: true },
+  { name: "Other Accessorial", calculationMethod: "FLAT" as const, isSystem: true }
+] as const;
+
 export type CommissionStatus = (typeof commissionStatuses)[number];
 export type CommissionCalculationMethod = (typeof commissionCalculationMethods)[number];
 

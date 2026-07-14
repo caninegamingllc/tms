@@ -2,6 +2,7 @@ import { PageHeader } from "@/components/page-header";
 import { FacilityCombobox, SearchCombobox } from "@/components/search-combobox";
 import { createLoad } from "@/lib/actions";
 import { getBranchScope } from "@/lib/branch-filter-server";
+import { ensureCompanyCatalogs } from "@/lib/catalogs";
 import { requireTmsAccess } from "@/lib/permissions";
 import { canPickBranch, isAdminRole } from "@/lib/scope";
 import { equipmentTypes, loadStatuses } from "@/lib/constants";
@@ -10,8 +11,9 @@ import { humanize } from "@/lib/format";
 
 export default async function NewLoadPage() {
   const user = await requireTmsAccess();
+  await ensureCompanyCatalogs(user.companyId);
   const scope = await getBranchScope(user);
-  const [company, customers, facilities, branches] = await Promise.all([
+  const [company, customers, facilities, branches, commodities] = await Promise.all([
     prisma.company.findUniqueOrThrow({ where: { id: user.companyId } }),
     prisma.customer.findMany({
       where: scope,
@@ -30,7 +32,11 @@ export default async function NewLoadPage() {
           },
           orderBy: { name: "asc" }
         })
-      : Promise.resolve([])
+      : Promise.resolve([]),
+    prisma.commodityOption.findMany({
+      where: { companyId: user.companyId, active: true },
+      orderBy: [{ sortOrder: "asc" }, { name: "asc" }]
+    })
   ]);
 
   const customerOptions = customers.map((customer) => ({
@@ -111,7 +117,14 @@ export default async function NewLoadPage() {
           </label>
           <label className="grid gap-2">
             <span className="label">Commodity</span>
-            <input name="commodity" className="input" />
+            <select name="commodity" className="select" defaultValue="">
+              <option value="">Select commodity</option>
+              {commodities.map((item) => (
+                <option key={item.id} value={item.name}>
+                  {item.name}
+                </option>
+              ))}
+            </select>
           </label>
           <label className="grid gap-2">
             <span className="label">Weight</span>

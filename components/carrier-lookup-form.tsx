@@ -175,6 +175,7 @@ export function CarrierLookupForm({ action }: CarrierLookupFormProps) {
                 key={result.id}
                 type="button"
                 className="block w-full px-4 py-3 text-left text-sm transition hover:bg-muted"
+                onMouseDown={(event) => event.preventDefault()}
                 onClick={() => selectResult(result)}
               >
                 <span className="font-semibold text-foreground">{result.name}</span>
@@ -230,6 +231,15 @@ export function CarrierLookupForm({ action }: CarrierLookupFormProps) {
                 setLoading(false);
               }
             }}
+            onBlur={() => {
+              window.setTimeout(() => {
+                if (activeField === "mc") {
+                  clearLookupState();
+                  setActiveField(null);
+                  setLoading(false);
+                }
+              }, 150);
+            }}
           />
           {renderLookupPanel("mc")}
         </label>
@@ -251,6 +261,15 @@ export function CarrierLookupForm({ action }: CarrierLookupFormProps) {
                 clearLookupState();
                 setLoading(false);
               }
+            }}
+            onBlur={() => {
+              window.setTimeout(() => {
+                if (activeField === "dot") {
+                  clearLookupState();
+                  setActiveField(null);
+                  setLoading(false);
+                }
+              }, 150);
             }}
           />
           {renderLookupPanel("dot")}

@@ -59,6 +59,10 @@ async function loadForEmail(loadId: string, user: SessionUser) {
       customer: { include: { contacts: true } },
       stops: true,
       charges: true,
+      carrierPayLines: {
+        orderBy: { sortOrder: "asc" },
+        include: { lineType: true }
+      },
       documents: { orderBy: { uploadedAt: "desc" } },
       dispatchAssignment: {
         include: {

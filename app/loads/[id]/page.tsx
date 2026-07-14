@@ -4,6 +4,7 @@ import { DocumentsTable } from "@/components/documents-table";
 import { PageHeader } from "@/components/page-header";
 import { LoadRoutePanel } from "@/components/load-route-panel";
 import { SearchCombobox } from "@/components/search-combobox";
+import { CarrierPayLinesEditor } from "@/components/carrier-pay-lines-editor";
 import { StatusBadge } from "@/components/status-badge";
 import {
   addCheckCall,
@@ -33,6 +34,7 @@ import { requireTmsAccess } from "@/lib/permissions";
 import { canAccessRecord, getBranchScope } from "@/lib/branch-filter-server";
 import { canManageUsers, canSettleCommission, canWrite } from "@/lib/scope";
 import { expenseTypes, loadStatuses } from "@/lib/constants";
+import { ensureCompanyCatalogs } from "@/lib/catalogs";
 import { prisma } from "@/lib/db";
 import { commissionMethodLabel, formatDate, formatDateTime, formatMoney, humanize, marginPercent } from "@/lib/format";
 import {
@@ -56,7 +58,8 @@ export default async function LoadDetailPage({
   const { id } = await params;
   const { emailed, saved } = await searchParams;
   const user = await requireTmsAccess();
-  const [load, carriers, commissionProfiles, mailbox] = await Promise.all([
+  await ensureCompanyCatalogs(user.companyId);
+  const [load, carriers, commissionProfiles, mailbox, payLineTypes] = await Promise.all([
     prisma.load.findUnique({
       where: { id, companyId: user.companyId },
       include: {
@@ -65,6 +68,10 @@ export default async function LoadDetailPage({
         stops: { orderBy: { sequence: "asc" } },
         charges: true,
         expenses: true,
+        carrierPayLines: {
+          orderBy: { sortOrder: "asc" },
+          include: { lineType: true }
+        },
         commission: true,
         documents: { include: { uploadedBy: true, load: true, customer: true, carrier: true } },
         notes: { orderBy: { createdAt: "desc" }, include: { user: true } },
@@ -93,7 +100,11 @@ export default async function LoadDetailPage({
           orderBy: { name: "asc" }
         })
       : Promise.resolve([]),
-    getUserMailbox(user.id)
+    getUserMailbox(user.id),
+    prisma.carrierPayLineType.findMany({
+      where: { companyId: user.companyId, active: true },
+      orderBy: [{ sortOrder: "asc" }, { name: "asc" }]
+    })
   ]);
 
   if (!load || !(await canAccessRecord(user, load.branchId))) {
@@ -425,13 +436,24 @@ export default async function LoadDetailPage({
                 defaultValue={load.dispatchAssignment?.carrierId ?? ""}
                 required
               />
-              <input
-                name="rate"
-                className="input"
-                defaultValue={load.dispatchAssignment ? load.dispatchAssignment.rateCents / 100 : ""}
-                placeholder="Carrier rate"
-                required
-              />
+              <div className="grid gap-2">
+                <span className="label">Payment line items</span>
+                <CarrierPayLinesEditor
+                  lineTypes={payLineTypes.map((type) => ({
+                    id: type.id,
+                    name: type.name,
+                    calculationMethod: type.calculationMethod
+                  }))}
+                  initialLines={load.carrierPayLines.map((line) => ({
+                    lineTypeId: line.lineTypeId,
+                    description: line.description,
+                    unitRateCents: line.unitRateCents,
+                    quantity: line.quantity,
+                    amountCents: line.amountCents
+                  }))}
+                  defaultMiles={load.routeTotalMiles}
+                />
+              </div>
               <input name="driverName" className="input" placeholder="Driver name" defaultValue={load.dispatchAssignment?.driverName ?? ""} />
               <input name="driverPhone" className="input" placeholder="Driver phone" defaultValue={load.dispatchAssignment?.driverPhone ?? ""} />
               <div className="grid gap-3 md:grid-cols-2">

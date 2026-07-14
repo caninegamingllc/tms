@@ -28,12 +28,20 @@ export function CustomerForm({ action, branches = [], showBranchPicker = false }
   const [results, setResults] = useState<BusinessSearchResult[]>([]);
   const [loading, setLoading] = useState(false);
   const [searchError, setSearchError] = useState("");
+  const [showSuggestions, setShowSuggestions] = useState(false);
   const sessionTokenRef = useRef(createSessionToken());
 
   const trimmedName = useMemo(() => name.trim(), [name]);
 
+  function clearSuggestions() {
+    setShowSuggestions(false);
+    setResults([]);
+    setSearchError("");
+    setLoading(false);
+  }
+
   useEffect(() => {
-    if (trimmedName.length < 3) {
+    if (!showSuggestions || trimmedName.length < 3) {
       return;
     }
 
@@ -75,10 +83,11 @@ export function CustomerForm({ action, branches = [], showBranchPicker = false }
       clearTimeout(timeout);
       controller.abort();
     };
-  }, [trimmedName]);
+  }, [showSuggestions, trimmedName]);
 
   async function selectResult(result: BusinessSearchResult) {
     setResults([]);
+    setShowSuggestions(false);
     setLoading(true);
     setSearchError("");
 
@@ -93,6 +102,7 @@ export function CustomerForm({ action, branches = [], showBranchPicker = false }
       if (!response.ok) {
         const payload = (await response.json().catch(() => null)) as { error?: string } | null;
         setSearchError(payload?.error ?? "Could not load business details.");
+        setShowSuggestions(true);
         setName(result.name);
         return;
       }
@@ -129,15 +139,20 @@ export function CustomerForm({ action, branches = [], showBranchPicker = false }
             const nextValue = event.target.value;
             setName(nextValue);
             setSearchError("");
+            setShowSuggestions(true);
             if (nextValue.trim().length < 3) {
-              setResults([]);
-              setLoading(false);
+              clearSuggestions();
               sessionTokenRef.current = createSessionToken();
             }
           }}
+          onBlur={() => {
+            window.setTimeout(() => {
+              clearSuggestions();
+            }, 150);
+          }}
           autoComplete="off"
         />
-        {trimmedName.length >= 3 && (results.length > 0 || loading || searchError) ? (
+        {showSuggestions && trimmedName.length >= 3 && (results.length > 0 || loading || searchError) ? (
           <div className="absolute left-0 right-0 top-full z-20 mt-1 overflow-hidden rounded-2xl border border-border bg-white shadow-card">
             {loading ? (
               <p className="px-4 py-3 text-sm text-muted-foreground">Searching businesses...</p>
@@ -149,6 +164,7 @@ export function CustomerForm({ action, branches = [], showBranchPicker = false }
                   key={result.id}
                   type="button"
                   className="block w-full px-4 py-3 text-left text-sm transition hover:bg-muted"
+                  onMouseDown={(event) => event.preventDefault()}
                   onClick={() => selectResult(result)}
                 >
                   <span className="font-semibold text-foreground">{result.name}</span>

@@ -203,7 +203,7 @@ export async function searchLoads(scope: BranchScope, filters: LoadSearchFilters
 }
 
 export async function getLoadSearchOptions(scope: BranchScope) {
-  const [customers, commodityRows] = await Promise.all([
+  const [customers, commodityRows, catalogCommodities] = await Promise.all([
     prisma.customer.findMany({
       where: scope,
       orderBy: { name: "asc" },
@@ -217,12 +217,23 @@ export async function getLoadSearchOptions(scope: BranchScope) {
       select: { commodity: true },
       distinct: ["commodity"],
       orderBy: { commodity: "asc" }
+    }),
+    prisma.commodityOption.findMany({
+      where: {
+        companyId: scope.companyId,
+        active: true
+      },
+      orderBy: [{ sortOrder: "asc" }, { name: "asc" }],
+      select: { name: true }
     })
   ]);
 
-  const commodities = commodityRows
-    .map((row) => row.commodity)
-    .filter((value): value is string => Boolean(value));
+  const commodities = [
+    ...new Set([
+      ...catalogCommodities.map((row) => row.name),
+      ...commodityRows.map((row) => row.commodity).filter((value): value is string => Boolean(value))
+    ])
+  ].sort((a, b) => a.localeCompare(b));
 
   return { customers, commodities };
 }

@@ -6,6 +6,7 @@ export type LoadForDocument = Prisma.LoadGetPayload<{
     customer: { include: { contacts: true } };
     stops: true;
     charges: true;
+    carrierPayLines: { include: { lineType: true } };
     dispatchAssignment: { include: { carrier: { include: { contacts: true } } } };
     invoices: true;
   };
@@ -112,6 +113,30 @@ function mapStops(load: LoadForDocument): DocumentStop[] {
     }));
 }
 
+function mapCarrierPayLines(load: LoadForDocument): DocumentCharge[] {
+  if (load.carrierPayLines?.length) {
+    return load.carrierPayLines.map((line) => {
+      const typeName = line.lineType?.name ?? "Pay line";
+      const method = line.lineType?.calculationMethod ?? "FLAT";
+      let label = typeName;
+      if (line.description) {
+        label = `${typeName} — ${line.description}`;
+      } else if (method === "PER_MILE") {
+        label = `${typeName} (${formatMoney(line.unitRateCents)}/mi × ${line.quantity})`;
+      } else if (method === "HOURLY") {
+        label = `${typeName} (${formatMoney(line.unitRateCents)}/hr × ${line.quantity})`;
+      }
+      return { label, amountCents: line.amountCents };
+    });
+  }
+
+  const total = load.dispatchAssignment?.rateCents ?? load.carrierCostCents;
+  if (total > 0) {
+    return [{ label: "Carrier Rate", amountCents: total }];
+  }
+  return [];
+}
+
 function mapCharges(load: LoadForDocument): DocumentCharge[] {
   if (load.charges.length) {
     return load.charges.map((charge) => ({
@@ -155,6 +180,8 @@ export function buildRateConfirmationDocument(
   const assignment = load.dispatchAssignment;
   const carrier = assignment?.carrier;
   const carrierContact = carrier?.contacts.find((contact) => contact.isPrimary);
+  const payLines = mapCarrierPayLines(load);
+  const totalCents = assignment?.rateCents ?? load.carrierCostCents;
 
   return {
     type: "RATE_CONFIRMATION",
@@ -185,13 +212,11 @@ export function buildRateConfirmationDocument(
       {
         label: "Weight",
         value: load.weight ? `${load.weight.toLocaleString()} lbs` : "N/A"
-      },
-      {
-        label: "Carrier Rate",
-        value: formatMoney(assignment?.rateCents ?? load.carrierCostCents)
       }
     ],
     stops: mapStops(load),
+    charges: payLines,
+    totalCents,
     extraSections: [
       {
         title: "Driver / Equipment",
@@ -390,7 +415,7 @@ function structuredToPlainText(doc: StructuredDocument) {
 
   if (doc.charges?.length) {
     lines.push(
-      "CHARGES",
+      doc.type === "RATE_CONFIRMATION" ? "CARRIER PAY" : "CHARGES",
       ...doc.charges.map((charge) => moneyLine(charge.label, charge.amountCents)),
       ""
     );

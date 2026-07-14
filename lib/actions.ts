@@ -23,6 +23,7 @@ import {
   primaryDocumentType,
   serializeDocumentTypes
 } from "@/lib/document-types";
+import { ensureCompanyCatalogs } from "@/lib/catalogs";
 
 function requiredString(formData: FormData, key: string) {
   const value = String(formData.get(key) ?? "").trim();
@@ -50,6 +51,10 @@ async function loadForDocument(loadId: string, user: SessionUser) {
       customer: { include: { contacts: true } },
       stops: true,
       charges: true,
+      carrierPayLines: {
+        orderBy: { sortOrder: "asc" },
+        include: { lineType: true }
+      },
       dispatchAssignment: {
         include: {
           carrier: { include: { contacts: true } }
@@ -576,7 +581,7 @@ export async function updateLoadStatus(formData: FormData) {
 export async function deleteLoad(formData: FormData) {
   const user = await requireWriteUser();
   const loadId = requiredString(formData, "loadId");
-  const load = await requireCompanyLoad(loadId, user);
+  await requireCompanyLoad(loadId, user);
 
   const documents = await prisma.loadDocument.findMany({
     where: { loadId },
@@ -604,43 +609,132 @@ export async function assignCarrier(formData: FormData) {
   const user = await requireWriteUser();
   const loadId = requiredString(formData, "loadId");
   const carrierId = requiredString(formData, "carrierId");
-  const rateCents = parseMoneyToCents(formData.get("rate"));
   await requireCompanyLoad(loadId, user);
   await requireCompanyCarrier(carrierId, user.companyId);
+  await ensureCompanyCatalogs(user.companyId);
 
-  await prisma.load.update({
-    where: { id: loadId },
-    data: {
-      status: "COVERED",
-      carrierCostCents: rateCents,
-      dispatchAssignment: {
-        upsert: {
+  const payLinesRaw = String(formData.get("payLinesJson") ?? "").trim();
+  if (!payLinesRaw) {
+    throw new Error("Add at least one carrier pay line item.");
+  }
+
+  let parsedLines: Array<{
+    lineTypeId: string;
+    description?: string | null;
+    unitRateCents: number;
+    quantity: number;
+    amountCents: number;
+    sortOrder?: number;
+  }>;
+
+  try {
+    parsedLines = JSON.parse(payLinesRaw);
+  } catch {
+    throw new Error("Invalid carrier pay line items.");
+  }
+
+  if (!Array.isArray(parsedLines) || parsedLines.length === 0) {
+    throw new Error("Add at least one carrier pay line item.");
+  }
+
+  const lineTypeIds = [...new Set(parsedLines.map((line) => line.lineTypeId).filter(Boolean))];
+  const lineTypes = await prisma.carrierPayLineType.findMany({
+    where: { companyId: user.companyId, id: { in: lineTypeIds } }
+  });
+  const typeById = new Map(lineTypes.map((type) => [type.id, type]));
+
+  const normalizedLines = parsedLines.map((line, index) => {
+    const lineType = typeById.get(line.lineTypeId);
+    if (!lineType) {
+      throw new Error("Invalid pay line type.");
+    }
+
+    const unitRateCents = Math.max(0, Math.round(Number(line.unitRateCents) || 0));
+    const quantityRaw = Number(line.quantity);
+    const quantity =
+      lineType.calculationMethod === "FLAT"
+        ? 1
+        : Number.isFinite(quantityRaw) && quantityRaw > 0
+          ? quantityRaw
+          : 0;
+    if (lineType.calculationMethod !== "FLAT" && quantity <= 0) {
+      throw new Error(`${lineType.name} requires a quantity.`);
+    }
+
+    const amountCents =
+      lineType.calculationMethod === "PER_MILE" || lineType.calculationMethod === "HOURLY"
+        ? Math.round(unitRateCents * quantity)
+        : unitRateCents;
+
+    return {
+      lineTypeId: lineType.id,
+      description: line.description?.trim() || null,
+      unitRateCents,
+      quantity,
+      amountCents,
+      sortOrder: Number.isFinite(line.sortOrder) ? Number(line.sortOrder) : index
+    };
+  });
+
+  const rateCents = normalizedLines.reduce((sum, line) => sum + line.amountCents, 0);
+  if (rateCents <= 0) {
+    throw new Error("Carrier pay total must be greater than zero.");
+  }
+
+  await prisma.$transaction(async (tx) => {
+    await tx.carrierPayLine.deleteMany({ where: { loadId } });
+
+    await tx.load.update({
+      where: { id: loadId },
+      data: {
+        status: "COVERED",
+        carrierCostCents: rateCents,
+        dispatchAssignment: {
+          upsert: {
+            create: {
+              carrierId,
+              driverName: optionalString(formData, "driverName"),
+              driverPhone: optionalString(formData, "driverPhone"),
+              truckNumber: optionalString(formData, "truckNumber"),
+              trailerNumber: optionalString(formData, "trailerNumber"),
+              rateCents
+            },
+            update: {
+              carrierId,
+              driverName: optionalString(formData, "driverName"),
+              driverPhone: optionalString(formData, "driverPhone"),
+              truckNumber: optionalString(formData, "truckNumber"),
+              trailerNumber: optionalString(formData, "trailerNumber"),
+              rateCents
+            }
+          }
+        },
+        activities: {
           create: {
-            carrierId,
-            driverName: optionalString(formData, "driverName"),
-            driverPhone: optionalString(formData, "driverPhone"),
-            truckNumber: optionalString(formData, "truckNumber"),
-            trailerNumber: optionalString(formData, "trailerNumber"),
-            rateCents
-          },
-          update: {
-            carrierId,
-            driverName: optionalString(formData, "driverName"),
-            driverPhone: optionalString(formData, "driverPhone"),
-            truckNumber: optionalString(formData, "truckNumber"),
-            trailerNumber: optionalString(formData, "trailerNumber"),
-            rateCents
+            userId: user.id,
+            action: "Carrier assigned",
+            details: `Carrier assignment updated with ${normalizedLines.length} pay line(s) totaling ${(rateCents / 100).toFixed(2)}.`
           }
         }
-      },
-      activities: {
-        create: {
-          userId: user.id,
-          action: "Carrier assigned",
-          details: `Carrier assignment updated at ${parseMoneyToCents(formData.get("rate")) / 100}.`
-        }
       }
-    }
+    });
+
+    const assignment = await tx.dispatchAssignment.findUniqueOrThrow({
+      where: { loadId }
+    });
+
+    await tx.carrierPayLine.createMany({
+      data: normalizedLines.map((line) => ({
+        loadId,
+        assignmentId: assignment.id,
+        lineTypeId: line.lineTypeId,
+        description: line.description,
+        unitRateCents: line.unitRateCents,
+        quantity: line.quantity,
+        amountCents: line.amountCents,
+        sortOrder: line.sortOrder
+      }))
+    });
   });
 
   await recalculateLoadCommission(loadId);

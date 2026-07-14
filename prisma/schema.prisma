@@ -43,8 +43,42 @@ model Company {
   auditLogs            AuditLog[]
   commissionProfiles   CommissionProfile[]
   emailThreads         EmailThread[]
+  commodityOptions     CommodityOption[]
+  carrierPayLineTypes  CarrierPayLineType[]
   createdAt            DateTime               @default(now())
   updatedAt            DateTime               @updatedAt
+}
+
+model CommodityOption {
+  id        String   @id @default(cuid())
+  companyId String
+  company   Company  @relation(fields: [companyId], references: [id], onDelete: Cascade)
+  name      String
+  active    Boolean  @default(true)
+  sortOrder Int      @default(0)
+  createdAt DateTime @default(now())
+  updatedAt DateTime @updatedAt
+
+  @@unique([companyId, name])
+  @@index([companyId])
+}
+
+model CarrierPayLineType {
+  id                 String          @id @default(cuid())
+  companyId          String
+  company            Company         @relation(fields: [companyId], references: [id], onDelete: Cascade)
+  name               String
+  /// FLAT | PER_MILE | HOURLY
+  calculationMethod  String          @default("FLAT")
+  active             Boolean         @default(true)
+  sortOrder          Int             @default(0)
+  isSystem           Boolean         @default(false)
+  payLines           CarrierPayLine[]
+  createdAt          DateTime        @default(now())
+  updatedAt          DateTime        @updatedAt
+
+  @@unique([companyId, name])
+  @@index([companyId])
 }
 
 model Branch {
@@ -430,6 +464,7 @@ model Load {
   stops                LoadStop[]
   charges              LoadCharge[]
   expenses             LoadExpense[]
+  carrierPayLines      CarrierPayLine[]
   documents            LoadDocument[]
   notes                LoadNote[]
   activities           LoadActivity[]
@@ -539,18 +574,40 @@ model LoadCommission {
 }
 
 model DispatchAssignment {
-  id             String      @id @default(cuid())
-  loadId         String      @unique
-  load           Load        @relation(fields: [loadId], references: [id], onDelete: Cascade)
+  id             String           @id @default(cuid())
+  loadId         String           @unique
+  load           Load             @relation(fields: [loadId], references: [id], onDelete: Cascade)
   carrierId      String
-  carrier        Carrier     @relation(fields: [carrierId], references: [id])
+  carrier        Carrier          @relation(fields: [carrierId], references: [id])
   driverName     String?
   driverPhone    String?
   truckNumber    String?
   trailerNumber  String?
-  rateCents      Int         @default(0)
-  assignedAt     DateTime    @default(now())
+  rateCents      Int              @default(0)
+  assignedAt     DateTime         @default(now())
   checkCalls     CheckCall[]
+  payLines       CarrierPayLine[]
+}
+
+model CarrierPayLine {
+  id             String              @id @default(cuid())
+  loadId         String
+  load           Load                @relation(fields: [loadId], references: [id], onDelete: Cascade)
+  assignmentId   String?
+  assignment     DispatchAssignment? @relation(fields: [assignmentId], references: [id], onDelete: SetNull)
+  lineTypeId     String
+  lineType       CarrierPayLineType  @relation(fields: [lineTypeId], references: [id])
+  description    String?
+  unitRateCents  Int                 @default(0)
+  quantity       Float               @default(1)
+  amountCents    Int                 @default(0)
+  sortOrder      Int                 @default(0)
+  createdAt      DateTime            @default(now())
+  updatedAt      DateTime            @updatedAt
+
+  @@index([loadId])
+  @@index([assignmentId])
+  @@index([lineTypeId])
 }
 
 model CheckCall {

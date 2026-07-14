@@ -45,9 +45,10 @@ export function renderDocumentHtml(
     )
     .join("");
 
+  const chargesHeading = doc.type === "RATE_CONFIRMATION" ? "Carrier Pay" : "Charges";
   const chargesSection = doc.charges?.length
     ? `<section>
-        <h2>Charges</h2>
+        <h2>${chargesHeading}</h2>
         <table class="charges">
           <thead><tr><th>Description</th><th class="num">Amount</th></tr></thead>
           <tbody>

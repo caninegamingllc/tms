@@ -2,6 +2,7 @@ import { randomBytes, scryptSync, timingSafeEqual, createHash } from "crypto";
 import { cookies } from "next/headers";
 import { redirect } from "next/navigation";
 import { prisma } from "@/lib/db";
+import { seedCompanyCatalogs } from "@/lib/catalogs";
 import { tryAutoAssignSeat } from "@/lib/seats";
 import { ensureMembershipBranchesSynced } from "@/lib/membership-branches";
 import type { OrganizationSummary, SessionUser } from "@/lib/types";
@@ -502,6 +503,8 @@ export async function createCompanyWorkspace(input: {
         }
       }
     });
+
+    await seedCompanyCatalogs(company.id, tx);
 
     await tx.auditLog.create({
       data: {
