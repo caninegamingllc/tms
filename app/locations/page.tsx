@@ -20,7 +20,8 @@ export default async function LocationsPage({
 }) {
   const user = await requireTmsAccess();
   const params = await searchParams;
-  const filters = parseLocationSearchParams(params);
+  const { saved, ...filterParams } = params;
+  const filters = parseLocationSearchParams(filterParams);
   const showResults = isSearchSubmitted(params);
 
   const scope = await getBranchScope(user);
@@ -43,6 +44,12 @@ export default async function LocationsPage({
         title="Locations"
         description="Store pickup, delivery, distribution center, port, and rail locations for future load entry."
       />
+
+      {saved ? (
+        <div className="mb-6 rounded-2xl border border-emerald-200 bg-emerald-50 p-4 text-sm font-semibold text-emerald-800">
+          Location saved successfully.
+        </div>
+      ) : null}
 
       <div className="grid gap-6 xl:grid-cols-[1.35fr_0.8fr]">
         <div className="grid gap-6">

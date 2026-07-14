@@ -51,10 +51,10 @@ export default async function LoadDetailPage({
   searchParams
 }: {
   params: Promise<{ id: string }>;
-  searchParams: Promise<{ emailed?: string }>;
+  searchParams: Promise<{ emailed?: string; saved?: string }>;
 }) {
   const { id } = await params;
-  const { emailed } = await searchParams;
+  const { emailed, saved } = await searchParams;
   const user = await requireTmsAccess();
   const [load, carriers, commissionProfiles, mailbox] = await Promise.all([
     prisma.load.findUnique({
@@ -159,7 +159,7 @@ export default async function LoadDetailPage({
   return (
     <>
       <PageHeader
-        title={`${load.loadNumber}: ${load.title}`}
+        title={load.loadNumber}
         description={`${load.customer.name} freight from ${load.pickupCity}, ${load.pickupState} to ${load.deliveryCity}, ${load.deliveryState}.`}
         action={
           canWrite(user) ? (
@@ -167,6 +167,12 @@ export default async function LoadDetailPage({
           ) : undefined
         }
       />
+
+      {saved ? (
+        <div className="mb-4 rounded-lg border border-emerald-200 bg-emerald-50 p-3 text-sm font-semibold text-emerald-700">
+          Load saved successfully.
+        </div>
+      ) : null}
 
       {emailed ? (
         <div className="mb-4 rounded-lg border border-emerald-200 bg-emerald-50 p-3 text-sm font-semibold text-emerald-700">
@@ -190,8 +196,7 @@ export default async function LoadDetailPage({
             <div className="flex flex-wrap items-start justify-between gap-4">
               <div>
                 <StatusBadge value={load.status} />
-                <h2 className="mt-3 text-2xl font-bold text-foreground">{load.title}</h2>
-                <p className="muted">
+                <p className="mt-3 muted">
                   {load.equipmentType} - {load.commodity ?? "General freight"} -{" "}
                   {load.weight ? `${load.weight.toLocaleString()} lbs` : "Weight TBD"}
                 </p>

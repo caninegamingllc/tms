@@ -8,7 +8,6 @@ import { formatDate, formatMoney, marginPercent } from "@/lib/format";
 export type LoadTableRow = {
   id: string;
   loadNumber: string;
-  title: string;
   status: string;
   customerName: string;
   pickupCity: string;
@@ -40,12 +39,9 @@ export function LoadsTable({ loads }: { loads: LoadTableRow[] }) {
           label: "Load",
           sortValue: (load) => load.loadNumber,
           render: (load) => (
-            <>
-              <Link href={`/loads/${load.id}`} className="font-semibold text-primary">
-                {load.loadNumber}
-              </Link>
-              <p className="muted">{load.title}</p>
-            </>
+            <Link href={`/loads/${load.id}`} className="font-semibold text-primary">
+              {load.loadNumber}
+            </Link>
           )
         },
         {

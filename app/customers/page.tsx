@@ -21,7 +21,8 @@ export default async function CustomersPage({
 }) {
   const user = await requireTmsAccess();
   const params = await searchParams;
-  const filters = parseCustomerSearchParams(params);
+  const { saved, ...filterParams } = params;
+  const filters = parseCustomerSearchParams(filterParams);
   const showResults = isSearchSubmitted(params);
 
   const scope = await getBranchScope(user);
@@ -65,6 +66,12 @@ export default async function CustomersPage({
         title="Customers"
         description="Manage shipper accounts, contacts, credit limits, payment terms, lane history, and open receivables."
       />
+
+      {saved ? (
+        <div className="mb-6 rounded-2xl border border-emerald-200 bg-emerald-50 p-4 text-sm font-semibold text-emerald-800">
+          Customer saved successfully.
+        </div>
+      ) : null}
 
       <div className="grid gap-6 xl:grid-cols-[1.3fr_0.8fr]">
         <div className="grid gap-6">

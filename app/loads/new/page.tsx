@@ -95,16 +95,10 @@ export default async function NewLoadPage() {
           </label>
         ) : null}
 
-        <div className="grid gap-4 md:grid-cols-3">
-          <label className="grid gap-2 md:col-span-2">
-            <span className="label">Load Title</span>
-            <input name="title" className="input" placeholder="Food products to Dallas DC" required />
-          </label>
-          <label className="grid gap-2">
-            <span className="label">Customer Reference</span>
-            <input name="referenceNumber" className="input" placeholder="PO / tender number" />
-          </label>
-        </div>
+        <label className="grid gap-2 md:max-w-sm">
+          <span className="label">Customer Reference</span>
+          <input name="referenceNumber" className="input" placeholder="PO / tender number" />
+        </label>
 
         <div className="grid gap-4 md:grid-cols-4">
           <label className="grid gap-2">

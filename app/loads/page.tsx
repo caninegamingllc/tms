@@ -34,7 +34,6 @@ export default async function LoadsPage({
   const rows = loads.map((load) => ({
     id: load.id,
     loadNumber: load.loadNumber,
-    title: load.title,
     status: load.status,
     customerName: load.customer.name,
     pickupCity: load.pickupCity,

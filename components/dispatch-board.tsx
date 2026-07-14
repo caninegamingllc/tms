@@ -48,12 +48,9 @@ function buildColumns(visibleColumnIds: Set<DispatchBoardColumnId>): SortableCol
       label: "Load",
       sortValue: (row) => row.loadNumber,
       render: (row) => (
-        <>
-          <Link href={`/loads/${row.id}`} className="font-semibold text-primary">
-            {row.loadNumber}
-          </Link>
-          <p className="muted">{row.title}</p>
-        </>
+        <Link href={`/loads/${row.id}`} className="font-semibold text-primary">
+          {row.loadNumber}
+        </Link>
       )
     },
     {

@@ -12,7 +12,7 @@ export default async function NewDocumentPage() {
     prisma.load.findMany({
       where: scope,
       orderBy: { loadNumber: "desc" },
-      select: { id: true, loadNumber: true, title: true }
+      select: { id: true, loadNumber: true, pickupCity: true, pickupState: true, deliveryCity: true, deliveryState: true }
     }),
     prisma.customer.findMany({
       where: scope,
@@ -43,7 +43,7 @@ export default async function NewDocumentPage() {
           loads={loads.map((load) => ({
             id: load.id,
             label: load.loadNumber,
-            description: load.title
+            description: `${load.pickupCity}, ${load.pickupState} → ${load.deliveryCity}, ${load.deliveryState}`
           }))}
           customers={customers.map((customer) => ({
             id: customer.id,

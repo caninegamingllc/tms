@@ -61,7 +61,6 @@ export type DispatchBoardColumnId = (typeof dispatchBoardColumnOptions)[number][
 export type DispatchBoardRow = {
   id: string;
   loadNumber: string;
-  title: string;
   status: string;
   boardStage: DispatchBoardStage;
   customerName: string;
@@ -186,7 +185,6 @@ export function filterRowsByStage(rows: DispatchBoardRow[], stage: DispatchBoard
 type DispatchBoardLoad = {
   id: string;
   loadNumber: string;
-  title: string;
   status: string;
   pickupCity: string;
   pickupState: string;
@@ -226,7 +224,6 @@ export function serializeDispatchBoardRow(load: DispatchBoardLoad): DispatchBoar
   return {
     id: load.id,
     loadNumber: load.loadNumber,
-    title: load.title,
     status: load.status,
     boardStage,
     customerName: load.customer.name,

@@ -17,7 +17,6 @@ import { formatDate, formatMoney, marginPercent } from "@/lib/format";
 export type SerializedSearchLoad = {
   id: string;
   loadNumber: string;
-  title: string;
   status: string;
   customer: string;
   pickupCity: string;
@@ -45,12 +44,9 @@ const columns: SortableColumn<SerializedSearchLoad>[] = [
     label: "Load",
     sortValue: (load) => load.loadNumber,
     render: (load) => (
-      <>
-        <Link href={`/loads/${load.id}`} className="font-semibold text-primary">
-          {load.loadNumber}
-        </Link>
-        <p className="muted">{load.title}</p>
-      </>
+      <Link href={`/loads/${load.id}`} className="font-semibold text-primary">
+        {load.loadNumber}
+      </Link>
     )
   },
   {

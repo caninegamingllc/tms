@@ -220,7 +220,7 @@ export async function createCustomer(formData: FormData) {
   });
 
   revalidatePath("/customers");
-  redirect("/customers");
+  redirect("/customers?saved=1");
 }
 
 export async function createCarrier(formData: FormData) {
@@ -283,7 +283,7 @@ export async function createCarrier(formData: FormData) {
   });
 
   revalidatePath("/carriers");
-  redirect("/carriers");
+  redirect("/carriers?saved=1");
 }
 
 export async function updateCarrier(formData: FormData) {
@@ -328,6 +328,7 @@ export async function updateCarrier(formData: FormData) {
 
   revalidatePath("/carriers");
   revalidatePath(`/carriers/${carrierId}`);
+  redirect(`/carriers/${carrierId}?saved=1`);
 }
 
 export async function createCarrierInsuranceCoverage(formData: FormData) {
@@ -352,6 +353,7 @@ export async function createCarrierInsuranceCoverage(formData: FormData) {
   await syncCarrierInsuranceSummary(carrierId);
   revalidatePath("/carriers");
   revalidatePath(`/carriers/${carrierId}`);
+  redirect(`/carriers/${carrierId}?saved=1`);
 }
 
 export async function updateCarrierInsuranceCoverage(formData: FormData) {
@@ -383,6 +385,7 @@ export async function updateCarrierInsuranceCoverage(formData: FormData) {
   await syncCarrierInsuranceSummary(coverage.carrierId);
   revalidatePath("/carriers");
   revalidatePath(`/carriers/${coverage.carrierId}`);
+  redirect(`/carriers/${coverage.carrierId}?saved=1`);
 }
 
 export async function createFacility(formData: FormData) {
@@ -414,7 +417,7 @@ export async function createFacility(formData: FormData) {
 
   revalidatePath("/locations");
   revalidatePath("/loads/new");
-  redirect("/locations");
+  redirect("/locations?saved=1");
 }
 
 export async function updateFacility(formData: FormData) {
@@ -448,6 +451,7 @@ export async function updateFacility(formData: FormData) {
 
   revalidatePath("/locations");
   revalidatePath("/loads/new");
+  redirect("/locations?saved=1");
 }
 
 export async function createLoad(formData: FormData) {
@@ -475,7 +479,7 @@ export async function createLoad(formData: FormData) {
         companyId: user.companyId,
         branchId,
         loadNumber,
-        title: requiredString(formData, "title"),
+        title: `${pickup.city}, ${pickup.state} → ${delivery.city}, ${delivery.state}`,
         status: requiredString(formData, "status"),
         customerId,
         referenceNumber: optionalString(formData, "referenceNumber"),
@@ -539,7 +543,7 @@ export async function createLoad(formData: FormData) {
 
   revalidatePath("/loads");
   revalidatePath("/commissions");
-  redirect(`/loads/${load.id}`);
+  redirect(`/loads/${load.id}?saved=1`);
 }
 
 export async function updateLoadStatus(formData: FormData) {

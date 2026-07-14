@@ -312,7 +312,6 @@ export function serializeSearchLoads(loads: SearchLoadResult[]) {
   return loads.map((load) => ({
     id: load.id,
     loadNumber: load.loadNumber,
-    title: load.title,
     status: load.status,
     customer: load.customer.name,
     pickupCity: load.pickupCity,

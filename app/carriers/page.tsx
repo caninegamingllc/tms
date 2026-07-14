@@ -18,7 +18,7 @@ export default async function CarriersPage({
   searchParams: Promise<Record<string, string | string[] | undefined>>;
 }) {
   const params = await searchParams;
-  const { error, ...filterParams } = params;
+  const { error, saved, ...filterParams } = params;
   const user = await requireTmsAccess();
   const filters = parseCarrierSearchParams(filterParams);
   const showResults = isSearchSubmitted(params);
@@ -55,6 +55,12 @@ export default async function CarriersPage({
       {error ? (
         <div className="mb-6 rounded-2xl border border-rose-200 bg-rose-50 p-4 text-sm font-semibold text-rose-700">
           {error}
+        </div>
+      ) : null}
+
+      {saved ? (
+        <div className="mb-6 rounded-2xl border border-emerald-200 bg-emerald-50 p-4 text-sm font-semibold text-emerald-800">
+          Carrier saved successfully.
         </div>
       ) : null}
 

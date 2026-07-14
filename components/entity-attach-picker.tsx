@@ -29,7 +29,7 @@ export function EntityAttachPicker({
         <SearchCombobox
           name="loadId"
           label="Attach to load"
-          placeholder="Search load number or title"
+          placeholder="Search load number"
           options={loads}
           defaultValue={defaultLoadId}
         />

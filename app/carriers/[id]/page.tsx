@@ -27,10 +27,10 @@ export default async function CarrierDetailPage({
   searchParams
 }: {
   params: Promise<{ id: string }>;
-  searchParams: Promise<{ error?: string }>;
+  searchParams: Promise<{ error?: string; saved?: string }>;
 }) {
   const { id } = await params;
-  const { error } = await searchParams;
+  const { error, saved } = await searchParams;
   const user = await requireTmsAccess();
   const carrier = await prisma.carrier.findUnique({
     where: { id, companyId: user.companyId },
@@ -63,6 +63,12 @@ export default async function CarrierDetailPage({
       {error ? (
         <div className="mb-6 rounded-2xl border border-rose-200 bg-rose-50 p-4 text-sm font-semibold text-rose-700">
           {error}
+        </div>
+      ) : null}
+
+      {saved ? (
+        <div className="mb-6 rounded-2xl border border-emerald-200 bg-emerald-50 p-4 text-sm font-semibold text-emerald-800">
+          Carrier saved successfully.
         </div>
       ) : null}
 
