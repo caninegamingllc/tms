@@ -1,5 +1,5 @@
+import { resolveOAuthRedirectUri } from "@/lib/app-url";
 import type { OAuthProvider } from "@/lib/oauth/types";
-import { getAppBaseUrl } from "@/lib/oauth/types";
 
 export type OAuthProfile = {
   provider: OAuthProvider;
@@ -17,9 +17,16 @@ export function isGoogleOAuthConfigured() {
 }
 
 function googleRedirectUri() {
-  return (
-    process.env.GOOGLE_REDIRECT_URI?.trim() ||
-    `${getAppBaseUrl()}/api/auth/oauth/google/callback`
+  return resolveOAuthRedirectUri(
+    process.env.GOOGLE_REDIRECT_URI,
+    "/api/auth/oauth/google/callback"
+  );
+}
+
+function googleMailRedirectUri() {
+  return resolveOAuthRedirectUri(
+    process.env.GOOGLE_MAIL_REDIRECT_URI,
+    "/api/mail/oauth/google/callback"
   );
 }
 
@@ -50,9 +57,7 @@ export function getGoogleMailAuthorizeUrl(state: string) {
 
   const params = new URLSearchParams({
     client_id: clientId,
-    redirect_uri:
-      process.env.GOOGLE_MAIL_REDIRECT_URI?.trim() ||
-      `${getAppBaseUrl()}/api/mail/oauth/google/callback`,
+    redirect_uri: googleMailRedirectUri(),
     response_type: "code",
     scope: [
       "openid",
@@ -136,10 +141,7 @@ export async function completeGoogleIdentityOAuth(code: string) {
 }
 
 export async function completeGoogleMailOAuth(code: string) {
-  const redirectUri =
-    process.env.GOOGLE_MAIL_REDIRECT_URI?.trim() ||
-    `${getAppBaseUrl()}/api/mail/oauth/google/callback`;
-  const tokens = await exchangeGoogleCode(code, redirectUri);
+  const tokens = await exchangeGoogleCode(code, googleMailRedirectUri());
   const profile = await fetchGoogleProfile(tokens.access_token);
   return { profile, tokens };
 }

@@ -1,5 +1,5 @@
+import { resolveOAuthRedirectUri } from "@/lib/app-url";
 import type { OAuthProvider } from "@/lib/oauth/types";
-import { getAppBaseUrl } from "@/lib/oauth/types";
 import type { OAuthProfile } from "@/lib/oauth/google";
 
 const MS_AUTHORIZE = (tenant: string) =>
@@ -18,16 +18,16 @@ export function isMicrosoftOAuthConfigured() {
 }
 
 function microsoftIdentityRedirectUri() {
-  return (
-    process.env.MICROSOFT_REDIRECT_URI?.trim() ||
-    `${getAppBaseUrl()}/api/auth/oauth/microsoft/callback`
+  return resolveOAuthRedirectUri(
+    process.env.MICROSOFT_REDIRECT_URI,
+    "/api/auth/oauth/microsoft/callback"
   );
 }
 
 function microsoftMailRedirectUri() {
-  return (
-    process.env.MICROSOFT_MAIL_REDIRECT_URI?.trim() ||
-    `${getAppBaseUrl()}/api/mail/oauth/microsoft/callback`
+  return resolveOAuthRedirectUri(
+    process.env.MICROSOFT_MAIL_REDIRECT_URI,
+    "/api/mail/oauth/microsoft/callback"
   );
 }
 
@@ -178,6 +178,11 @@ export async function sendMicrosoftMail(
     to: string[];
     bodyText: string;
     bodyHtml?: string;
+    attachments?: Array<{
+      name: string;
+      contentType: string;
+      contentBytes: string;
+    }>;
   }
 ) {
   const response = await fetch("https://graph.microsoft.com/v1.0/me/sendMail", {
@@ -195,6 +200,12 @@ export async function sendMicrosoftMail(
         },
         toRecipients: message.to.map((address) => ({
           emailAddress: { address }
+        })),
+        attachments: message.attachments?.map((attachment) => ({
+          "@odata.type": "#microsoft.graph.fileAttachment",
+          name: attachment.name,
+          contentType: attachment.contentType,
+          contentBytes: attachment.contentBytes
         }))
       },
       saveToSentItems: true

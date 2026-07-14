@@ -1,7 +1,7 @@
-import type { Prisma } from "@prisma/client";
+import type { Company, Prisma } from "@prisma/client";
 import { formatDate, formatDateTime, formatMoney } from "@/lib/format";
 
-type LoadForDocument = Prisma.LoadGetPayload<{
+export type LoadForDocument = Prisma.LoadGetPayload<{
   include: {
     customer: { include: { contacts: true } };
     stops: true;
@@ -11,23 +11,123 @@ type LoadForDocument = Prisma.LoadGetPayload<{
   };
 }>;
 
+export type CompanyBranding = Pick<
+  Company,
+  | "name"
+  | "address"
+  | "city"
+  | "state"
+  | "postalCode"
+  | "phone"
+  | "email"
+  | "website"
+  | "logoFilePath"
+  | "logoMimeType"
+>;
+
+export type DocumentStop = {
+  sequence: number;
+  type: string;
+  facilityName: string;
+  addressLine: string;
+  appointment: string;
+  instructions: string;
+};
+
+export type DocumentCharge = {
+  label: string;
+  amountCents: number;
+};
+
+export type StructuredDocument = {
+  type: "RATE_CONFIRMATION" | "CUSTOMER_LOAD_CONFIRMATION" | "BOL" | "INVOICE";
+  title: string;
+  documentNumber: string;
+  loadNumber: string;
+  dateLabel: string;
+  issuedDate: string;
+  dueDate?: string;
+  company: {
+    name: string;
+    addressLines: string[];
+    phone?: string;
+    email?: string;
+    website?: string;
+    logoFilePath?: string | null;
+    logoMimeType?: string | null;
+  };
+  partyTitle: string;
+  partyLines: string[];
+  details: Array<{ label: string; value: string }>;
+  stops: DocumentStop[];
+  charges?: DocumentCharge[];
+  totalCents?: number;
+  extraSections?: Array<{ title: string; lines: string[] }>;
+  terms: string[];
+  signatures: string[];
+  remittance?: string[];
+};
+
+function companyAddressLines(company: CompanyBranding) {
+  const lines: string[] = [];
+  if (company.address) {
+    lines.push(company.address);
+  }
+  const cityState = [company.city, company.state].filter(Boolean).join(", ");
+  const cityLine = [cityState, company.postalCode].filter(Boolean).join(" ");
+  if (cityLine) {
+    lines.push(cityLine);
+  }
+  return lines;
+}
+
+export function brandingFromCompany(company: CompanyBranding): StructuredDocument["company"] {
+  return {
+    name: company.name,
+    addressLines: companyAddressLines(company),
+    phone: company.phone ?? undefined,
+    email: company.email ?? undefined,
+    website: company.website ?? undefined,
+    logoFilePath: company.logoFilePath,
+    logoMimeType: company.logoMimeType
+  };
+}
+
+function mapStops(load: LoadForDocument): DocumentStop[] {
+  return [...load.stops]
+    .sort((a, b) => a.sequence - b.sequence)
+    .map((stop) => ({
+      sequence: stop.sequence,
+      type: stop.type,
+      facilityName: stop.facilityName || "N/A",
+      addressLine: [
+        stop.address,
+        [stop.city, stop.state].filter(Boolean).join(", "),
+        stop.postalCode
+      ]
+        .filter(Boolean)
+        .join(", "),
+      appointment: formatDateTime(stop.appointmentAt),
+      instructions: stop.instructions || ""
+    }));
+}
+
+function mapCharges(load: LoadForDocument): DocumentCharge[] {
+  if (load.charges.length) {
+    return load.charges.map((charge) => ({
+      label: charge.label,
+      amountCents: charge.amountCents
+    }));
+  }
+  return [{ label: "Linehaul", amountCents: load.revenueCents }];
+}
+
 function line(label: string, value?: string | number | null) {
   return `${label}: ${value || "N/A"}`;
 }
 
 function moneyLine(label: string, cents?: number | null) {
   return `${label}: ${formatMoney(cents ?? 0)}`;
-}
-
-function stopBlock(stop: LoadForDocument["stops"][number]) {
-  return [
-    `${stop.sequence}. ${stop.type}`,
-    line("Facility", stop.facilityName),
-    line("Address", stop.address),
-    line("City/State", `${stop.city}, ${stop.state}${stop.postalCode ? ` ${stop.postalCode}` : ""}`),
-    line("Appointment", formatDateTime(stop.appointmentAt)),
-    line("Instructions", stop.instructions)
-  ].join("\n");
 }
 
 export function documentTitle(type: string, loadNumber: string) {
@@ -47,162 +147,307 @@ export function documentTitle(type: string, loadNumber: string) {
   return `Document - ${loadNumber}`;
 }
 
-export function buildRateConfirmation(load: LoadForDocument, documentNumber: string) {
+export function buildRateConfirmationDocument(
+  load: LoadForDocument,
+  documentNumber: string,
+  company: CompanyBranding
+): StructuredDocument {
   const assignment = load.dispatchAssignment;
   const carrier = assignment?.carrier;
   const carrierContact = carrier?.contacts.find((contact) => contact.isPrimary);
 
-  return [
-    "CARRIER RATE CONFIRMATION",
-    line("Confirmation #", documentNumber),
-    line("Load #", load.loadNumber),
-    line("Date", formatDate(new Date())),
+  return {
+    type: "RATE_CONFIRMATION",
+    title: "Carrier Rate Confirmation",
+    documentNumber,
+    loadNumber: load.loadNumber,
+    dateLabel: "Date",
+    issuedDate: formatDate(new Date()),
+    company: brandingFromCompany(company),
+    partyTitle: "Carrier",
+    partyLines: [
+      carrier?.name || "N/A",
+      carrier?.mcNumber ? `MC # ${carrier.mcNumber}` : "",
+      carrier?.dotNumber ? `DOT # ${carrier.dotNumber}` : "",
+      carrierContact?.name ? `Contact: ${carrierContact.name}` : "",
+      carrierContact?.phone || carrier?.phone
+        ? `Phone: ${carrierContact?.phone ?? carrier?.phone}`
+        : "",
+      carrierContact?.email || carrier?.email
+        ? `Email: ${carrierContact?.email ?? carrier?.email}`
+        : ""
+    ].filter(Boolean),
+    details: [
+      { label: "Customer", value: load.customer.name },
+      { label: "Reference", value: load.referenceNumber || "N/A" },
+      { label: "Equipment", value: load.equipmentType || "N/A" },
+      { label: "Commodity", value: load.commodity || "N/A" },
+      {
+        label: "Weight",
+        value: load.weight ? `${load.weight.toLocaleString()} lbs` : "N/A"
+      },
+      {
+        label: "Carrier Rate",
+        value: formatMoney(assignment?.rateCents ?? load.carrierCostCents)
+      }
+    ],
+    stops: mapStops(load),
+    extraSections: [
+      {
+        title: "Driver / Equipment",
+        lines: [
+          line("Driver", assignment?.driverName),
+          line("Driver Phone", assignment?.driverPhone),
+          line("Truck #", assignment?.truckNumber),
+          line("Trailer #", assignment?.trailerNumber)
+        ]
+      }
+    ],
+    terms: [
+      "Carrier must notify broker immediately of delays, OS&D, temperature issues, detention, or accessorials.",
+      "Carrier must submit signed POD and all supporting receipts before payment.",
+      "Double brokering is prohibited. Carrier agrees it is the motor carrier responsible for this shipment."
+    ],
+    signatures: ["Carrier Signature: ______________________________ Date: _______________"]
+  };
+}
+
+export function buildBillOfLadingDocument(
+  load: LoadForDocument,
+  documentNumber: string,
+  company: CompanyBranding
+): StructuredDocument {
+  return {
+    type: "BOL",
+    title: "Bill of Lading",
+    documentNumber,
+    loadNumber: load.loadNumber,
+    dateLabel: "Date",
+    issuedDate: formatDate(new Date()),
+    company: brandingFromCompany(company),
+    partyTitle: "Shipper / Consignee",
+    partyLines: [
+      load.customer.name,
+      load.customer.phone ? `Phone: ${load.customer.phone}` : "",
+      load.customer.email ? `Email: ${load.customer.email}` : ""
+    ].filter(Boolean),
+    details: [
+      { label: "Customer Reference", value: load.referenceNumber || "N/A" },
+      { label: "Commodity", value: load.commodity || "N/A" },
+      { label: "Equipment", value: load.equipmentType || "N/A" },
+      {
+        label: "Weight",
+        value: load.weight ? `${load.weight.toLocaleString()} lbs` : "N/A"
+      }
+    ],
+    stops: mapStops(load),
+    terms: [
+      "Driver must verify piece count, condition, seal number, and temperature if applicable.",
+      "Signed POD must be returned to broker after delivery."
+    ],
+    signatures: [
+      "Shipper: ______________________________ Date: _______________",
+      "Carrier: ______________________________ Date: _______________",
+      "Consignee: ____________________________ Date: _______________"
+    ]
+  };
+}
+
+export function buildCustomerInvoiceDocument(
+  load: LoadForDocument,
+  documentNumber: string,
+  company: CompanyBranding
+): StructuredDocument {
+  const invoice = load.invoices[0];
+  const charges = mapCharges(load);
+  const totalCents = invoice?.totalCents ?? load.revenueCents;
+
+  return {
+    type: "INVOICE",
+    title: "Customer Invoice",
+    documentNumber,
+    loadNumber: load.loadNumber,
+    dateLabel: "Issued",
+    issuedDate: formatDate(invoice?.issuedAt ?? new Date()),
+    dueDate: formatDate(invoice?.dueAt),
+    company: brandingFromCompany(company),
+    partyTitle: "Bill To",
+    partyLines: [
+      load.customer.name,
+      load.customer.email ? `Email: ${load.customer.email}` : "",
+      load.customer.phone ? `Phone: ${load.customer.phone}` : "",
+      load.customer.paymentTerms ? `Terms: ${load.customer.paymentTerms}` : ""
+    ].filter(Boolean),
+    details: [
+      { label: "Reference", value: load.referenceNumber || "N/A" },
+      {
+        label: "Lane",
+        value: `${load.pickupCity}, ${load.pickupState} to ${load.deliveryCity}, ${load.deliveryState}`
+      },
+      { label: "Pickup", value: formatDate(load.pickupDate) },
+      { label: "Delivery", value: formatDate(load.deliveryDate) }
+    ],
+    stops: mapStops(load),
+    charges,
+    totalCents,
+    terms: ["Payment is due per the terms stated above. Please reference the invoice number on remittance."],
+    signatures: [],
+    remittance: [
+      company.name,
+      ...companyAddressLines(company),
+      company.email ? `Email: ${company.email}` : "Accounting Department",
+      company.phone ? `Phone: ${company.phone}` : ""
+    ].filter(Boolean)
+  };
+}
+
+export function buildCustomerLoadConfirmationDocument(
+  load: LoadForDocument,
+  documentNumber: string,
+  company: CompanyBranding
+): StructuredDocument {
+  const customerContact = load.customer.contacts.find((contact) => contact.isPrimary);
+  const charges = mapCharges(load);
+
+  return {
+    type: "CUSTOMER_LOAD_CONFIRMATION",
+    title: "Customer Load Confirmation",
+    documentNumber,
+    loadNumber: load.loadNumber,
+    dateLabel: "Date",
+    issuedDate: formatDate(new Date()),
+    company: brandingFromCompany(company),
+    partyTitle: "Customer",
+    partyLines: [
+      load.customer.name,
+      customerContact?.name ? `Contact: ${customerContact.name}` : "",
+      customerContact?.phone || load.customer.phone
+        ? `Phone: ${customerContact?.phone ?? load.customer.phone}`
+        : "",
+      customerContact?.email || load.customer.email
+        ? `Email: ${customerContact?.email ?? load.customer.email}`
+        : "",
+      load.referenceNumber ? `Reference: ${load.referenceNumber}` : ""
+    ].filter(Boolean),
+    details: [
+      { label: "Equipment", value: load.equipmentType || "N/A" },
+      { label: "Commodity", value: load.commodity || "N/A" },
+      {
+        label: "Weight",
+        value: load.weight ? `${load.weight.toLocaleString()} lbs` : "N/A"
+      },
+      { label: "Pickup", value: formatDate(load.pickupDate) },
+      { label: "Delivery", value: formatDate(load.deliveryDate) },
+      {
+        label: "Lane",
+        value: `${load.pickupCity}, ${load.pickupState} to ${load.deliveryCity}, ${load.deliveryState}`
+      }
+    ],
+    stops: mapStops(load),
+    charges,
+    totalCents: load.revenueCents,
+    terms: [
+      "Please review the schedule and contact your broker immediately with any changes.",
+      "This confirmation acknowledges the load details and customer rates described above."
+    ],
+    signatures: []
+  };
+}
+
+function structuredToPlainText(doc: StructuredDocument) {
+  const lines = [
+    doc.title.toUpperCase(),
+    line(doc.type === "INVOICE" ? "Invoice #" : "Document #", doc.documentNumber),
+    line("Load #", doc.loadNumber),
+    line(doc.dateLabel, doc.issuedDate),
+    ...(doc.dueDate ? [line("Due", doc.dueDate)] : []),
     "",
     "BROKER",
-    "Great Lakes Brokerage",
+    doc.company.name,
+    ...doc.company.addressLines,
+    ...(doc.company.phone ? [line("Phone", doc.company.phone)] : []),
+    ...(doc.company.email ? [line("Email", doc.company.email)] : []),
     "",
-    "CARRIER",
-    line("Name", carrier?.name),
-    line("MC #", carrier?.mcNumber),
-    line("DOT #", carrier?.dotNumber),
-    line("Contact", carrierContact?.name),
-    line("Phone", carrierContact?.phone ?? carrier?.phone),
-    line("Email", carrierContact?.email ?? carrier?.email),
+    doc.partyTitle.toUpperCase(),
+    ...doc.partyLines,
     "",
-    "LOAD DETAILS",
-    line("Customer", load.customer.name),
-    line("Reference", load.referenceNumber),
-    line("Equipment", load.equipmentType),
-    line("Commodity", load.commodity),
-    line("Weight", load.weight ? `${load.weight.toLocaleString()} lbs` : null),
-    moneyLine("Carrier Rate", assignment?.rateCents ?? load.carrierCostCents),
+    "DETAILS",
+    ...doc.details.map((item) => line(item.label, item.value)),
     "",
     "STOPS",
-    ...load.stops.sort((a, b) => a.sequence - b.sequence).map(stopBlock),
-    "",
-    "DRIVER / EQUIPMENT",
-    line("Driver", assignment?.driverName),
-    line("Driver Phone", assignment?.driverPhone),
-    line("Truck #", assignment?.truckNumber),
-    line("Trailer #", assignment?.trailerNumber),
-    "",
-    "TERMS",
-    "Carrier must notify broker immediately of delays, OS&D, temperature issues, detention, or accessorials.",
-    "Carrier must submit signed POD and all supporting receipts before payment.",
-    "Double brokering is prohibited. Carrier agrees it is the motor carrier responsible for this shipment.",
-    "",
-    "AUTHORIZED SIGNATURE",
-    "Carrier Signature: ______________________________ Date: _______________"
-  ].join("\n");
+    ...doc.stops.flatMap((stop) => [
+      `${stop.sequence}. ${stop.type} — ${stop.facilityName}`,
+      line("Address", stop.addressLine),
+      line("Appointment", stop.appointment),
+      ...(stop.instructions ? [line("Instructions", stop.instructions)] : []),
+      ""
+    ])
+  ];
+
+  for (const section of doc.extraSections ?? []) {
+    lines.push(section.title.toUpperCase(), ...section.lines, "");
+  }
+
+  if (doc.charges?.length) {
+    lines.push(
+      "CHARGES",
+      ...doc.charges.map((charge) => moneyLine(charge.label, charge.amountCents)),
+      ""
+    );
+  }
+
+  if (doc.totalCents != null) {
+    lines.push(moneyLine("Total", doc.totalCents), "");
+  }
+
+  if (doc.remittance?.length) {
+    lines.push("REMIT PAYMENT TO", ...doc.remittance, "");
+  }
+
+  if (doc.terms.length) {
+    lines.push("TERMS", ...doc.terms, "");
+  }
+
+  if (doc.signatures.length) {
+    lines.push("AUTHORIZED SIGNATURE", ...doc.signatures);
+  }
+
+  return lines.join("\n");
 }
 
-export function buildBillOfLading(load: LoadForDocument, documentNumber: string) {
-  return [
-    "BILL OF LADING",
-    line("BOL #", documentNumber),
-    line("Load #", load.loadNumber),
-    line("Customer Reference", load.referenceNumber),
-    line("Date", formatDate(new Date())),
-    "",
-    "SHIPPER / CONSIGNEE",
-    line("Customer", load.customer.name),
-    line("Customer Phone", load.customer.phone),
-    line("Customer Email", load.customer.email),
-    "",
-    "FREIGHT",
-    line("Commodity", load.commodity),
-    line("Equipment", load.equipmentType),
-    line("Weight", load.weight ? `${load.weight.toLocaleString()} lbs` : null),
-    "",
-    "STOPS",
-    ...load.stops.sort((a, b) => a.sequence - b.sequence).map(stopBlock),
-    "",
-    "SPECIAL INSTRUCTIONS",
-    "Driver must verify piece count, condition, seal number, and temperature if applicable.",
-    "Signed POD must be returned to broker after delivery.",
-    "",
-    "SIGNATURES",
-    "Shipper: ______________________________ Date: _______________",
-    "Carrier: ______________________________ Date: _______________",
-    "Consignee: ____________________________ Date: _______________"
-  ].join("\n");
+/** @deprecated Prefer structured builders; kept as plain-text helper using company branding. */
+export function buildRateConfirmation(
+  load: LoadForDocument,
+  documentNumber: string,
+  company: CompanyBranding
+) {
+  return structuredToPlainText(buildRateConfirmationDocument(load, documentNumber, company));
 }
 
-export function buildCustomerInvoice(load: LoadForDocument, documentNumber: string) {
-  const invoice = load.invoices[0];
-  const charges = load.charges.length
-    ? load.charges.map((charge) => `${charge.label} - ${formatMoney(charge.amountCents)}`)
-    : [`Linehaul - ${formatMoney(load.revenueCents)}`];
-
-  return [
-    "CUSTOMER INVOICE",
-    line("Invoice #", documentNumber),
-    line("Load #", load.loadNumber),
-    line("Issued", formatDate(invoice?.issuedAt ?? new Date())),
-    line("Due", formatDate(invoice?.dueAt)),
-    "",
-    "BILL TO",
-    line("Customer", load.customer.name),
-    line("Email", load.customer.email),
-    line("Phone", load.customer.phone),
-    line("Terms", load.customer.paymentTerms),
-    "",
-    "SHIPMENT",
-    line("Reference", load.referenceNumber),
-    line("Lane", `${load.pickupCity}, ${load.pickupState} to ${load.deliveryCity}, ${load.deliveryState}`),
-    line("Pickup", formatDate(load.pickupDate)),
-    line("Delivery", formatDate(load.deliveryDate)),
-    "",
-    "CHARGES",
-    ...charges,
-    "",
-    moneyLine("Invoice Total", invoice?.totalCents ?? load.revenueCents),
-    "",
-    "REMIT PAYMENT TO",
-    "Great Lakes Brokerage",
-    "Accounting Department",
-    "accounting@example.com"
-  ].join("\n");
+export function buildBillOfLading(
+  load: LoadForDocument,
+  documentNumber: string,
+  company: CompanyBranding
+) {
+  return structuredToPlainText(buildBillOfLadingDocument(load, documentNumber, company));
 }
 
-export function buildCustomerLoadConfirmation(load: LoadForDocument, documentNumber: string) {
-  const customerContact = load.customer.contacts.find((contact) => contact.isPrimary);
-  const charges = load.charges.length
-    ? load.charges.map((charge) => `${charge.label} - ${formatMoney(charge.amountCents)}`)
-    : [`Linehaul - ${formatMoney(load.revenueCents)}`];
+export function buildCustomerInvoice(
+  load: LoadForDocument,
+  documentNumber: string,
+  company: CompanyBranding
+) {
+  return structuredToPlainText(buildCustomerInvoiceDocument(load, documentNumber, company));
+}
 
-  return [
-    "CUSTOMER LOAD CONFIRMATION",
-    line("Confirmation #", documentNumber),
-    line("Load #", load.loadNumber),
-    line("Date", formatDate(new Date())),
-    "",
-    "CUSTOMER",
-    line("Name", load.customer.name),
-    line("Contact", customerContact?.name),
-    line("Phone", customerContact?.phone ?? load.customer.phone),
-    line("Email", customerContact?.email ?? load.customer.email),
-    line("Reference", load.referenceNumber),
-    "",
-    "SHIPMENT",
-    line("Equipment", load.equipmentType),
-    line("Commodity", load.commodity),
-    line("Weight", load.weight ? `${load.weight.toLocaleString()} lbs` : null),
-    line("Pickup", formatDate(load.pickupDate)),
-    line("Delivery", formatDate(load.deliveryDate)),
-    line("Lane", `${load.pickupCity}, ${load.pickupState} to ${load.deliveryCity}, ${load.deliveryState}`),
-    "",
-    "STOPS",
-    ...load.stops.sort((a, b) => a.sequence - b.sequence).map(stopBlock),
-    "",
-    "CHARGES",
-    ...charges,
-    moneyLine("Total", load.revenueCents),
-    "",
-    "NOTES",
-    "Please review the schedule and contact your broker immediately with any changes.",
-    "This confirmation acknowledges the load details and customer rates described above."
-  ].join("\n");
+export function buildCustomerLoadConfirmation(
+  load: LoadForDocument,
+  documentNumber: string,
+  company: CompanyBranding
+) {
+  return structuredToPlainText(
+    buildCustomerLoadConfirmationDocument(load, documentNumber, company)
+  );
 }
 
 export function buildPodRequestEmail(load: LoadForDocument, brokerEmail: string) {
@@ -228,6 +473,30 @@ export function buildPodRequestEmail(load: LoadForDocument, brokerEmail: string)
     "",
     "Thank you,"
   ].join("\n");
+}
+
+export function defaultEmailMessage(
+  purpose:
+    | "CARRIER_RATE_CONFIRMATION"
+    | "CUSTOMER_LOAD_CONFIRMATION"
+    | "INVOICE"
+    | "BOL"
+    | "POD_REQUEST",
+  loadNumber: string,
+  companyName: string
+) {
+  switch (purpose) {
+    case "CARRIER_RATE_CONFIRMATION":
+      return `Please find attached the rate confirmation for load ${loadNumber}.\n\nPlease review, sign if required, and confirm receipt.\n\nThank you,\n${companyName}`;
+    case "CUSTOMER_LOAD_CONFIRMATION":
+      return `Please find attached the load confirmation for ${loadNumber}.\n\nLet us know if you have any questions or changes.\n\nThank you,\n${companyName}`;
+    case "INVOICE":
+      return `Please find attached the invoice for load ${loadNumber}, along with any supporting documents.\n\nThank you for your business,\n${companyName}`;
+    case "BOL":
+      return `Please find attached the bill of lading for load ${loadNumber}.\n\nThank you,\n${companyName}`;
+    case "POD_REQUEST":
+      return `Please send the signed proof of delivery for load ${loadNumber} at your earliest convenience.\n\nThank you,\n${companyName}`;
+  }
 }
 
 export function plainTextToHtml(text: string) {

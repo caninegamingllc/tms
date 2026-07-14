@@ -1,4 +1,5 @@
 import { createHmac, timingSafeEqual } from "crypto";
+import { appBaseUrl } from "@/lib/app-url";
 
 export type OAuthProvider = "GOOGLE" | "MICROSOFT";
 
@@ -25,10 +26,6 @@ export type OAuthStatePayload = IdentityOAuthState | MailOAuthState;
 
 export const IDENTITY_OAUTH_STATE_COOKIE = "tms_oauth_state";
 export const MAIL_OAUTH_STATE_COOKIE = "tms_mail_oauth_state";
-
-function appBaseUrl() {
-  return (process.env.APP_BASE_URL ?? "http://localhost:3000").replace(/\/$/, "");
-}
 
 function stateSecret() {
   return (

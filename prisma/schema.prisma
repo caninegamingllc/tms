@@ -18,6 +18,16 @@ model Company {
   quickbooksMethod     String                 @default("NONE")
   /// JSON: AR/AP/income/expense account names and item defaults
   quickbooksConfigJson String?
+  logoFilePath         String?
+  logoMimeType         String?
+  logoOriginalFileName String?
+  address              String?
+  city                 String?
+  state                String?
+  postalCode           String?
+  phone                String?
+  email                String?
+  website              String?
   memberships          CompanyMembership[]
   seatSubscription     SeatSubscription?
   branches             Branch[]

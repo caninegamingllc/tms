@@ -170,45 +170,104 @@ async function getValidAccessToken(mailbox: {
   return refreshed.access_token;
 }
 
+export type MailAttachment = {
+  filename: string;
+  contentType: string;
+  content: Buffer;
+};
+
 function buildRawMime(input: {
   from: string;
   to: string[];
   subject: string;
   text: string;
   html?: string;
+  attachments?: MailAttachment[];
 }) {
-  const boundary = `tms_${Date.now()}`;
   const toHeader = input.to.join(", ");
-  const lines = [
+  const hasAttachments = Boolean(input.attachments?.length);
+  const altBoundary = `tms_alt_${Date.now()}`;
+  const mixedBoundary = `tms_mixed_${Date.now()}`;
+
+  const headers = [
     `From: ${input.from}`,
     `To: ${toHeader}`,
-    `Subject: ${input.subject}`,
+    `Subject: ${encodeSubject(input.subject)}`,
     "MIME-Version: 1.0"
   ];
 
-  if (input.html) {
-    lines.push(
-      `Content-Type: multipart/alternative; boundary="${boundary}"`,
-      "",
-      `--${boundary}`,
-      'Content-Type: text/plain; charset="UTF-8"',
-      "",
-      input.text,
-      `--${boundary}`,
-      'Content-Type: text/html; charset="UTF-8"',
-      "",
-      input.html,
-      `--${boundary}--`
-    );
-  } else {
-    lines.push('Content-Type: text/plain; charset="UTF-8"', "", input.text);
+  const alternativeParts = [
+    `--${altBoundary}`,
+    'Content-Type: text/plain; charset="UTF-8"',
+    "Content-Transfer-Encoding: 7bit",
+    "",
+    input.text,
+    `--${altBoundary}`,
+    'Content-Type: text/html; charset="UTF-8"',
+    "Content-Transfer-Encoding: 7bit",
+    "",
+    input.html ?? `<pre>${input.text}</pre>`,
+    `--${altBoundary}--`
+  ];
+
+  if (!hasAttachments) {
+    if (input.html) {
+      return Buffer.from(
+        [...headers, `Content-Type: multipart/alternative; boundary="${altBoundary}"`, "", ...alternativeParts].join(
+          "\r\n"
+        )
+      )
+        .toString("base64")
+        .replace(/\+/g, "-")
+        .replace(/\//g, "_")
+        .replace(/=+$/, "");
+    }
+
+    return Buffer.from(
+      [...headers, 'Content-Type: text/plain; charset="UTF-8"', "", input.text].join("\r\n")
+    )
+      .toString("base64")
+      .replace(/\+/g, "-")
+      .replace(/\//g, "_")
+      .replace(/=+$/, "");
   }
 
-  return Buffer.from(lines.join("\r\n"))
+  const attachmentParts = (input.attachments ?? []).flatMap((attachment) => {
+    const encoded = attachment.content.toString("base64").replace(/(.{76})/g, "$1\r\n");
+    return [
+      `--${mixedBoundary}`,
+      `Content-Type: ${attachment.contentType}; name="${attachment.filename}"`,
+      "Content-Transfer-Encoding: base64",
+      `Content-Disposition: attachment; filename="${attachment.filename}"`,
+      "",
+      encoded
+    ];
+  });
+
+  return Buffer.from(
+    [
+      ...headers,
+      `Content-Type: multipart/mixed; boundary="${mixedBoundary}"`,
+      "",
+      `--${mixedBoundary}`,
+      `Content-Type: multipart/alternative; boundary="${altBoundary}"`,
+      "",
+      ...alternativeParts,
+      ...attachmentParts,
+      `--${mixedBoundary}--`
+    ].join("\r\n")
+  )
     .toString("base64")
     .replace(/\+/g, "-")
     .replace(/\//g, "_")
     .replace(/=+$/, "");
+}
+
+function encodeSubject(subject: string) {
+  if (/^[\x20-\x7E]*$/.test(subject)) {
+    return subject;
+  }
+  return `=?UTF-8?B?${Buffer.from(subject).toString("base64")}?=`;
 }
 
 export type SendMailboxResult = {
@@ -224,6 +283,7 @@ export async function sendViaUserMailbox(input: {
   subject: string;
   text: string;
   html?: string;
+  attachments?: MailAttachment[];
 }): Promise<SendMailboxResult> {
   const mailbox = await getUserMailbox(input.userId);
   if (!mailbox || mailbox.status !== "CONNECTED") {
@@ -239,7 +299,8 @@ export async function sendViaUserMailbox(input: {
       to: input.to,
       subject: input.subject,
       text: input.text,
-      html: input.html
+      html: input.html,
+      attachments: input.attachments
     });
     const sent = await sendGmailMessage(accessToken, raw);
     return {
@@ -254,7 +315,12 @@ export async function sendViaUserMailbox(input: {
     subject: input.subject,
     to: input.to,
     bodyText: input.text,
-    bodyHtml: input.html
+    bodyHtml: input.html,
+    attachments: input.attachments?.map((attachment) => ({
+      name: attachment.filename,
+      contentType: attachment.contentType,
+      contentBytes: attachment.content.toString("base64")
+    }))
   });
 
   // Graph sendMail does not return ids; a sentinel is stored and reconciled on sync.

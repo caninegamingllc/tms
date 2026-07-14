@@ -7,12 +7,13 @@ import type { SessionUser } from "@/lib/types";
 import { canAccessRecord } from "@/lib/branch-filter-server";
 import { resolveBranchId } from "@/lib/scope";
 import { requireWriteUser } from "@/lib/permissions";
+import { documentTitle } from "@/lib/document-templates";
 import {
-  buildBillOfLading,
-  buildCustomerInvoice,
-  buildRateConfirmation,
-  documentTitle
-} from "@/lib/document-templates";
+  getCompanyBranding,
+  persistGeneratedPdf,
+  plainTextForType,
+  structuredDocumentForType
+} from "@/lib/document-generate";
 import { normalizeCarrierNumber } from "@/lib/carrier-numbers";
 import { parseMoneyToCents } from "@/lib/format";
 import { recalculateLoadCommission } from "@/lib/commission";
@@ -909,6 +910,15 @@ export async function generateRateConfirmation(formData: FormData) {
   }
 
   const documentNumber = await nextDocumentNumber(user.companyId, "RC");
+  const company = await getCompanyBranding(user.companyId);
+  const structured = structuredDocumentForType(
+    "RATE_CONFIRMATION",
+    load,
+    documentNumber,
+    company
+  );
+  const pdf = await persistGeneratedPdf(user.companyId, structured);
+
   const document = await prisma.loadDocument.create({
     data: {
       companyId: user.companyId,
@@ -917,8 +927,12 @@ export async function generateRateConfirmation(formData: FormData) {
       type: "RATE_CONFIRMATION",
       name: documentTitle("RATE_CONFIRMATION", load.loadNumber),
       documentNumber,
-      generatedContent: buildRateConfirmation(load, documentNumber),
+      generatedContent: plainTextForType("RATE_CONFIRMATION", load, documentNumber, company),
       generatedAt: new Date(),
+      filePath: pdf.storedPath,
+      mimeType: pdf.mimeType,
+      originalFileName: pdf.originalFileName,
+      fileSizeBytes: pdf.fileSizeBytes,
       notes: "Generated carrier rate confirmation."
     }
   });
@@ -942,6 +956,9 @@ export async function generateBillOfLading(formData: FormData) {
   const loadId = requiredString(formData, "loadId");
   const load = await loadForDocument(loadId, user);
   const documentNumber = await nextDocumentNumber(user.companyId, "BOL");
+  const company = await getCompanyBranding(user.companyId);
+  const structured = structuredDocumentForType("BOL", load, documentNumber, company);
+  const pdf = await persistGeneratedPdf(user.companyId, structured);
 
   const document = await prisma.loadDocument.create({
     data: {
@@ -951,8 +968,12 @@ export async function generateBillOfLading(formData: FormData) {
       type: "BOL",
       name: documentTitle("BOL", load.loadNumber),
       documentNumber,
-      generatedContent: buildBillOfLading(load, documentNumber),
+      generatedContent: plainTextForType("BOL", load, documentNumber, company),
       generatedAt: new Date(),
+      filePath: pdf.storedPath,
+      mimeType: pdf.mimeType,
+      originalFileName: pdf.originalFileName,
+      fileSizeBytes: pdf.fileSizeBytes,
       notes: "Generated bill of lading."
     }
   });
@@ -996,6 +1017,15 @@ export async function generateCustomerInvoice(formData: FormData) {
     }));
 
   const refreshedLoad = await loadForDocument(loadId, user);
+  const company = await getCompanyBranding(user.companyId);
+  const structured = structuredDocumentForType(
+    "INVOICE",
+    refreshedLoad,
+    invoice.invoiceNo,
+    company
+  );
+  const pdf = await persistGeneratedPdf(user.companyId, structured);
+
   const document = await prisma.loadDocument.create({
     data: {
       companyId: user.companyId,
@@ -1004,8 +1034,12 @@ export async function generateCustomerInvoice(formData: FormData) {
       type: "INVOICE",
       name: documentTitle("INVOICE", load.loadNumber),
       documentNumber: invoice.invoiceNo,
-      generatedContent: buildCustomerInvoice(refreshedLoad, invoice.invoiceNo),
+      generatedContent: plainTextForType("INVOICE", refreshedLoad, invoice.invoiceNo, company),
       generatedAt: new Date(),
+      filePath: pdf.storedPath,
+      mimeType: pdf.mimeType,
+      originalFileName: pdf.originalFileName,
+      fileSizeBytes: pdf.fileSizeBytes,
       notes: "Generated customer invoice."
     }
   });

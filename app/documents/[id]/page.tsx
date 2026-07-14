@@ -84,7 +84,7 @@ export default async function DocumentDetailPage({ params }: { params: Promise<{
                   Next document
                 </Link>
               ) : null}
-              {document.generatedContent ? <PrintButton /> : null}
+              {document.filePath || document.generatedContent ? <PrintButton /> : null}
             </div>
           }
         />
@@ -92,23 +92,7 @@ export default async function DocumentDetailPage({ params }: { params: Promise<{
 
       <div className="grid gap-6 xl:grid-cols-[1.1fr_0.9fr]">
         <section className="card min-h-[70vh] overflow-hidden p-0">
-          {document.generatedContent ? (
-            <article className="p-8">
-              <header className="border-b border-border pb-5">
-                <p className="text-sm font-semibold uppercase tracking-wide text-primary">Generated Document</p>
-                <h1 className="mt-2 text-2xl font-bold text-foreground">{document.name}</h1>
-                <div className="mt-3 grid gap-1 text-sm text-muted-foreground md:grid-cols-2">
-                  <p>Document Type: {humanize(document.type)}</p>
-                  <p>Document #: {document.documentNumber ?? "Not assigned"}</p>
-                  <p>Load: {document.load?.loadNumber ?? "Not linked"}</p>
-                  <p>Generated: {formatDateTime(document.generatedAt ?? document.uploadedAt)}</p>
-                </div>
-              </header>
-              <pre className="mt-6 whitespace-pre-wrap font-sans text-sm leading-7 text-foreground">
-                {document.generatedContent}
-              </pre>
-            </article>
-          ) : hasFilePreview ? (
+          {hasFilePreview ? (
             <div className="h-full min-h-[70vh] bg-muted">
               {isImage ? (
                 // eslint-disable-next-line @next/next/no-img-element
@@ -125,6 +109,22 @@ export default async function DocumentDetailPage({ params }: { params: Promise<{
                 />
               )}
             </div>
+          ) : document.generatedContent ? (
+            <article className="p-8">
+              <header className="border-b border-border pb-5">
+                <p className="text-sm font-semibold uppercase tracking-wide text-primary">Generated Document</p>
+                <h1 className="mt-2 text-2xl font-bold text-foreground">{document.name}</h1>
+                <div className="mt-3 grid gap-1 text-sm text-muted-foreground md:grid-cols-2">
+                  <p>Document Type: {humanize(document.type)}</p>
+                  <p>Document #: {document.documentNumber ?? "Not assigned"}</p>
+                  <p>Load: {document.load?.loadNumber ?? "Not linked"}</p>
+                  <p>Generated: {formatDateTime(document.generatedAt ?? document.uploadedAt)}</p>
+                </div>
+              </header>
+              <pre className="mt-6 whitespace-pre-wrap font-sans text-sm leading-7 text-foreground">
+                {document.generatedContent}
+              </pre>
+            </article>
           ) : (
             <div className="p-8">
               <p className="font-semibold text-foreground">No preview available</p>

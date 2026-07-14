@@ -41,6 +41,7 @@ export const emailPurposes = [
   "INVOICE",
   "CUSTOMER_LOAD_CONFIRMATION",
   "CARRIER_RATE_CONFIRMATION",
+  "BOL",
   "POD_REQUEST",
   "GENERAL"
 ] as const;

@@ -756,3 +756,58 @@ export async function updateLoadNumberSettings(formData: FormData) {
   revalidatePath("/admin");
   revalidatePath("/loads/new");
 }
+
+export async function updateCompanyBranding(formData: FormData) {
+  const actor = await requireAdmin();
+  const { deleteStoredFile, saveUploadedFile } = await import("@/lib/document-storage");
+
+  const company = await prisma.company.findUniqueOrThrow({ where: { id: actor.companyId } });
+  const removeLogo = formData.get("removeLogo") === "on";
+  const logoFile = formData.get("logo");
+
+  let logoFilePath = company.logoFilePath;
+  let logoMimeType = company.logoMimeType;
+  let logoOriginalFileName = company.logoOriginalFileName;
+
+  if (removeLogo) {
+    await deleteStoredFile(company.logoFilePath);
+    logoFilePath = null;
+    logoMimeType = null;
+    logoOriginalFileName = null;
+  } else if (logoFile instanceof File && logoFile.size > 0) {
+    if (!logoFile.type.startsWith("image/")) {
+      throw new Error("Logo must be a JPEG, PNG, or WebP image.");
+    }
+    await deleteStoredFile(company.logoFilePath);
+    const stored = await saveUploadedFile(actor.companyId, logoFile);
+    logoFilePath = stored.storedPath;
+    logoMimeType = stored.mimeType;
+    logoOriginalFileName = stored.originalFileName;
+  }
+
+  await prisma.company.update({
+    where: { id: actor.companyId },
+    data: {
+      address: optionalString(formData, "address") ?? null,
+      city: optionalString(formData, "city") ?? null,
+      state: optionalString(formData, "state")?.toUpperCase() ?? null,
+      postalCode: optionalString(formData, "postalCode") ?? null,
+      phone: optionalString(formData, "phone") ?? null,
+      email: optionalString(formData, "email") ?? null,
+      website: optionalString(formData, "website") ?? null,
+      logoFilePath,
+      logoMimeType,
+      logoOriginalFileName
+    }
+  });
+
+  await audit(
+    actor.companyId,
+    actor.id,
+    "UPDATE_COMPANY_BRANDING",
+    "Company",
+    actor.companyId,
+    "Updated organization branding and letterhead."
+  );
+  revalidatePath("/admin");
+}

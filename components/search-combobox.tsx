@@ -1,6 +1,6 @@
 "use client";
 
-import { useMemo, useState } from "react";
+import { useEffect, useMemo, useRef, useState } from "react";
 
 export type SearchOption = {
   id: string;
@@ -33,6 +33,8 @@ export function SearchCombobox({
   const initialOption = options.find((option) => option.id === defaultValue);
   const [query, setQuery] = useState(initialOption?.label ?? "");
   const [selectedId, setSelectedId] = useState(initialOption?.id ?? "");
+  const [open, setOpen] = useState(false);
+  const rootRef = useRef<HTMLLabelElement>(null);
 
   const filtered = useMemo(() => {
     const normalized = query.trim().toLowerCase();
@@ -47,8 +49,19 @@ export function SearchCombobox({
       .slice(0, 8);
   }, [options, query]);
 
+  useEffect(() => {
+    function handlePointerDown(event: MouseEvent) {
+      if (!rootRef.current?.contains(event.target as Node)) {
+        setOpen(false);
+      }
+    }
+
+    document.addEventListener("mousedown", handlePointerDown);
+    return () => document.removeEventListener("mousedown", handlePointerDown);
+  }, []);
+
   return (
-    <label className="relative grid gap-2">
+    <label className="relative grid gap-2" ref={rootRef}>
       {label ? <span className="label">{label}</span> : null}
       <input type="hidden" name={name} value={selectedId} />
       <input
@@ -57,23 +70,33 @@ export function SearchCombobox({
         onChange={(event) => {
           const value = event.target.value;
           setQuery(value);
+          setOpen(true);
           if (options.find((option) => option.id === selectedId)?.label !== value) {
             setSelectedId("");
           }
         }}
+        onFocus={() => setOpen(true)}
+        onKeyDown={(event) => {
+          if (event.key === "Escape") {
+            setOpen(false);
+          }
+        }}
         placeholder={placeholder}
         required={required && !selectedId}
+        autoComplete="off"
       />
-      {query && filtered.length ? (
+      {open && filtered.length ? (
         <div className="absolute left-0 right-0 top-full z-20 mt-1 overflow-hidden rounded-lg border border-border bg-card shadow-card">
           {filtered.map((option) => (
             <button
               key={option.id}
               type="button"
               className="block w-full px-4 py-3 text-left text-sm transition hover:bg-muted"
+              onMouseDown={(event) => event.preventDefault()}
               onClick={() => {
                 setQuery(option.label);
                 setSelectedId(option.id);
+                setOpen(false);
               }}
             >
               <span className="font-semibold text-foreground">{option.label}</span>
@@ -113,6 +136,8 @@ export function FacilityCombobox({
   const [city, setCity] = useState(defaultCity ?? "");
   const [state, setState] = useState(defaultState ?? "");
   const [postalCode, setPostalCode] = useState(defaultPostalCode ?? "");
+  const [open, setOpen] = useState(false);
+  const rootRef = useRef<HTMLLabelElement>(null);
 
   const filtered = useMemo(() => {
     const normalized = facilityName.trim().toLowerCase();
@@ -129,6 +154,17 @@ export function FacilityCombobox({
       .slice(0, 8);
   }, [facilities, facilityName]);
 
+  useEffect(() => {
+    function handlePointerDown(event: MouseEvent) {
+      if (!rootRef.current?.contains(event.target as Node)) {
+        setOpen(false);
+      }
+    }
+
+    document.addEventListener("mousedown", handlePointerDown);
+    return () => document.removeEventListener("mousedown", handlePointerDown);
+  }, []);
+
   function selectFacility(facility: FacilityOption) {
     setFacilityId(facility.id);
     setFacilityName(facility.label);
@@ -136,13 +172,14 @@ export function FacilityCombobox({
     setCity(facility.city);
     setState(facility.state);
     setPostalCode(facility.postalCode ?? "");
+    setOpen(false);
   }
 
   return (
     <fieldset className="grid gap-4 rounded-lg border border-border p-4">
       <legend className="px-2 text-sm font-semibold text-foreground">{legend}</legend>
       <input type="hidden" name={`${prefix}FacilityId`} value={facilityId} />
-      <label className="relative grid gap-2">
+      <label className="relative grid gap-2" ref={rootRef}>
         <span className="label">Facility</span>
         <input
           name={`${prefix}Facility`}
@@ -151,17 +188,26 @@ export function FacilityCombobox({
           onChange={(event) => {
             setFacilityName(event.target.value);
             setFacilityId("");
+            setOpen(true);
+          }}
+          onFocus={() => setOpen(true)}
+          onKeyDown={(event) => {
+            if (event.key === "Escape") {
+              setOpen(false);
+            }
           }}
           placeholder="Start typing a saved location or enter a new one"
           required
+          autoComplete="off"
         />
-        {facilityName && filtered.length ? (
+        {open && facilityName && filtered.length ? (
           <div className="absolute left-0 right-0 top-full z-20 mt-1 overflow-hidden rounded-lg border border-border bg-card shadow-card">
             {filtered.map((facility) => (
               <button
                 key={facility.id}
                 type="button"
                 className="block w-full px-4 py-3 text-left text-sm transition hover:bg-muted"
+                onMouseDown={(event) => event.preventDefault()}
                 onClick={() => selectFacility(facility)}
               >
                 <span className="font-semibold text-foreground">{facility.label}</span>

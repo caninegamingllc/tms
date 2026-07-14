@@ -56,6 +56,12 @@ export function DocumentUploadForm({
       <label className="grid gap-2">
         <span className="label">Document Type(s)</span>
         <DocumentTypePicker />
+        {defaultLoadId && defaultCustomerId ? (
+          <p className="text-xs text-muted-foreground">
+            For invoice supporting docs, choose <strong>BOL</strong> or <strong>POD</strong>. This
+            upload is linked to the load&apos;s customer automatically.
+          </p>
+        ) : null}
       </label>
 
       <label className="grid gap-2">

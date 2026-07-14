@@ -1,3 +1,4 @@
+import { resolveOAuthRedirectUri } from "@/lib/app-url";
 import { prisma } from "@/lib/db";
 import { decryptSecret, encryptSecret } from "@/lib/quickbooks/crypto";
 import { parseQuickbooksConfig } from "@/lib/quickbooks/types";
@@ -9,9 +10,10 @@ function intuitEnv() {
   const environment = process.env.INTUIT_ENVIRONMENT === "production" ? "production" : "sandbox";
   const clientId = process.env.INTUIT_CLIENT_ID ?? "";
   const clientSecret = process.env.INTUIT_CLIENT_SECRET ?? "";
-  const redirectUri =
-    process.env.INTUIT_REDIRECT_URI ||
-    `${process.env.APP_BASE_URL ?? "http://localhost:3000"}/api/integrations/quickbooks/callback`;
+  const redirectUri = resolveOAuthRedirectUri(
+    process.env.INTUIT_REDIRECT_URI,
+    "/api/integrations/quickbooks/callback"
+  );
 
   return { environment, clientId, clientSecret, redirectUri };
 }

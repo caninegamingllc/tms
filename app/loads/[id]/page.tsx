@@ -14,13 +14,10 @@ import {
   updateLoadStatus
 } from "@/lib/actions";
 import {
-  emailCustomerLoadConfirmation,
-  emailInvoice,
-  emailPodRequest,
-  emailRateConfirmation,
   generateCustomerLoadConfirmation,
   syncLoadEmails
 } from "@/lib/email-ops-actions";
+import { EmailComposeButton } from "@/components/email-compose-button";
 import { getUserMailbox } from "@/lib/mail/user-mailbox";
 import { DeleteLoadButton } from "@/components/delete-load-button";
 import {
@@ -288,38 +285,36 @@ export default async function LoadDetailPage({
             </div>
 
             <div className="mt-4 flex flex-wrap gap-2">
-              <form action={emailRateConfirmation}>
-                <input type="hidden" name="loadId" value={load.id} />
-                <button
-                  className="btn"
-                  type="submit"
-                  disabled={!mailbox || !load.dispatchAssignment || !canWrite(user)}
-                >
-                  Email Rate Con
-                </button>
-              </form>
-              <form action={emailCustomerLoadConfirmation}>
-                <input type="hidden" name="loadId" value={load.id} />
-                <button className="btn" type="submit" disabled={!mailbox || !canWrite(user)}>
-                  Email Load Con
-                </button>
-              </form>
-              <form action={emailInvoice}>
-                <input type="hidden" name="loadId" value={load.id} />
-                <button className="btn" type="submit" disabled={!mailbox || !canWrite(user)}>
-                  Email Invoice
-                </button>
-              </form>
-              <form action={emailPodRequest}>
-                <input type="hidden" name="loadId" value={load.id} />
-                <button
-                  className="btn"
-                  type="submit"
-                  disabled={!mailbox || !load.dispatchAssignment || !canWrite(user)}
-                >
-                  Email POD Request
-                </button>
-              </form>
+              <EmailComposeButton
+                loadId={load.id}
+                purpose="CARRIER_RATE_CONFIRMATION"
+                label="Email Rate Con"
+                disabled={!mailbox || !load.dispatchAssignment || !canWrite(user)}
+              />
+              <EmailComposeButton
+                loadId={load.id}
+                purpose="CUSTOMER_LOAD_CONFIRMATION"
+                label="Email Load Con"
+                disabled={!mailbox || !canWrite(user)}
+              />
+              <EmailComposeButton
+                loadId={load.id}
+                purpose="BOL"
+                label="Email BOL"
+                disabled={!mailbox || !canWrite(user)}
+              />
+              <EmailComposeButton
+                loadId={load.id}
+                purpose="INVOICE"
+                label="Email Invoice"
+                disabled={!mailbox || !canWrite(user)}
+              />
+              <EmailComposeButton
+                loadId={load.id}
+                purpose="POD_REQUEST"
+                label="Email POD Request"
+                disabled={!mailbox || !load.dispatchAssignment || !canWrite(user)}
+              />
             </div>
 
             <div className="mt-4 overflow-hidden rounded-2xl border border-border">
