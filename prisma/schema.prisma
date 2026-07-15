@@ -307,6 +307,8 @@ model Customer {
   status        String            @default("Active")
   creditLimit   Int               @default(0)
   paymentTerms  String            @default("Net 30")
+  /// Percent of original (non–late-fee) invoice amount charged per overdue terms period on invoice email send.
+  lateFeePercent Float            @default(0)
   /// Default carrier rate confirmation terms (appended after built-in terms).
   rateConfirmationTerms String?
   industry      String?

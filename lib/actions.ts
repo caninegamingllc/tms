@@ -16,6 +16,7 @@ import {
 import { enqueueJob } from "@/lib/jobs";
 import { normalizeCarrierNumber } from "@/lib/carrier-numbers";
 import { parseMoneyToCents } from "@/lib/format";
+import { parseLateFeePercent } from "@/lib/late-fees";
 import { recalculateLoadCommission } from "@/lib/commission";
 import { deleteStoredFile, saveUploadedFile } from "@/lib/document-storage";
 import {
@@ -221,6 +222,7 @@ export async function createCustomer(formData: FormData) {
       status: requiredString(formData, "status"),
       creditLimit: parseMoneyToCents(formData.get("creditLimit")),
       paymentTerms: requiredString(formData, "paymentTerms"),
+      lateFeePercent: parseLateFeePercent(formData.get("lateFeePercent")),
       rateConfirmationTerms: optionalString(formData, "rateConfirmationTerms"),
       industry: optionalString(formData, "industry"),
       phone: optionalString(formData, "phone"),
@@ -268,6 +270,7 @@ export async function updateCustomer(formData: FormData) {
     status: requiredString(formData, "status"),
     creditLimit: parseMoneyToCents(formData.get("creditLimit")),
     paymentTerms: requiredString(formData, "paymentTerms"),
+    lateFeePercent: parseLateFeePercent(formData.get("lateFeePercent")),
     industry: optionalString(formData, "industry") ?? null,
     phone: optionalString(formData, "phone") ?? null,
     email: optionalString(formData, "email") ?? null,
@@ -298,6 +301,7 @@ export async function updateCustomer(formData: FormData) {
       status: existing.status,
       creditLimit: existing.creditLimit,
       paymentTerms: existing.paymentTerms,
+      lateFeePercent: existing.lateFeePercent,
       ...(formData.has("rateConfirmationTerms")
         ? { rateConfirmationTerms: existing.rateConfirmationTerms }
         : {}),
@@ -326,6 +330,7 @@ export async function updateCustomer(formData: FormData) {
       status: "status",
       creditLimit: "credit limit",
       paymentTerms: "payment terms",
+      lateFeePercent: "late fee percent",
       rateConfirmationTerms: "rate confirmation terms",
       industry: "industry",
       phone: "phone",

@@ -8,6 +8,7 @@
     "start": "node -r dotenv/config ./node_modules/next/dist/bin/next start",
     "worker": "tsx scripts/job-worker.ts",
     "lint": "eslint . --max-warnings=0",
+    "test": "tsx --test lib/**/*.test.ts",
     "postinstall": "prisma generate",
     "setup": "prisma generate && prisma migrate deploy && prisma db seed",
     "db:generate": "prisma generate",

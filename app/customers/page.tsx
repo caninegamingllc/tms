@@ -67,6 +67,7 @@ export default async function CustomersPage({
       contactEmail: primary?.email ?? customer.email ?? "No email",
       paymentTerms: customer.paymentTerms,
       creditLimit: customer.creditLimit,
+      lateFeePercent: customer.lateFeePercent,
       loadCount: customer._count.loads,
       openArCents: customer.openArCents
     };
