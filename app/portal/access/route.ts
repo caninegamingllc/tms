@@ -1,4 +1,5 @@
 import { NextRequest, NextResponse } from "next/server";
+import { requestPublicOrigin, resolvePublicAppUrl } from "@/lib/app-url";
 import {
   createPortalLinkSessionToken,
   portalSessionCookieName,
@@ -6,19 +7,24 @@ import {
   resolvePortalAccessLink
 } from "@/lib/portal-auth";
 
-/** Relative Location so nginx-proxied localhost request URLs do not leak to clients. */
-function portalRedirect(pathWithQuery: string) {
+/**
+ * Build a redirect that stays on the public site behind nginx.
+ * Route Handlers do not get middleware's localhost→relative Location rewrite,
+ * so `new URL(path, request.url)` would send browsers to https://localhost:3001.
+ */
+function portalRedirect(request: NextRequest, pathWithQuery: string) {
   const path = pathWithQuery.startsWith("/") ? pathWithQuery : `/${pathWithQuery}`;
-  return new NextResponse(null, {
-    status: 307,
-    headers: { Location: path }
-  });
+  const base = resolvePublicAppUrl(requestPublicOrigin(request));
+  return NextResponse.redirect(new URL(path, `${base}/`));
 }
 
-async function redeemAndRedirect(rawToken: string | null) {
+async function redeemAndRedirect(request: NextRequest, rawToken: string | null) {
   const resolved = await resolvePortalAccessLink(rawToken ?? "");
   if (!resolved.ok) {
-    return portalRedirect(`/portal/login?error=${encodeURIComponent(resolved.error)}`);
+    return portalRedirect(
+      request,
+      `/portal/login?error=${encodeURIComponent(resolved.error)}`
+    );
   }
 
   const session = await createPortalLinkSessionToken(
@@ -27,7 +33,7 @@ async function redeemAndRedirect(rawToken: string | null) {
     resolved.link.expiresAt
   );
 
-  const response = portalRedirect("/portal");
+  const response = portalRedirect(request, "/portal");
   response.cookies.set(
     portalSessionCookieName,
     session.token,
@@ -39,5 +45,5 @@ async function redeemAndRedirect(rawToken: string | null) {
 /** Query-param magic links: /portal/access?token=… */
 export async function GET(request: NextRequest) {
   const token = request.nextUrl.searchParams.get("token");
-  return redeemAndRedirect(token);
+  return redeemAndRedirect(request, token);
 }

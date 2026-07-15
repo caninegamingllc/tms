@@ -4,12 +4,21 @@ set -euo pipefail
 APP_DIR="/var/www/tms"
 BRANCH="main"
 LOG_FILE="/var/log/tms-deploy.log"
+LOCK_FILE="/var/lock/tms-deploy.lock"
 PM2_APP="tms"
 PM2_WORKER="tms-worker"
 
 export PATH="/usr/local/bin:/usr/bin:/bin:$PATH"
 
 exec >> "$LOG_FILE" 2>&1
+
+# Serialize stacked webhooks so concurrent resets/builds cannot race.
+exec 9>"$LOCK_FILE"
+if ! flock -w 1800 9; then
+  echo "=== Deploy skipped $(date) — could not acquire lock within 30m ==="
+  exit 1
+fi
+
 echo "=== Deploy started $(date) ==="
 
 cd "$APP_DIR"
