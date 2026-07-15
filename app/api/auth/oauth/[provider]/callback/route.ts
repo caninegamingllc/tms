@@ -17,6 +17,12 @@ function errorRedirect(request: Request, path: string, message: string) {
   return NextResponse.redirect(url);
 }
 
+function messageRedirect(request: Request, path: string, message: string) {
+  const url = appAbsoluteUrl(path, request);
+  url.searchParams.set("message", message);
+  return NextResponse.redirect(url);
+}
+
 export async function GET(
   request: Request,
   context: { params: Promise<{ provider: string }> }
@@ -31,6 +37,23 @@ export async function GET(
   const code = url.searchParams.get("code");
   const stateParam = url.searchParams.get("state");
   const oauthError = url.searchParams.get("error");
+  const adminConsent = url.searchParams.get("admin_consent");
+
+  // Microsoft admin-consent redirects here with admin_consent=True|False (no code/state).
+  if (adminConsent !== null) {
+    if (adminConsent.toLowerCase() === "true") {
+      return messageRedirect(
+        request,
+        "/login",
+        "Microsoft admin consent granted. Users can Sign in with Microsoft now."
+      );
+    }
+    return errorRedirect(
+      request,
+      "/login",
+      "Microsoft admin consent was not granted. An admin must Accept for the organization."
+    );
+  }
 
   if (oauthError) {
     return errorRedirect(request, "/login", oauthError);

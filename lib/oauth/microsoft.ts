@@ -44,7 +44,10 @@ export function getMicrosoftIdentityAuthorizeUrl(state: string, requestOrigin?: 
     response_type: "code",
     redirect_uri: microsoftIdentityRedirectUri(requestOrigin),
     response_mode: "query",
-    scope: "openid profile email User.Read offline_access",
+    // Sign-in only needs OIDC claims from the ID token. Avoid Graph scopes
+    // (User.Read / offline_access / Mail.*) so locked-down tenants don't
+    // block non-admins with AADSTS90094 after org admin consent.
+    scope: "openid profile email",
     state,
     prompt: "select_account"
   });
@@ -65,7 +68,9 @@ export function getMicrosoftMailAuthorizeUrl(state: string, requestOrigin?: stri
     response_mode: "query",
     scope: "openid profile email offline_access User.Read Mail.Send Mail.Read",
     state,
-    prompt: "consent"
+    // Do not use prompt=consent. With user consent disabled, that forces
+    // "Need admin approval" even after org-wide admin consent is already granted.
+    prompt: "select_account"
   });
 
   return `${MS_AUTHORIZE(microsoftTenant())}?${params.toString()}`;
@@ -99,6 +104,48 @@ async function exchangeMicrosoftCode(code: string, redirectUri: string) {
     refresh_token?: string;
     expires_in: number;
     scope?: string;
+    id_token?: string;
+  };
+}
+
+function profileFromMicrosoftIdToken(idToken: string): OAuthProfile {
+  const parts = idToken.split(".");
+  if (parts.length < 2) {
+    throw new Error("Microsoft ID token was malformed.");
+  }
+
+  const payload = JSON.parse(Buffer.from(parts[1], "base64url").toString("utf8")) as {
+    aud?: string | string[];
+    oid?: string;
+    sub?: string;
+    email?: string;
+    preferred_username?: string;
+    name?: string;
+  };
+
+  const clientId = process.env.MICROSOFT_CLIENT_ID?.trim();
+  const audienceOk =
+    payload.aud === clientId ||
+    (Array.isArray(payload.aud) && clientId != null && payload.aud.includes(clientId));
+  if (!audienceOk) {
+    throw new Error("Microsoft ID token audience mismatch.");
+  }
+
+  const email = (payload.email || payload.preferred_username || "").toLowerCase();
+  if (!email || !email.includes("@")) {
+    throw new Error("Microsoft account did not return an email address.");
+  }
+
+  const providerAccountId = payload.oid || payload.sub;
+  if (!providerAccountId) {
+    throw new Error("Microsoft ID token did not include a user id.");
+  }
+
+  return {
+    provider: "MICROSOFT" satisfies OAuthProvider,
+    providerAccountId,
+    email,
+    name: payload.name?.trim() || email.split("@")[0]
   };
 }
 
@@ -136,7 +183,10 @@ export async function completeMicrosoftIdentityOAuth(
   requestOrigin?: string | null
 ) {
   const tokens = await exchangeMicrosoftCode(code, microsoftIdentityRedirectUri(requestOrigin));
-  const profile = await fetchMicrosoftProfile(tokens.access_token);
+  if (!tokens.id_token) {
+    throw new Error("Microsoft sign-in did not return an ID token.");
+  }
+  const profile = profileFromMicrosoftIdToken(tokens.id_token);
   return { profile, tokens };
 }
 
