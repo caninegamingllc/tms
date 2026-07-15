@@ -283,7 +283,8 @@ export default async function AdminPage({
                         </label>
                       ) : null}
                       <p className="text-xs text-muted-foreground">
-                        JPEG, PNG, or WebP. Leave space on document templates is reserved for this logo.
+                        JPEG, PNG, or WebP up to 25 MB. Leave space on document templates is reserved for
+                        this logo.
                       </p>
                     </div>
                   </div>

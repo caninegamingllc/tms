@@ -1,5 +1,11 @@
 /** @type {import('next').NextConfig} */
 const nextConfig = {
+  // Match lib/document-storage MAX_FILE_SIZE (25 MB), with headroom for multipart overhead.
+  experimental: {
+    serverActions: {
+      bodySizeLimit: "26mb"
+    }
+  },
   async headers() {
     return [
       {
