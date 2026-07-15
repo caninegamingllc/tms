@@ -96,12 +96,13 @@ export async function disconnectUserMailbox(userId: string, provider: OAuthProvi
 export async function completeMailboxOAuth(
   provider: OAuthProvider,
   code: string,
-  userId: string
+  userId: string,
+  requestOrigin?: string | null
 ) {
   const result =
     provider === "GOOGLE"
-      ? await completeGoogleMailOAuth(code)
-      : await completeMicrosoftMailOAuth(code);
+      ? await completeGoogleMailOAuth(code, requestOrigin)
+      : await completeMicrosoftMailOAuth(code, requestOrigin);
 
   if (!result.tokens.refresh_token) {
     const existing = await getUserMailbox(userId, provider);

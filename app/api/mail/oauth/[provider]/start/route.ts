@@ -1,6 +1,7 @@
 import { randomBytes } from "crypto";
 import { cookies } from "next/headers";
 import { NextResponse } from "next/server";
+import { requestPublicOrigin } from "@/lib/app-url";
 import { requireUser } from "@/lib/auth";
 import { getGoogleMailAuthorizeUrl, isGoogleOAuthConfigured } from "@/lib/oauth/google";
 import { getMicrosoftMailAuthorizeUrl, isMicrosoftOAuthConfigured } from "@/lib/oauth/microsoft";
@@ -51,8 +52,11 @@ export async function GET(
     maxAge: 60 * 15
   });
 
+  const requestOrigin = requestPublicOrigin(request);
   const authorizeUrl =
-    provider === "GOOGLE" ? getGoogleMailAuthorizeUrl(state) : getMicrosoftMailAuthorizeUrl(state);
+    provider === "GOOGLE"
+      ? getGoogleMailAuthorizeUrl(state, requestOrigin)
+      : getMicrosoftMailAuthorizeUrl(state, requestOrigin);
 
   return NextResponse.redirect(authorizeUrl);
 }

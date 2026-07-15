@@ -1,5 +1,6 @@
 import { cookies } from "next/headers";
 import { NextResponse } from "next/server";
+import { appAbsoluteUrl, requestPublicOrigin } from "@/lib/app-url";
 import { completeGoogleIdentityOAuth } from "@/lib/oauth/google";
 import { completeMicrosoftIdentityOAuth } from "@/lib/oauth/microsoft";
 import { completeIdentityOAuth } from "@/lib/oauth/identity";
@@ -11,7 +12,7 @@ import {
 } from "@/lib/oauth/types";
 
 function errorRedirect(request: Request, path: string, message: string) {
-  const url = new URL(path, request.url);
+  const url = appAbsoluteUrl(path, request);
   url.searchParams.set("error", message);
   return NextResponse.redirect(url);
 }
@@ -58,13 +59,14 @@ export async function GET(
   }
 
   try {
+    const requestOrigin = requestPublicOrigin(request);
     const { profile } =
       provider === "GOOGLE"
-        ? await completeGoogleIdentityOAuth(code)
-        : await completeMicrosoftIdentityOAuth(code);
+        ? await completeGoogleIdentityOAuth(code, requestOrigin)
+        : await completeMicrosoftIdentityOAuth(code, requestOrigin);
 
     const result = await completeIdentityOAuth(state, profile);
-    return NextResponse.redirect(new URL(result.redirectTo, request.url));
+    return NextResponse.redirect(appAbsoluteUrl(result.redirectTo, request));
   } catch (error) {
     const message = error instanceof Error ? error.message : "OAuth sign-in failed";
     const fallback =

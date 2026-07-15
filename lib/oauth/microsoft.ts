@@ -17,21 +17,23 @@ export function isMicrosoftOAuthConfigured() {
   );
 }
 
-function microsoftIdentityRedirectUri() {
+function microsoftIdentityRedirectUri(requestOrigin?: string | null) {
   return resolveOAuthRedirectUri(
     process.env.MICROSOFT_REDIRECT_URI,
-    "/api/auth/oauth/microsoft/callback"
+    "/api/auth/oauth/microsoft/callback",
+    requestOrigin
   );
 }
 
-function microsoftMailRedirectUri() {
+function microsoftMailRedirectUri(requestOrigin?: string | null) {
   return resolveOAuthRedirectUri(
     process.env.MICROSOFT_MAIL_REDIRECT_URI,
-    "/api/mail/oauth/microsoft/callback"
+    "/api/mail/oauth/microsoft/callback",
+    requestOrigin
   );
 }
 
-export function getMicrosoftIdentityAuthorizeUrl(state: string) {
+export function getMicrosoftIdentityAuthorizeUrl(state: string, requestOrigin?: string | null) {
   const clientId = process.env.MICROSOFT_CLIENT_ID?.trim();
   if (!clientId) {
     throw new Error("MICROSOFT_CLIENT_ID is not configured.");
@@ -40,7 +42,7 @@ export function getMicrosoftIdentityAuthorizeUrl(state: string) {
   const params = new URLSearchParams({
     client_id: clientId,
     response_type: "code",
-    redirect_uri: microsoftIdentityRedirectUri(),
+    redirect_uri: microsoftIdentityRedirectUri(requestOrigin),
     response_mode: "query",
     scope: "openid profile email User.Read offline_access",
     state,
@@ -50,7 +52,7 @@ export function getMicrosoftIdentityAuthorizeUrl(state: string) {
   return `${MS_AUTHORIZE(microsoftTenant())}?${params.toString()}`;
 }
 
-export function getMicrosoftMailAuthorizeUrl(state: string) {
+export function getMicrosoftMailAuthorizeUrl(state: string, requestOrigin?: string | null) {
   const clientId = process.env.MICROSOFT_CLIENT_ID?.trim();
   if (!clientId) {
     throw new Error("MICROSOFT_CLIENT_ID is not configured.");
@@ -59,7 +61,7 @@ export function getMicrosoftMailAuthorizeUrl(state: string) {
   const params = new URLSearchParams({
     client_id: clientId,
     response_type: "code",
-    redirect_uri: microsoftMailRedirectUri(),
+    redirect_uri: microsoftMailRedirectUri(requestOrigin),
     response_mode: "query",
     scope: "openid profile email offline_access User.Read Mail.Send Mail.Read",
     state,
@@ -129,14 +131,17 @@ async function fetchMicrosoftProfile(accessToken: string): Promise<OAuthProfile>
   };
 }
 
-export async function completeMicrosoftIdentityOAuth(code: string) {
-  const tokens = await exchangeMicrosoftCode(code, microsoftIdentityRedirectUri());
+export async function completeMicrosoftIdentityOAuth(
+  code: string,
+  requestOrigin?: string | null
+) {
+  const tokens = await exchangeMicrosoftCode(code, microsoftIdentityRedirectUri(requestOrigin));
   const profile = await fetchMicrosoftProfile(tokens.access_token);
   return { profile, tokens };
 }
 
-export async function completeMicrosoftMailOAuth(code: string) {
-  const tokens = await exchangeMicrosoftCode(code, microsoftMailRedirectUri());
+export async function completeMicrosoftMailOAuth(code: string, requestOrigin?: string | null) {
+  const tokens = await exchangeMicrosoftCode(code, microsoftMailRedirectUri(requestOrigin));
   const profile = await fetchMicrosoftProfile(tokens.access_token);
   return { profile, tokens };
 }

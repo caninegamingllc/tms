@@ -16,21 +16,23 @@ export function isGoogleOAuthConfigured() {
   return Boolean(process.env.GOOGLE_CLIENT_ID?.trim() && process.env.GOOGLE_CLIENT_SECRET?.trim());
 }
 
-function googleRedirectUri() {
+function googleRedirectUri(requestOrigin?: string | null) {
   return resolveOAuthRedirectUri(
     process.env.GOOGLE_REDIRECT_URI,
-    "/api/auth/oauth/google/callback"
+    "/api/auth/oauth/google/callback",
+    requestOrigin
   );
 }
 
-function googleMailRedirectUri() {
+function googleMailRedirectUri(requestOrigin?: string | null) {
   return resolveOAuthRedirectUri(
     process.env.GOOGLE_MAIL_REDIRECT_URI,
-    "/api/mail/oauth/google/callback"
+    "/api/mail/oauth/google/callback",
+    requestOrigin
   );
 }
 
-export function getGoogleIdentityAuthorizeUrl(state: string) {
+export function getGoogleIdentityAuthorizeUrl(state: string, requestOrigin?: string | null) {
   const clientId = process.env.GOOGLE_CLIENT_ID?.trim();
   if (!clientId) {
     throw new Error("GOOGLE_CLIENT_ID is not configured.");
@@ -38,7 +40,7 @@ export function getGoogleIdentityAuthorizeUrl(state: string) {
 
   const params = new URLSearchParams({
     client_id: clientId,
-    redirect_uri: googleRedirectUri(),
+    redirect_uri: googleRedirectUri(requestOrigin),
     response_type: "code",
     scope: "openid email profile",
     state,
@@ -49,7 +51,7 @@ export function getGoogleIdentityAuthorizeUrl(state: string) {
   return `${GOOGLE_AUTH}?${params.toString()}`;
 }
 
-export function getGoogleMailAuthorizeUrl(state: string) {
+export function getGoogleMailAuthorizeUrl(state: string, requestOrigin?: string | null) {
   const clientId = process.env.GOOGLE_CLIENT_ID?.trim();
   if (!clientId) {
     throw new Error("GOOGLE_CLIENT_ID is not configured.");
@@ -57,7 +59,7 @@ export function getGoogleMailAuthorizeUrl(state: string) {
 
   const params = new URLSearchParams({
     client_id: clientId,
-    redirect_uri: googleMailRedirectUri(),
+    redirect_uri: googleMailRedirectUri(requestOrigin),
     response_type: "code",
     scope: [
       "openid",
@@ -134,14 +136,14 @@ async function fetchGoogleProfile(accessToken: string): Promise<OAuthProfile> {
   };
 }
 
-export async function completeGoogleIdentityOAuth(code: string) {
-  const tokens = await exchangeGoogleCode(code, googleRedirectUri());
+export async function completeGoogleIdentityOAuth(code: string, requestOrigin?: string | null) {
+  const tokens = await exchangeGoogleCode(code, googleRedirectUri(requestOrigin));
   const profile = await fetchGoogleProfile(tokens.access_token);
   return { profile, tokens };
 }
 
-export async function completeGoogleMailOAuth(code: string) {
-  const tokens = await exchangeGoogleCode(code, googleMailRedirectUri());
+export async function completeGoogleMailOAuth(code: string, requestOrigin?: string | null) {
+  const tokens = await exchangeGoogleCode(code, googleMailRedirectUri(requestOrigin));
   const profile = await fetchGoogleProfile(tokens.access_token);
   return { profile, tokens };
 }

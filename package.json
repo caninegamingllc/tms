@@ -5,7 +5,7 @@
   "scripts": {
     "dev": "prisma generate && prisma migrate deploy && next dev --webpack",
     "build": "prisma generate && next build",
-    "start": "next start",
+    "start": "node -r dotenv/config ./node_modules/next/dist/bin/next start",
     "worker": "tsx scripts/job-worker.ts",
     "lint": "eslint . --max-warnings=0",
     "postinstall": "prisma generate",
