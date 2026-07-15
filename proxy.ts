@@ -11,8 +11,10 @@ const publicPaths = [
   "/privacy",
   "/terms",
   "/hooks",
+  "/portal",
   "/api/auth/oauth",
-  "/api/stripe/webhook"
+  "/api/stripe/webhook",
+  "/api/portal"
 ];
 
 export function proxy(request: NextRequest) {

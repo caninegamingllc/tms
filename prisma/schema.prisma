@@ -28,6 +28,8 @@ model Company {
   phone                String?
   email                String?
   website              String?
+  /// Optional remittance / pay-portal URL shown on customer portal invoices
+  customerPaymentUrl   String?
   memberships          CompanyMembership[]
   seatSubscription     SeatSubscription?
   branches             Branch[]
@@ -47,6 +49,8 @@ model Company {
   emailThreads         EmailThread[]
   commodityOptions     CommodityOption[]
   carrierPayLineTypes  CarrierPayLineType[]
+  portalUsers          CustomerPortalUser[]
+  portalLinks          CustomerPortalLink[]
   createdAt            DateTime               @default(now())
   updatedAt            DateTime               @updatedAt
 }
@@ -319,6 +323,8 @@ model Customer {
   state         String?
   postalCode    String?
   externalQboId String?
+  /// Optional per-customer pay URL; falls back to Company.customerPaymentUrl
+  paymentUrl    String?
   branchId      String?
   branch        Branch?           @relation(fields: [branchId], references: [id])
   contacts      CustomerContact[]
@@ -328,10 +334,71 @@ model Customer {
   invoices      Invoice[]
   payments      Payment[]
   activities    CustomerActivity[]
+  portalUsers   CustomerPortalUser[]
+  portalLinks   CustomerPortalLink[]
+  portalSessions CustomerPortalSession[]
   createdAt     DateTime          @default(now())
   updatedAt     DateTime          @updatedAt
 
   @@index([companyId])
+}
+
+model CustomerPortalUser {
+  id              String                  @id @default(cuid())
+  companyId       String
+  company         Company                 @relation(fields: [companyId], references: [id], onDelete: Cascade)
+  customerId      String
+  customer        Customer                @relation(fields: [customerId], references: [id], onDelete: Cascade)
+  name            String
+  email           String
+  passwordHash    String?
+  status          String                  @default("INVITED")
+  inviteTokenHash String?                 @unique
+  inviteExpiresAt DateTime?
+  disabledAt      DateTime?
+  sessions        CustomerPortalSession[]
+  createdAt       DateTime                @default(now())
+  updatedAt       DateTime                @updatedAt
+
+  @@unique([companyId, email])
+  @@index([customerId])
+  @@index([companyId])
+}
+
+model CustomerPortalLink {
+  id              String                  @id @default(cuid())
+  companyId       String
+  company         Company                 @relation(fields: [companyId], references: [id], onDelete: Cascade)
+  customerId      String
+  customer        Customer                @relation(fields: [customerId], references: [id], onDelete: Cascade)
+  label           String                  @default("Share link")
+  tokenHash       String                  @unique
+  expiresAt       DateTime?
+  revokedAt       DateTime?
+  createdByUserId String?
+  sessions        CustomerPortalSession[]
+  createdAt       DateTime                @default(now())
+
+  @@index([customerId])
+  @@index([companyId])
+}
+
+model CustomerPortalSession {
+  id           String              @id @default(cuid())
+  tokenHash    String              @unique
+  customerId   String
+  customer     Customer            @relation(fields: [customerId], references: [id], onDelete: Cascade)
+  portalUserId String?
+  portalUser   CustomerPortalUser? @relation(fields: [portalUserId], references: [id], onDelete: Cascade)
+  portalLinkId String?
+  portalLink   CustomerPortalLink? @relation(fields: [portalLinkId], references: [id], onDelete: Cascade)
+  expiresAt    DateTime
+  lastSeenAt   DateTime            @default(now())
+  createdAt    DateTime            @default(now())
+
+  @@index([customerId])
+  @@index([portalUserId])
+  @@index([portalLinkId])
 }
 
 model CustomerActivity {
@@ -591,6 +658,9 @@ model LoadStop {
   appointmentAt DateTime?
   actualAt      DateTime?
   instructions  String?
+  latitude      Float?
+  longitude     Float?
+  geocodedAt    DateTime?
 }
 
 model LoadCharge {
@@ -710,6 +780,9 @@ model CheckCall {
   notes        String?
   occurredAt   DateTime           @default(now())
   nextCheckAt  DateTime?
+  latitude     Float?
+  longitude    Float?
+  geocodedAt   DateTime?
 }
 
 model LoadDocument {

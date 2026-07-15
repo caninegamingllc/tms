@@ -339,6 +339,20 @@ export default async function AdminPage({
                       <span className="label">Website</span>
                       <input name="website" className="input" defaultValue={company.website ?? ""} />
                     </label>
+                    <label className="grid gap-2 md:col-span-2">
+                      <span className="label">Customer portal payment URL</span>
+                      <input
+                        name="customerPaymentUrl"
+                        className="input"
+                        type="url"
+                        defaultValue={company.customerPaymentUrl ?? ""}
+                        placeholder="https://pay.example.com/…"
+                      />
+                      <span className="text-xs text-muted-foreground">
+                        Shown as “Pay invoice” in the customer portal when a customer has no payment URL
+                        override.
+                      </span>
+                    </label>
                   </div>
 
                   <div>

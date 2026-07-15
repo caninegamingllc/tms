@@ -16,6 +16,13 @@ import { toDocumentTableRows } from "@/lib/document-rows";
 import { prisma } from "@/lib/db";
 import { formatDateTime, formatMoney } from "@/lib/format";
 import { formatLateFeePercent } from "@/lib/late-fees";
+import {
+  createCustomerPortalLink,
+  disableCustomerPortalUser,
+  inviteCustomerPortalUser,
+  revokeCustomerPortalLink,
+  updateCustomerPaymentUrl
+} from "@/lib/portal-admin-actions";
 import { CUSTOMER_DETAIL_TILES } from "@/lib/tile-defaults";
 import { loadPageLayouts } from "@/lib/ui-preferences-load";
 
@@ -24,12 +31,17 @@ export default async function CustomerDetailPage({
   searchParams
 }: {
   params: Promise<{ id: string }>;
-  searchParams: Promise<{ saved?: string }>;
+  searchParams: Promise<{
+    saved?: string;
+    portalInvite?: string;
+    portalLink?: string;
+    error?: string;
+  }>;
 }) {
   const { id } = await params;
-  const { saved } = await searchParams;
+  const { saved, portalInvite, portalLink, error } = await searchParams;
   const user = await requireTmsAccess();
-  const [customer, layouts] = await Promise.all([
+  const [customer, layouts, portalUsers, portalLinks] = await Promise.all([
     prisma.customer.findUnique({
       where: { id, companyId: user.companyId },
       include: {
@@ -41,7 +53,15 @@ export default async function CustomerDetailPage({
         activities: { orderBy: { createdAt: "desc" }, include: { user: true } }
       }
     }),
-    loadPageLayouts("customer-detail")
+    loadPageLayouts("customer-detail"),
+    prisma.customerPortalUser.findMany({
+      where: { customerId: id, companyId: user.companyId },
+      orderBy: { createdAt: "desc" }
+    }),
+    prisma.customerPortalLink.findMany({
+      where: { customerId: id, companyId: user.companyId },
+      orderBy: { createdAt: "desc" }
+    })
   ]);
 
   if (!customer || !(await canAccessRecord(user, customer.branchId))) {
@@ -68,7 +88,7 @@ export default async function CustomerDetailPage({
     <>
       <PageHeader
         title={customer.name}
-        description="Customer profile, account summary, and customer-specific documents."
+        description="Customer profile, portal access, and customer-specific documents."
         action={
           <Link href="/customers" className="btn-secondary">
             Back to customers
@@ -79,6 +99,26 @@ export default async function CustomerDetailPage({
       {saved ? (
         <div className="mb-6 rounded-2xl border border-emerald-200 bg-emerald-50 p-4 text-sm font-semibold text-emerald-800">
           Customer saved successfully.
+        </div>
+      ) : null}
+
+      {error ? (
+        <div className="mb-6 rounded-2xl border border-rose-200 bg-rose-50 p-4 text-sm font-semibold text-rose-800">
+          {error}
+        </div>
+      ) : null}
+
+      {portalInvite ? (
+        <div className="mb-6 rounded-2xl border border-emerald-200 bg-emerald-50 p-4 text-sm text-emerald-900">
+          <p className="font-semibold">Portal invite created</p>
+          <p className="mt-1 break-all">{portalInvite}</p>
+        </div>
+      ) : null}
+
+      {portalLink ? (
+        <div className="mb-6 rounded-2xl border border-cyan-200 bg-cyan-50 p-4 text-sm text-cyan-900">
+          <p className="font-semibold">Copy this magic link now (shown once)</p>
+          <p className="mt-1 break-all">{portalLink}</p>
         </div>
       ) : null}
 
@@ -271,6 +311,134 @@ export default async function CustomerDetailPage({
               {customer.rateConfirmationTerms?.trim() || "No custom rate confirmation terms set."}
             </p>
           )}
+        </Tile>
+
+        <Tile id="portal">
+          <p className="muted">
+            Invite contacts to the customer portal or share a magic link. Portal users only see their
+            loads — no carrier pay or margins.
+          </p>
+
+          {writable ? (
+            <form action={updateCustomerPaymentUrl} className="mt-4 grid gap-3 rounded-2xl bg-muted p-4">
+              <input type="hidden" name="customerId" value={customer.id} />
+              <label className="grid gap-2">
+                <span className="label">Payment URL override</span>
+                <input
+                  name="paymentUrl"
+                  type="url"
+                  className="input"
+                  defaultValue={customer.paymentUrl ?? ""}
+                  placeholder="Optional — falls back to company payment URL"
+                />
+              </label>
+              <button type="submit" className="btn-secondary">
+                Save payment URL
+              </button>
+            </form>
+          ) : (
+            <p className="mt-4 text-sm">
+              Payment URL: {customer.paymentUrl?.trim() || "Using company default (if set)"}
+            </p>
+          )}
+
+          {writable ? (
+            <form action={inviteCustomerPortalUser} className="mt-4 grid gap-3 rounded-2xl bg-muted p-4">
+              <input type="hidden" name="customerId" value={customer.id} />
+              <p className="text-sm font-semibold">Invite portal user</p>
+              <input name="name" className="input" placeholder="Contact name" required />
+              <input name="email" type="email" className="input" placeholder="Email" required />
+              <button type="submit" className="btn">
+                Send invite
+              </button>
+            </form>
+          ) : null}
+
+          <div className="mt-4 grid gap-2">
+            <p className="text-sm font-semibold">Portal users</p>
+            {portalUsers.length === 0 ? (
+              <p className="text-sm text-muted-foreground">No portal users yet.</p>
+            ) : (
+              portalUsers.map((portalUser) => (
+                <div
+                  key={portalUser.id}
+                  className="flex flex-wrap items-center justify-between gap-3 rounded-2xl border border-border p-3 text-sm"
+                >
+                  <div>
+                    <p className="font-semibold">{portalUser.name}</p>
+                    <p className="muted">
+                      {portalUser.email} · {portalUser.status}
+                    </p>
+                  </div>
+                  {writable && portalUser.status !== "DISABLED" ? (
+                    <form action={disableCustomerPortalUser}>
+                      <input type="hidden" name="customerId" value={customer.id} />
+                      <input type="hidden" name="portalUserId" value={portalUser.id} />
+                      <button type="submit" className="btn-secondary">
+                        Disable
+                      </button>
+                    </form>
+                  ) : null}
+                </div>
+              ))
+            )}
+          </div>
+
+          {writable ? (
+            <form action={createCustomerPortalLink} className="mt-4 grid gap-3 rounded-2xl bg-muted p-4">
+              <input type="hidden" name="customerId" value={customer.id} />
+              <p className="text-sm font-semibold">Create magic link</p>
+              <input name="label" className="input" placeholder="Label" defaultValue="Share link" />
+              <label className="grid gap-2">
+                <span className="label">Expires in days</span>
+                <input
+                  name="expiresInDays"
+                  type="number"
+                  min={1}
+                  max={365}
+                  className="input"
+                  defaultValue={30}
+                />
+              </label>
+              <button type="submit" className="btn-secondary">
+                Create link
+              </button>
+            </form>
+          ) : null}
+
+          <div className="mt-4 grid gap-2">
+            <p className="text-sm font-semibold">Magic links</p>
+            {portalLinks.length === 0 ? (
+              <p className="text-sm text-muted-foreground">No share links yet.</p>
+            ) : (
+              portalLinks.map((link) => (
+                <div
+                  key={link.id}
+                  className="flex flex-wrap items-center justify-between gap-3 rounded-2xl border border-border p-3 text-sm"
+                >
+                  <div>
+                    <p className="font-semibold">{link.label}</p>
+                    <p className="muted">
+                      {link.revokedAt
+                        ? "Revoked"
+                        : link.expiresAt
+                          ? `Expires ${formatDateTime(link.expiresAt)}`
+                          : "No expiry"}
+                    </p>
+                  </div>
+                  {writable && !link.revokedAt ? (
+                    <form action={revokeCustomerPortalLink}>
+                      <input type="hidden" name="customerId" value={customer.id} />
+                      <input type="hidden" name="linkId" value={link.id} />
+                      <button type="submit" className="btn-secondary">
+                        Revoke
+                      </button>
+                    </form>
+                  ) : null}
+                </div>
+              ))
+            )}
+          </div>
         </Tile>
 
         <Tile id="activity">

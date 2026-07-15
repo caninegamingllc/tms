@@ -1,6 +1,6 @@
 # Freight Broker TMS — Project Overview
 
-**Version:** 0.4.1  
+**Version:** 0.4.4  
 **Production URL:** https://tms.simple-source.com  
 **Repository:** Freight Broker Transportation Management System (Next.js + Prisma + SQLite)
 

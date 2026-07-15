@@ -844,6 +844,7 @@ export async function updateCompanyBranding(formData: FormData) {
         phone: optionalString(formData, "phone") ?? null,
         email: optionalString(formData, "email") ?? null,
         website: optionalString(formData, "website") ?? null,
+        customerPaymentUrl: optionalString(formData, "customerPaymentUrl") ?? null,
         logoFilePath,
         logoMimeType,
         logoOriginalFileName
