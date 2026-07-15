@@ -597,16 +597,15 @@ Production: **https://tms.simple-source.com**
 1. Push to `origin` **`main`**.
 2. GitHub Actions workflow `.github/workflows/deploy.yml` POSTs a signed webhook to  
    `https://tms.simple-source.com/hooks/tms-deploy`.
-3. Server runs `scripts/tms-deploy.sh`:
+3. Server runs `scripts/tms-deploy.sh` (flock-serialized):
 
-   - `pm2 stop tms`
    - `git fetch` + `git reset --hard origin/main`
-   - `chmod +x` deploy script (preserve executable bit)
+   - `chmod +x` deploy/worker scripts (preserve executable bit)
    - `npm ci --include=dev`
-   - `prisma generate` (+ optional membership migrate)
-   - `prisma migrate deploy` (or equivalent schema apply step in the deploy script)
+   - `prisma generate`
+   - `prisma migrate deploy` (uses `DATABASE_MIGRATE_URL` when set)
    - production `next build` with raised Node heap (`4096` MB)
-   - `pm2 start/restart tms`
+   - `pm2 reload` (or start) app `tms` and worker `tms-worker`
 
 Do **not** also configure a GitHub repo webhook if Actions is already deployed (would double-deploy).
 
