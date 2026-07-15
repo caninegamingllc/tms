@@ -203,3 +203,67 @@ export async function sendInviteEmail(to: string, options: InviteEmailOptions): 
 
   return result;
 }
+
+type PortalInviteEmailOptions = {
+  inviteUrl: string;
+  companyName: string;
+  customerName: string;
+  inviteeName: string;
+  expiresInDays: number;
+};
+
+function portalInviteContent(options: PortalInviteEmailOptions) {
+  const { inviteUrl, companyName, customerName, inviteeName, expiresInDays } = options;
+  const subject = `You're invited to the ${companyName} customer portal`;
+  const text = [
+    `Hi ${inviteeName},`,
+    "",
+    `${companyName} invited you to view shipments for ${customerName} in the customer portal.`,
+    "Use the link below to set your password and access your loads.",
+    `This invite expires in ${expiresInDays} days.`,
+    "",
+    inviteUrl,
+    "",
+    "If you were not expecting this invite, you can ignore this email."
+  ].join("\n");
+
+  const html = `
+    <div style="font-family:'Source Sans 3',Arial,sans-serif;line-height:1.5;color:#1b2433;max-width:560px">
+      <div style="height:3px;background:linear-gradient(90deg,#1e3a5f,#2b6b80,#3d9ba8);border-radius:2px;margin-bottom:18px"></div>
+      <p style="font-size:11px;font-weight:700;letter-spacing:0.16em;text-transform:uppercase;color:#2b6b80;margin:0">
+        Customer Portal
+      </p>
+      <h1 style="font-family:Georgia,serif;font-size:26px;margin:10px 0 8px;letter-spacing:-0.02em">You're invited</h1>
+      <p>Hi ${inviteeName},</p>
+      <p><strong>${companyName}</strong> invited you to the customer portal for <strong>${customerName}</strong>.</p>
+      <p>Use the button below to set your password and view your loads.</p>
+      <p style="margin:24px 0">
+        <a href="${inviteUrl}" style="display:inline-block;background:#2b6b80;color:#fff;text-decoration:none;padding:11px 18px;border-radius:6px;font-weight:700">
+          Accept Invite
+        </a>
+      </p>
+      <p style="font-size:14px;color:#64748b">This invite expires in ${expiresInDays} days.</p>
+      <p style="font-size:12px;color:#94a3b8;word-break:break-all">${inviteUrl}</p>
+    </div>
+  `.trim();
+
+  return { subject, text, html };
+}
+
+export async function sendPortalInviteEmail(
+  to: string,
+  options: PortalInviteEmailOptions
+): Promise<SendResult> {
+  const { subject, text, html } = portalInviteContent(options);
+  const result = await deliverEmail(to, subject, html, text);
+
+  if (!result.delivered) {
+    if (process.env.NODE_ENV !== "production") {
+      console.info(`[portal-invite] ${to}: ${options.inviteUrl}`);
+    } else {
+      console.info(`[portal-invite] email undelivered for ${to}`);
+    }
+  }
+
+  return result;
+}

@@ -408,6 +408,7 @@ export function AppShell({
   const closeTimer = useRef<ReturnType<typeof setTimeout> | null>(null);
 
   const publicPage =
+    pathname.startsWith("/portal") ||
     pathname === "/login" ||
     pathname === "/register" ||
     pathname === "/change-password" ||

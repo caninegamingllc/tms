@@ -203,6 +203,24 @@ textarea::placeholder {
   font-weight: 700;
 }
 
+.customer-load-marker {
+  background: transparent;
+  border: none;
+}
+
+.customer-load-map-tooltip {
+  background: #ffffff;
+  border: 1px solid #e2e8f0;
+  border-radius: 12px;
+  box-shadow: 0 10px 24px -12px rgba(15, 23, 42, 0.35);
+  color: #1b2433;
+  padding: 10px 12px;
+}
+
+.customer-load-map-tooltip .leaflet-tooltip-arrow {
+  display: none;
+}
+
 @media print {
   aside,
   .app-rail,

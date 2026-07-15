@@ -53,3 +53,24 @@ export async function assertPasswordResetRequestNotRateLimited(email: string) {
     await redirectIfLimited(`auth:reset:email:${email}`, LIMITS.resetEmail, "/forgot-password");
   }
 }
+
+export async function assertPortalLoginNotRateLimited(email: string) {
+  const ip = await getClientIp();
+  await redirectIfLimited(`auth:portal-login:ip:${ip}`, LIMITS.loginIp, "/portal/login");
+  if (email) {
+    await redirectIfLimited(`auth:portal-login:email:${email}`, LIMITS.loginEmail, "/portal/login");
+  }
+}
+
+export async function assertPortalInviteAcceptNotRateLimited(inviteToken?: string) {
+  const ip = await getClientIp();
+  if (await isRateLimited(`auth:portal-invite:ip:${ip}`, LIMITS.inviteIp, AUTH_WINDOW_MS)) {
+    const params = new URLSearchParams({
+      error: "Too many attempts. Try again shortly."
+    });
+    if (inviteToken) {
+      params.set("token", inviteToken);
+    }
+    redirect(`/portal/accept-invite?${params.toString()}`);
+  }
+}

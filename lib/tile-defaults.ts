@@ -57,8 +57,9 @@ export const CARRIER_DETAIL_TILES: TileDefinition[] = [
 export const CUSTOMER_DETAIL_TILES: TileDefinition[] = [
   { id: "profile", title: "Customer Profile", minW: 4, minH: 6, default: { x: 0, y: 0, w: 7, h: 16 } },
   { id: "rate-terms", title: "Rate Confirmation Terms", minW: 3, minH: 5, default: { x: 7, y: 0, w: 5, h: 12 } },
-  { id: "activity", title: "Activity Log", minW: 4, minH: 5, default: { x: 0, y: 16, w: 7, h: 12 } },
-  { id: "documents", title: "Customer Documents", minW: 3, minH: 5, default: { x: 7, y: 12, w: 5, h: 12 } }
+  { id: "portal", title: "Portal Access", minW: 4, minH: 6, default: { x: 0, y: 16, w: 7, h: 16 } },
+  { id: "activity", title: "Activity Log", minW: 3, minH: 5, default: { x: 7, y: 12, w: 5, h: 12 } },
+  { id: "documents", title: "Customer Documents", minW: 4, minH: 5, default: { x: 0, y: 32, w: 12, h: 12 } }
 ];
 
 export const LIST_SEARCH_ADD_TILES: TileDefinition[] = [

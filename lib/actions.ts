@@ -966,11 +966,17 @@ export async function updateLoadStatus(formData: FormData) {
     }
   });
 
+  if (status === "DELIVERED" || status === "INVOICED" || status === "PAID") {
+    const { ensureDeliveryStopGeocoded } = await import("@/lib/customer-load-map");
+    await ensureDeliveryStopGeocoded(loadId);
+  }
+
   await recalculateLoadCommission(loadId);
 
   revalidatePath("/loads");
   revalidatePath("/commissions");
   revalidatePath(`/loads/${loadId}`);
+  revalidatePath("/portal");
 }
 
 export async function addLoadNote(formData: FormData) {
@@ -1266,27 +1272,34 @@ export async function addCheckCall(formData: FormData) {
   const loadId = requiredString(formData, "loadId");
   await requireCompanyLoad(loadId, user);
 
-  await prisma.checkCall.create({
+  const location = requiredString(formData, "location");
+  const status = requiredString(formData, "status");
+
+  const checkCall = await prisma.checkCall.create({
     data: {
       assignmentId,
-      location: requiredString(formData, "location"),
-      status: requiredString(formData, "status"),
+      location,
+      status,
       notes: optionalString(formData, "notes"),
       nextCheckAt: optionalDate(formData, "nextCheckAt")
     }
   });
+
+  const { geocodeAndStoreCheckCallLocation } = await import("@/lib/customer-load-map");
+  await geocodeAndStoreCheckCallLocation(checkCall.id, location);
 
   await prisma.loadActivity.create({
     data: {
       loadId,
       userId: user.id,
       action: "Check call added",
-      details: `${requiredString(formData, "status")} at ${requiredString(formData, "location")}.`
+      details: `${status} at ${location}.`
     }
   });
 
   revalidatePath("/dispatch");
   revalidatePath(`/loads/${loadId}`);
+  revalidatePath("/portal");
 }
 
 async function validateDocumentEntityLinks(
