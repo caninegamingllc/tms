@@ -91,6 +91,14 @@ export const defaultCarrierPayLineTypes = [
   { name: "Other Accessorial", calculationMethod: "FLAT" as const, isSystem: true }
 ] as const;
 
+export const defaultCustomerChargeTypes = [
+  { name: "Flat Rate", calculationMethod: "FLAT" as const, isSystem: true },
+  { name: "Rate per Mile", calculationMethod: "PER_MILE" as const, isSystem: true },
+  { name: "Hourly", calculationMethod: "HOURLY" as const, isSystem: true },
+  { name: "Detention", calculationMethod: "HOURLY" as const, isSystem: true },
+  { name: "Truck Ordered Not Used", calculationMethod: "FLAT" as const, isSystem: true }
+] as const;
+
 export type CommissionStatus = (typeof commissionStatuses)[number];
 export type CommissionCalculationMethod = (typeof commissionCalculationMethods)[number];
 

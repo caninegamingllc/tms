@@ -26,8 +26,17 @@ export default async function AdminPage({
 
   await refreshSeatSubscriptionFromStripe(currentUser.companyId);
   await ensureCompanyCatalogs(currentUser.companyId);
-  const [company, memberships, branches, auditLogs, seatSummary, commodities, payLineTypes, layouts] =
-    await Promise.all([
+  const [
+    company,
+    memberships,
+    branches,
+    auditLogs,
+    seatSummary,
+    commodities,
+    payLineTypes,
+    chargeTypes,
+    layouts
+  ] = await Promise.all([
       prisma.company.findUniqueOrThrow({ where: { id: currentUser.companyId } }),
       prisma.companyMembership.findMany({
         where: { companyId: currentUser.companyId },
@@ -68,6 +77,11 @@ export default async function AdminPage({
       prisma.carrierPayLineType.findMany({
         where: { companyId: currentUser.companyId },
         include: { _count: { select: { payLines: true } } },
+        orderBy: [{ sortOrder: "asc" }, { name: "asc" }]
+      }),
+      prisma.customerChargeType.findMany({
+        where: { companyId: currentUser.companyId },
+        include: { _count: { select: { charges: true } } },
         orderBy: [{ sortOrder: "asc" }, { name: "asc" }]
       }),
       loadPageLayouts("admin")
@@ -433,6 +447,15 @@ export default async function AdminPage({
                   sortOrder: item.sortOrder,
                   isSystem: item.isSystem,
                   usageCount: item._count.payLines
+                }))}
+                chargeTypes={chargeTypes.map((item) => ({
+                  id: item.id,
+                  name: item.name,
+                  calculationMethod: item.calculationMethod,
+                  active: item.active,
+                  sortOrder: item.sortOrder,
+                  isSystem: item.isSystem,
+                  usageCount: item._count.charges
                 }))}
               />
             </div>

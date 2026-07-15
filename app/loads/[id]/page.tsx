@@ -73,8 +73,19 @@ export default async function LoadDetailPage({
     void ensureCompanyCatalogs(user.companyId);
   });
   const scope = await getBranchScope(user);
-  const [load, carriers, commissionProfiles, mailbox, payLineTypes, layouts, customers, facilities, branches, commodities] =
-    await Promise.all([
+  const [
+    load,
+    carriers,
+    commissionProfiles,
+    mailbox,
+    payLineTypes,
+    layouts,
+    customers,
+    facilities,
+    branches,
+    commodities,
+    chargeTypes
+  ] = await Promise.all([
     prisma.load.findUnique({
       where: { id, companyId: user.companyId },
       include: {
@@ -82,7 +93,7 @@ export default async function LoadDetailPage({
         branch: true,
         stops: { orderBy: { sequence: "asc" } },
         commodityLines: { orderBy: { sequence: "asc" } },
-        charges: true,
+        charges: { orderBy: [{ sortOrder: "asc" }, { createdAt: "asc" }] },
         expenses: true,
         carrierPayLines: {
           orderBy: { sortOrder: "asc" },
@@ -143,12 +154,23 @@ export default async function LoadDetailPage({
     prisma.commodityOption.findMany({
       where: { companyId: user.companyId, active: true },
       orderBy: [{ sortOrder: "asc" }, { name: "asc" }]
+    }),
+    prisma.customerChargeType.findMany({
+      where: { companyId: user.companyId },
+      orderBy: [{ sortOrder: "asc" }, { name: "asc" }]
     })
   ]);
 
   if (!load || !(await canAccessRecord(user, load.branchId))) {
     notFound();
   }
+
+  const usedChargeTypeIds = new Set(
+    load.charges.map((charge) => charge.lineTypeId).filter((id): id is string => Boolean(id))
+  );
+  const chargeTypesForEditor = chargeTypes.filter(
+    (type) => type.active || usedChargeTypeIds.has(type.id)
+  );
 
   const quickbooksMethod = await getCompanyQuickbooksMethod(user.companyId);
   const activeExportMethod: AccountingExportMethod | null =
@@ -295,6 +317,22 @@ export default async function LoadDetailPage({
             weight={load.weight}
             freightLines={freightLines}
             descriptionSuggestions={commodities.map((item) => item.name)}
+            chargeTypes={chargeTypesForEditor.map((type) => ({
+              id: type.id,
+              name: type.name,
+              calculationMethod: type.calculationMethod
+            }))}
+            charges={load.charges.map((charge) => ({
+              id: charge.id,
+              label: charge.label,
+              chargeType: charge.chargeType,
+              description: charge.description,
+              unitRateCents: charge.unitRateCents,
+              quantity: charge.quantity,
+              amountCents: charge.amountCents,
+              lineTypeId: charge.lineTypeId
+            }))}
+            defaultMiles={load.routeTotalMiles}
             stops={load.stops}
             facilities={facilityOptions}
             statusBadge={<StatusBadge value={load.status} />}

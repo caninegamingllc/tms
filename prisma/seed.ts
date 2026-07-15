@@ -158,6 +158,15 @@ async function main() {
 
   await seedCompanyCatalogs(company.id, prisma);
 
+  const customerChargeTypes = await prisma.customerChargeType.findMany({
+    where: { companyId: company.id }
+  });
+  const chargeTypeByName = new Map(customerChargeTypes.map((type) => [type.name, type]));
+  const flatRateType = chargeTypeByName.get("Flat Rate");
+  if (!flatRateType) {
+    throw new Error("Expected Flat Rate customer charge type after catalog seed.");
+  }
+
   const customer = await prisma.customer.create({
     data: {
       name: "Northstar Foods",
@@ -473,8 +482,25 @@ async function main() {
       },
       charges: {
         create: [
-          { label: "Linehaul", chargeType: "Linehaul", amountCents: 275000 },
-          { label: "Fuel surcharge", chargeType: "Fuel", amountCents: 10000 }
+          {
+            lineTypeId: flatRateType.id,
+            label: "Flat Rate",
+            chargeType: "Flat Rate",
+            unitRateCents: 275000,
+            quantity: 1,
+            amountCents: 275000,
+            sortOrder: 0
+          },
+          {
+            lineTypeId: flatRateType.id,
+            label: "Fuel surcharge",
+            chargeType: "Flat Rate",
+            description: "Fuel surcharge",
+            unitRateCents: 10000,
+            quantity: 1,
+            amountCents: 10000,
+            sortOrder: 1
+          }
         ]
       },
       dispatchAssignment: {
@@ -639,7 +665,15 @@ async function main() {
       },
       charges: {
         create: [
-          { label: "Linehaul", chargeType: "Linehaul", amountCents: 195000 }
+          {
+            lineTypeId: flatRateType.id,
+            label: "Flat Rate",
+            chargeType: "Flat Rate",
+            unitRateCents: 195000,
+            quantity: 1,
+            amountCents: 195000,
+            sortOrder: 0
+          }
         ]
       },
       notes: {
@@ -713,7 +747,17 @@ async function main() {
         ]
       },
       charges: {
-        create: [{ label: "Linehaul", chargeType: "Linehaul", amountCents: 100000 }]
+        create: [
+          {
+            lineTypeId: flatRateType.id,
+            label: "Flat Rate",
+            chargeType: "Flat Rate",
+            unitRateCents: 100000,
+            quantity: 1,
+            amountCents: 100000,
+            sortOrder: 0
+          }
+        ]
       },
       invoices: {
         create: [

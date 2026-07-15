@@ -179,12 +179,14 @@ function mapCarrierPayLines(load: LoadForDocument): DocumentCharge[] {
 
 function mapCharges(load: LoadForDocument): DocumentCharge[] {
   if (load.charges.length) {
-    return load.charges.map((charge) => ({
-      label: charge.label,
-      amountCents: charge.amountCents
-    }));
+    return [...load.charges]
+      .sort((a, b) => a.sortOrder - b.sortOrder)
+      .map((charge) => ({
+        label: charge.label,
+        amountCents: charge.amountCents
+      }));
   }
-  return [{ label: "Linehaul", amountCents: load.revenueCents }];
+  return [{ label: "Flat Rate", amountCents: load.revenueCents }];
 }
 
 /** Public load notes only — never include private notes on generated docs. */

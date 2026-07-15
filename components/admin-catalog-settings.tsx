@@ -1,12 +1,16 @@
 import {
   createCarrierPayLineType,
   createCommodityOption,
+  createCustomerChargeType,
   deleteCarrierPayLineType,
   deleteCommodityOption,
+  deleteCustomerChargeType,
   toggleCarrierPayLineTypeActive,
   toggleCommodityActive,
+  toggleCustomerChargeTypeActive,
   updateCarrierPayLineType,
-  updateCommodityOption
+  updateCommodityOption,
+  updateCustomerChargeType
 } from "@/lib/catalog-actions";
 import { carrierPayCalculationMethods } from "@/lib/constants";
 import { humanize } from "@/lib/format";
@@ -28,12 +32,24 @@ type PayLineTypeRow = {
   usageCount: number;
 };
 
+type ChargeTypeRow = {
+  id: string;
+  name: string;
+  calculationMethod: string;
+  active: boolean;
+  sortOrder: number;
+  isSystem: boolean;
+  usageCount: number;
+};
+
 export function AdminCatalogSettings({
   commodities,
-  payLineTypes
+  payLineTypes,
+  chargeTypes
 }: {
   commodities: CommodityRow[];
   payLineTypes: PayLineTypeRow[];
+  chargeTypes: ChargeTypeRow[];
 }) {
   return (
     <div className="grid gap-6">
@@ -212,6 +228,121 @@ export function AdminCatalogSettings({
                   </form>
                   {!item.isSystem && item.usageCount === 0 ? (
                     <form action={deleteCarrierPayLineType}>
+                      <input type="hidden" name="id" value={item.id} />
+                      <button type="submit" className="btn-danger">
+                        Delete
+                      </button>
+                    </form>
+                  ) : null}
+                  <span className="text-xs text-muted-foreground">
+                    {item.active ? "Active" : "Inactive"}
+                    {item.isSystem ? " · System" : ""}
+                    {item.usageCount > 0 ? ` · Used on ${item.usageCount} line(s)` : ""}
+                  </span>
+                </div>
+              </div>
+            ))
+          )}
+        </div>
+      </section>
+
+      <section className="card">
+        <h2 className="section-title">Customer Charge Types</h2>
+        <p className="muted">
+          Line item types for customer rates on a load. Flat uses a dollar amount; per mile and hourly
+          multiply rate × quantity. System types can be deactivated but not deleted.
+        </p>
+
+        <form
+          action={createCustomerChargeType}
+          className="mt-4 grid gap-3 md:grid-cols-[1fr_1fr_120px_auto]"
+        >
+          <label className="grid gap-2">
+            <span className="label">Name</span>
+            <input name="name" className="input" placeholder="e.g. Stop Off" required />
+          </label>
+          <label className="grid gap-2">
+            <span className="label">Calculation</span>
+            <select name="calculationMethod" className="select" defaultValue="FLAT">
+              {carrierPayCalculationMethods.map((method) => (
+                <option key={method} value={method}>
+                  {humanize(method)}
+                </option>
+              ))}
+            </select>
+          </label>
+          <label className="grid gap-2">
+            <span className="label">Sort</span>
+            <input
+              name="sortOrder"
+              className="input"
+              type="number"
+              min={0}
+              defaultValue={chargeTypes.length}
+            />
+          </label>
+          <div className="flex items-end">
+            <button type="submit" className="btn">
+              Add Type
+            </button>
+          </div>
+        </form>
+
+        <div className="mt-4 grid gap-3">
+          {chargeTypes.length === 0 ? (
+            <p className="text-sm text-muted-foreground">No charge types yet.</p>
+          ) : (
+            chargeTypes.map((item) => (
+              <div key={item.id} className="grid gap-3 rounded-2xl border border-border p-4">
+                <form
+                  action={updateCustomerChargeType}
+                  className="grid gap-3 md:grid-cols-[1fr_1fr_100px_auto]"
+                >
+                  <input type="hidden" name="id" value={item.id} />
+                  <input type="hidden" name="active" value={item.active ? "true" : "false"} />
+                  <label className="grid gap-1">
+                    <span className="label">Name</span>
+                    <input name="name" className="input" defaultValue={item.name} required />
+                  </label>
+                  <label className="grid gap-1">
+                    <span className="label">Calculation</span>
+                    <select
+                      name="calculationMethod"
+                      className="select"
+                      defaultValue={item.calculationMethod}
+                    >
+                      {carrierPayCalculationMethods.map((method) => (
+                        <option key={method} value={method}>
+                          {humanize(method)}
+                        </option>
+                      ))}
+                    </select>
+                  </label>
+                  <label className="grid gap-1">
+                    <span className="label">Sort</span>
+                    <input
+                      name="sortOrder"
+                      className="input"
+                      type="number"
+                      min={0}
+                      defaultValue={item.sortOrder}
+                    />
+                  </label>
+                  <div className="flex items-end">
+                    <button type="submit" className="btn-secondary">
+                      Save
+                    </button>
+                  </div>
+                </form>
+                <div className="flex flex-wrap items-center gap-2">
+                  <form action={toggleCustomerChargeTypeActive}>
+                    <input type="hidden" name="id" value={item.id} />
+                    <button type="submit" className="btn-secondary">
+                      {item.active ? "Deactivate" : "Activate"}
+                    </button>
+                  </form>
+                  {!item.isSystem && item.usageCount === 0 ? (
+                    <form action={deleteCustomerChargeType}>
                       <input type="hidden" name="id" value={item.id} />
                       <button type="submit" className="btn-danger">
                         Delete

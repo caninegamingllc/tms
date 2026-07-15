@@ -1,6 +1,11 @@
 "use client";
 
 import { useState, type ReactNode } from "react";
+import {
+  CustomerChargeLinesEditor,
+  type ChargeTypeOption,
+  type InitialCustomerCharge
+} from "@/components/customer-charge-lines-editor";
 import { EquipmentFields } from "@/components/equipment-fields";
 import {
   FreightLinesEditor,
@@ -32,18 +37,29 @@ type StopView = {
   instructions: string | null;
 };
 
-function moneyInput(cents: number) {
-  if (!cents) {
-    return "";
-  }
-  return (cents / 100).toFixed(2).replace(/\.00$/, "");
-}
+type ChargeView = {
+  id: string;
+  label: string;
+  chargeType: string;
+  description: string | null;
+  unitRateCents: number;
+  quantity: number;
+  amountCents: number;
+  lineTypeId: string | null;
+};
 
 function formatDims(line: InitialFreightLine) {
   const parts = [line.lengthIn, line.widthIn, line.heightIn]
     .filter((value) => value != null)
     .map((value) => `${value}"`);
   return parts.length ? parts.join(" × ") : null;
+}
+
+function moneyInput(cents: number) {
+  if (!cents) {
+    return "";
+  }
+  return (cents / 100).toFixed(2).replace(/\.00$/, "");
 }
 
 export function LoadDetailsEditor({
@@ -63,6 +79,9 @@ export function LoadDetailsEditor({
   weight,
   freightLines,
   descriptionSuggestions,
+  chargeTypes,
+  charges,
+  defaultMiles,
   stops,
   facilities,
   statusBadge,
@@ -85,6 +104,9 @@ export function LoadDetailsEditor({
   weight: number | null;
   freightLines: InitialFreightLine[];
   descriptionSuggestions: string[];
+  chargeTypes: ChargeTypeOption[];
+  charges: ChargeView[];
+  defaultMiles?: number | null;
   stops: StopView[];
   facilities: FacilityOption[];
   statusBadge: ReactNode;
@@ -92,6 +114,18 @@ export function LoadDetailsEditor({
   marginPercentLabel: string;
 }) {
   const [editing, setEditing] = useState(false);
+
+  const editableCharges = charges.filter((charge) => charge.chargeType !== "Late Fee");
+  const lateFeeCharges = charges.filter((charge) => charge.chargeType === "Late Fee");
+  const initialChargeLines: InitialCustomerCharge[] = editableCharges
+    .filter((charge) => charge.lineTypeId)
+    .map((charge) => ({
+      lineTypeId: charge.lineTypeId as string,
+      description: charge.description,
+      unitRateCents: charge.unitRateCents || charge.amountCents,
+      quantity: charge.quantity || 1,
+      amountCents: charge.amountCents
+    }));
 
   if (!editing || !writable) {
     return (
@@ -122,9 +156,26 @@ export function LoadDetailsEditor({
         </div>
 
         <div className="grid gap-4 md:grid-cols-3">
-          <div className="rounded-2xl bg-muted p-4">
+          <div className="rounded-2xl bg-muted p-4 md:col-span-1">
             <p className="label">Customer Rate</p>
             <p className="mt-2 text-xl font-semibold">{formatMoney(revenueCents)}</p>
+            {charges.length > 0 ? (
+              <ul className="mt-3 grid gap-1 text-sm text-muted-foreground">
+                {charges.map((charge) => (
+                  <li key={charge.id} className="flex justify-between gap-3">
+                    <span>
+                      {charge.label}
+                      {charge.quantity !== 1 && charge.chargeType !== "Late Fee"
+                        ? ` × ${charge.quantity}`
+                        : ""}
+                    </span>
+                    <span className="font-medium text-foreground">
+                      {formatMoney(charge.amountCents)}
+                    </span>
+                  </li>
+                ))}
+              </ul>
+            ) : null}
           </div>
           <div className="rounded-2xl bg-muted p-4">
             <p className="label">Carrier Cost</p>
@@ -224,18 +275,8 @@ export function LoadDetailsEditor({
         <input type="hidden" name="branchId" value={branchId ?? ""} />
       )}
 
-      <div className="grid gap-4 md:grid-cols-3">
+      <div className="grid gap-4 md:grid-cols-2">
         <EquipmentFields defaultEquipmentType={equipmentType} defaultReeferTempF={reeferTempF} />
-        <label className="grid gap-2">
-          <span className="label">Customer Rate</span>
-          <input
-            name="revenue"
-            className="input"
-            defaultValue={moneyInput(revenueCents)}
-            placeholder="2500"
-            required
-          />
-        </label>
         <label className="grid gap-2">
           <span className="label">Estimated Carrier Cost</span>
           <input
@@ -245,6 +286,26 @@ export function LoadDetailsEditor({
             placeholder="1900"
           />
         </label>
+      </div>
+
+      <div className="grid gap-3">
+        <div>
+          <h4 className="text-sm font-semibold text-foreground">Customer charges</h4>
+          <p className="muted text-sm">
+            Add line items with charge type, quantity, and amount. Total becomes customer rate.
+          </p>
+        </div>
+        <CustomerChargeLinesEditor
+          lineTypes={chargeTypes}
+          initialLines={initialChargeLines}
+          defaultMiles={defaultMiles}
+        />
+        {lateFeeCharges.length ? (
+          <p className="text-sm text-muted-foreground">
+            Late fees ({formatMoney(lateFeeCharges.reduce((sum, c) => sum + c.amountCents, 0))}) stay
+            on the load and are not edited here.
+          </p>
+        ) : null}
       </div>
 
       <div className="grid gap-3">

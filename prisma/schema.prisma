@@ -47,12 +47,13 @@ model Company {
   auditLogs            AuditLog[]
   commissionProfiles   CommissionProfile[]
   emailThreads         EmailThread[]
-  commodityOptions     CommodityOption[]
-  carrierPayLineTypes  CarrierPayLineType[]
-  portalUsers          CustomerPortalUser[]
-  portalLinks          CustomerPortalLink[]
-  createdAt            DateTime               @default(now())
-  updatedAt            DateTime               @updatedAt
+  commodityOptions      CommodityOption[]
+  carrierPayLineTypes   CarrierPayLineType[]
+  customerChargeTypes   CustomerChargeType[]
+  portalUsers           CustomerPortalUser[]
+  portalLinks           CustomerPortalLink[]
+  createdAt             DateTime               @default(now())
+  updatedAt             DateTime               @updatedAt
 }
 
 model CommodityOption {
@@ -82,6 +83,24 @@ model CarrierPayLineType {
   payLines           CarrierPayLine[]
   createdAt          DateTime        @default(now())
   updatedAt          DateTime        @updatedAt
+
+  @@unique([companyId, name])
+  @@index([companyId])
+}
+
+model CustomerChargeType {
+  id                 String       @id @default(cuid())
+  companyId          String
+  company            Company      @relation(fields: [companyId], references: [id], onDelete: Cascade)
+  name               String
+  /// FLAT | PER_MILE | HOURLY
+  calculationMethod  String       @default("FLAT")
+  active             Boolean      @default(true)
+  sortOrder          Int          @default(0)
+  isSystem           Boolean      @default(false)
+  charges            LoadCharge[]
+  createdAt          DateTime     @default(now())
+  updatedAt          DateTime     @updatedAt
 
   @@unique([companyId, name])
   @@index([companyId])
@@ -664,12 +683,23 @@ model LoadStop {
 }
 
 model LoadCharge {
-  id          String   @id @default(cuid())
-  loadId      String
-  load        Load     @relation(fields: [loadId], references: [id], onDelete: Cascade)
-  label       String
-  chargeType  String   @default("Linehaul")
-  amountCents Int
+  id             String              @id @default(cuid())
+  loadId         String
+  load           Load                @relation(fields: [loadId], references: [id], onDelete: Cascade)
+  lineTypeId     String?
+  lineType       CustomerChargeType? @relation(fields: [lineTypeId], references: [id], onDelete: SetNull)
+  label          String
+  chargeType     String              @default("Linehaul")
+  description    String?
+  unitRateCents  Int                 @default(0)
+  quantity       Float               @default(1)
+  amountCents    Int
+  sortOrder      Int                 @default(0)
+  createdAt      DateTime            @default(now())
+  updatedAt      DateTime            @updatedAt
+
+  @@index([loadId])
+  @@index([lineTypeId])
 }
 
 model LoadExpense {

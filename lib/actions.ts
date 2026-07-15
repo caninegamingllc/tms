@@ -16,7 +16,7 @@ import {
 import { enqueueJob } from "@/lib/jobs";
 import { normalizeCarrierNumber } from "@/lib/carrier-numbers";
 import { parseMoneyToCents } from "@/lib/format";
-import { parseLateFeePercent } from "@/lib/late-fees";
+import { LATE_FEE_CHARGE_TYPE, parseLateFeePercent } from "@/lib/late-fees";
 import { recalculateLoadCommission } from "@/lib/commission";
 import { deleteStoredFile, saveUploadedFile } from "@/lib/document-storage";
 import {
@@ -25,6 +25,12 @@ import {
   serializeDocumentTypes
 } from "@/lib/document-types";
 import { ensureCompanyCatalogs } from "@/lib/catalogs";
+import {
+  chargesCreateData,
+  customerChargesTotalCents,
+  isLateFeeCharge,
+  parseCustomerChargesFromForm
+} from "@/lib/customer-charges";
 import { dueDateFromTerms, parsePaymentTermsDays } from "@/lib/accounting-aging";
 import { resolveCarrierApPayee } from "@/lib/accounting-payee";
 import {
@@ -786,7 +792,6 @@ export async function createLoad(formData: FormData) {
   const branchId = await resolveBranchId(user, optionalString(formData, "branchId"), prisma);
 
   const manualLoadNumber = optionalString(formData, "loadNumber");
-  const revenueCents = parseMoneyToCents(formData.get("revenue"));
   let carrierCostCents = parseMoneyToCents(formData.get("carrierCost"));
   const equipmentType = requiredString(formData, "equipmentType");
   const reeferTempF = equipmentType === "Reefer" ? optionalFloat(formData, "reeferTempF") : null;
@@ -796,6 +801,17 @@ export async function createLoad(formData: FormData) {
   const stops = await parseLoadStopsFromForm(formData, user.companyId);
   const origin = firstPickup(stops);
   const destination = lastDelivery(stops);
+
+  await ensureCompanyCatalogs(user.companyId);
+  const customerChargeLines = await parseCustomerChargesFromForm(
+    formData,
+    user.companyId,
+    prisma
+  );
+  const revenueCents = customerChargesTotalCents(customerChargeLines);
+  if (revenueCents < 0) {
+    throw new Error("Customer rate total cannot be negative.");
+  }
 
   const cloneFromLoadId = optionalString(formData, "cloneFromLoadId");
   const keepNotes = String(formData.get("keepNotes") ?? "").trim() === "1";
@@ -924,11 +940,7 @@ export async function createLoad(formData: FormData) {
           create: commodityLinesCreateData(freightLines)
         },
         charges: {
-          create: {
-            label: "Linehaul",
-            chargeType: "Linehaul",
-            amountCents: revenueCents
-          }
+          create: chargesCreateData(customerChargeLines)
         },
         activities: {
           create: {
@@ -1040,7 +1052,6 @@ export async function updateLoad(formData: FormData) {
   await requireCompanyCustomer(customerId, user);
   const branchId = await resolveBranchId(user, optionalString(formData, "branchId"), prisma);
 
-  const revenueCents = parseMoneyToCents(formData.get("revenue"));
   const carrierCostCents = parseMoneyToCents(formData.get("carrierCost"));
   const equipmentType = requiredString(formData, "equipmentType");
   const reeferTempF = equipmentType === "Reefer" ? optionalFloat(formData, "reeferTempF") ?? null : null;
@@ -1051,9 +1062,29 @@ export async function updateLoad(formData: FormData) {
   const origin = firstPickup(stops);
   const destination = lastDelivery(stops);
 
+  await ensureCompanyCatalogs(user.companyId);
+  const customerChargeLines = await parseCustomerChargesFromForm(
+    formData,
+    user.companyId,
+    prisma
+  );
+
   await prisma.$transaction(async (tx) => {
     await tx.loadCommodityLine.deleteMany({ where: { loadId } });
     await tx.loadStop.deleteMany({ where: { loadId } });
+
+    const existingCharges = await tx.loadCharge.findMany({ where: { loadId } });
+    const lateFeeCents = existingCharges
+      .filter(isLateFeeCharge)
+      .reduce((sum, charge) => sum + charge.amountCents, 0);
+    const revenueCents = customerChargesTotalCents(customerChargeLines) + lateFeeCents;
+
+    await tx.loadCharge.deleteMany({
+      where: {
+        loadId,
+        chargeType: { not: LATE_FEE_CHARGE_TYPE }
+      }
+    });
 
     await tx.load.update({
       where: { id: loadId },
@@ -1084,26 +1115,18 @@ export async function updateLoad(formData: FormData) {
         stops: {
           create: stopsCreateData(stops)
         },
+        charges: {
+          create: chargesCreateData(customerChargeLines)
+        },
         activities: {
           create: {
             userId: user.id,
             action: "Load details updated",
-            details: "Updated load details, stops, and freight lines."
+            details: "Updated load details, stops, freight lines, and customer charges."
           }
         }
       }
     });
-
-    const linehaul = await tx.loadCharge.findFirst({
-      where: { loadId, chargeType: "Linehaul" },
-      orderBy: { id: "asc" }
-    });
-    if (linehaul) {
-      await tx.loadCharge.update({
-        where: { id: linehaul.id },
-        data: { amountCents: revenueCents }
-      });
-    }
   });
 
   await recalculateLoadCommission(loadId);

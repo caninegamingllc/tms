@@ -1,3 +1,4 @@
+import { CustomerChargeLinesEditor } from "@/components/customer-charge-lines-editor";
 import { EquipmentFields } from "@/components/equipment-fields";
 import { FreightLinesEditor } from "@/components/freight-lines-editor";
 import { LoadStopsEditor } from "@/components/load-stops-editor";
@@ -45,7 +46,8 @@ export default async function NewLoadPage({
   const keepCommodity = flagEnabled(params.keepCommodity);
   const keepNotes = flagEnabled(params.keepNotes);
 
-  const [company, customers, facilities, branches, commodities, cloneSource] = await Promise.all([
+  const [company, customers, facilities, branches, commodities, chargeTypes, cloneSource] =
+    await Promise.all([
     prisma.company.findUniqueOrThrow({ where: { id: user.companyId } }),
     prisma.customer.findMany({
       where: scope,
@@ -69,12 +71,20 @@ export default async function NewLoadPage({
       where: { companyId: user.companyId, active: true },
       orderBy: [{ sortOrder: "asc" }, { name: "asc" }]
     }),
+    prisma.customerChargeType.findMany({
+      where: { companyId: user.companyId, active: true },
+      orderBy: [{ sortOrder: "asc" }, { name: "asc" }]
+    }),
     cloneFromId
       ? prisma.load.findUnique({
           where: { id: cloneFromId, companyId: user.companyId },
           include: {
             stops: { orderBy: { sequence: "asc" } },
             commodityLines: { orderBy: { sequence: "asc" } },
+            charges: {
+              where: { chargeType: { not: "Late Fee" } },
+              orderBy: [{ sortOrder: "asc" }, { createdAt: "asc" }]
+            },
             carrierPayLines: { orderBy: { sortOrder: "asc" } },
             dispatchAssignment: { include: { carrier: true } }
           }
@@ -134,10 +144,20 @@ export default async function NewLoadPage({
           heightIn: line.heightIn
         }))
       : undefined;
-  const clonedRevenue =
-    cloneSource && keepRate ? moneyInput(cloneSource.revenueCents) : "";
   const clonedCarrierCost =
     cloneSource && keepRate ? moneyInput(cloneSource.carrierCostCents) : "";
+  const clonedChargeLines =
+    cloneSource && keepRate
+      ? cloneSource.charges
+          .filter((charge) => charge.lineTypeId)
+          .map((charge) => ({
+            lineTypeId: charge.lineTypeId as string,
+            description: charge.description,
+            unitRateCents: charge.unitRateCents || charge.amountCents,
+            quantity: charge.quantity || 1,
+            amountCents: charge.amountCents
+          }))
+      : undefined;
   const assignment = cloneSource?.dispatchAssignment;
   const shouldCloneCarrier = Boolean(keepCarrier && assignment);
   const clonePayLinesJson = shouldCloneCarrier
@@ -235,21 +255,11 @@ export default async function NewLoadPage({
           <input name="referenceNumber" className="input" placeholder="PO / tender number" />
         </label>
 
-        <div className="grid gap-4 md:grid-cols-3">
+        <div className="grid gap-4 md:grid-cols-2">
           <EquipmentFields
             defaultEquipmentType={cloneSource?.equipmentType ?? "Dry Van"}
             defaultReeferTempF={cloneSource?.reeferTempF ?? null}
           />
-          <label className="grid gap-2">
-            <span className="label">Customer Rate</span>
-            <input
-              name="revenue"
-              className="input"
-              placeholder="2500"
-              defaultValue={clonedRevenue}
-              required
-            />
-          </label>
           <label className="grid gap-2">
             <span className="label">Estimated Carrier Cost</span>
             <input
@@ -259,6 +269,24 @@ export default async function NewLoadPage({
               defaultValue={clonedCarrierCost}
             />
           </label>
+        </div>
+
+        <div className="grid gap-3">
+          <div>
+            <h3 className="text-sm font-semibold text-foreground">Customer charges</h3>
+            <p className="muted text-sm">
+              Select charge type, quantity, and amount. Add accessorials as additional lines.
+            </p>
+          </div>
+          <CustomerChargeLinesEditor
+            lineTypes={chargeTypes.map((type) => ({
+              id: type.id,
+              name: type.name,
+              calculationMethod: type.calculationMethod
+            }))}
+            initialLines={clonedChargeLines}
+            defaultMiles={cloneSource?.routeTotalMiles}
+          />
         </div>
 
         <div className="grid gap-3">

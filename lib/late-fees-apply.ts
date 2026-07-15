@@ -44,7 +44,10 @@ export async function applyLateFeesForInvoiceSend(input: {
     loadId: load.id,
     label: lateFeeLabel(plan.existingCount + index + 1),
     chargeType: LATE_FEE_CHARGE_TYPE,
-    amountCents: plan.feeAmountCents
+    unitRateCents: plan.feeAmountCents,
+    quantity: 1,
+    amountCents: plan.feeAmountCents,
+    sortOrder: 1000 + plan.existingCount + index
   }));
 
   await prisma.$transaction(async (tx) => {

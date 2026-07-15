@@ -198,3 +198,95 @@ export async function toggleCarrierPayLineTypeActive(formData: FormData) {
 
   revalidateAdminCatalogs();
 }
+
+export async function createCustomerChargeType(formData: FormData) {
+  const user = await requireAdmin();
+  await ensureCompanyCatalogs(user.companyId);
+
+  const name = requiredString(formData, "name");
+  const calculationMethod = parseCalculationMethod(formData);
+  const sortOrder = parseSortOrder(formData);
+
+  await prisma.customerChargeType.create({
+    data: {
+      companyId: user.companyId,
+      name,
+      calculationMethod,
+      sortOrder,
+      active: true,
+      isSystem: false
+    }
+  });
+
+  revalidateAdminCatalogs();
+}
+
+export async function updateCustomerChargeType(formData: FormData) {
+  const user = await requireAdmin();
+  const id = requiredString(formData, "id");
+  const name = requiredString(formData, "name");
+  const calculationMethod = parseCalculationMethod(formData);
+  const sortOrder = parseSortOrder(formData);
+  const active = formData.get("active") === "on" || formData.get("active") === "true";
+
+  const existing = await prisma.customerChargeType.findFirst({
+    where: { id, companyId: user.companyId }
+  });
+  if (!existing) {
+    throw new Error("Charge type not found.");
+  }
+
+  await prisma.customerChargeType.update({
+    where: { id },
+    data: {
+      name,
+      calculationMethod,
+      sortOrder,
+      active
+    }
+  });
+
+  revalidateAdminCatalogs();
+}
+
+export async function deleteCustomerChargeType(formData: FormData) {
+  const user = await requireAdmin();
+  const id = requiredString(formData, "id");
+
+  const existing = await prisma.customerChargeType.findFirst({
+    where: { id, companyId: user.companyId },
+    include: { _count: { select: { charges: true } } }
+  });
+  if (!existing) {
+    throw new Error("Charge type not found.");
+  }
+
+  if (existing.isSystem) {
+    throw new Error("System charge types cannot be deleted. Deactivate them instead.");
+  }
+
+  if (existing._count.charges > 0) {
+    throw new Error("This charge type is in use. Deactivate it instead of deleting.");
+  }
+
+  await prisma.customerChargeType.delete({ where: { id } });
+  revalidateAdminCatalogs();
+}
+
+export async function toggleCustomerChargeTypeActive(formData: FormData) {
+  const user = await requireAdmin();
+  const id = requiredString(formData, "id");
+  const existing = await prisma.customerChargeType.findFirst({
+    where: { id, companyId: user.companyId }
+  });
+  if (!existing) {
+    throw new Error("Charge type not found.");
+  }
+
+  await prisma.customerChargeType.update({
+    where: { id },
+    data: { active: !existing.active }
+  });
+
+  revalidateAdminCatalogs();
+}

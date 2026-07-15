@@ -1,6 +1,7 @@
 import "dotenv/config";
 import { randomBytes, scryptSync } from "crypto";
 import { PrismaClient } from "@prisma/client";
+import { ensureCompanyCatalogs } from "../lib/catalogs";
 import { ensureDefaultCommissionProfile, recalculateLoadCommission } from "../lib/commission";
 import {
   assertKnownBranch,
@@ -344,6 +345,7 @@ async function importLoad(
   branchContexts: Map<string, BranchContext>,
   customerCache: Map<string, string>,
   carrierCache: Map<string, string>,
+  flatRateChargeTypeId: string,
   summary: ImportSummary
 ) {
   const loadNumber = row["Load ID"]?.trim();
@@ -471,9 +473,13 @@ async function importLoad(
       stops: { create: stopCreates },
       charges: {
         create: {
-          label: "Linehaul",
-          chargeType: "Linehaul",
-          amountCents: revenueCents
+          lineTypeId: flatRateChargeTypeId,
+          label: "Flat Rate",
+          chargeType: "Flat Rate",
+          unitRateCents: revenueCents,
+          quantity: 1,
+          amountCents: revenueCents,
+          sortOrder: 0
         }
       },
       notes: notes.length ? { create: notes } : undefined,
@@ -560,12 +566,27 @@ async function main() {
   }
 
   const { company, branchContexts } = await setupOrg(summary);
+  await ensureCompanyCatalogs(company.id, prisma);
+  const flatRateType = await prisma.customerChargeType.findFirst({
+    where: { companyId: company.id, name: "Flat Rate" }
+  });
+  if (!flatRateType) {
+    throw new Error("Flat Rate customer charge type missing after catalog ensure.");
+  }
   const customerCache = new Map<string, string>();
   const carrierCache = new Map<string, string>();
 
   for (const row of rows) {
     try {
-      await importLoad(row, company.id, branchContexts, customerCache, carrierCache, summary);
+      await importLoad(
+        row,
+        company.id,
+        branchContexts,
+        customerCache,
+        carrierCache,
+        flatRateType.id,
+        summary
+      );
     } catch (error) {
       const message = error instanceof Error ? error.message : String(error);
       summary.warnings.push(`Load ${row["Load ID"]}: ${message}`);
