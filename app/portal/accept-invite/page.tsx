@@ -1,7 +1,8 @@
 import { redirect } from "next/navigation";
-import { getPortalViewer, portalAcceptInvite } from "@/lib/portal-auth";
-import { prisma } from "@/lib/db";
 import { createHash } from "crypto";
+import { portalAcceptInvite } from "@/lib/portal-auth-actions";
+import { getPortalViewer } from "@/lib/portal-auth";
+import { prisma } from "@/lib/db";
 
 function hashToken(token: string) {
   return createHash("sha256").update(token).digest("hex");

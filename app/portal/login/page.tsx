@@ -1,6 +1,7 @@
 import Link from "next/link";
 import { redirect } from "next/navigation";
-import { getPortalViewer, portalLogin } from "@/lib/portal-auth";
+import { portalLogin } from "@/lib/portal-auth-actions";
+import { getPortalViewer } from "@/lib/portal-auth";
 
 export default async function PortalLoginPage({
   searchParams
