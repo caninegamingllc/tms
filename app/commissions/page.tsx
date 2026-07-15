@@ -8,7 +8,7 @@ import { TileBoard, Tile } from "@/components/tile-board";
 import { syncMissingCommissions, syncStalePayableCommissions } from "@/lib/commission";
 import { getBranchScope } from "@/lib/branch-filter-server";
 import { buildCommissionWhere, parseCommissionSearchParams } from "@/lib/commission-search";
-import { requireTmsAccess } from "@/lib/permissions";
+import { requirePlanFeature } from "@/lib/permissions";
 import { canManageUsers, canSettleCommission } from "@/lib/scope";
 import { prisma } from "@/lib/db";
 import { commissionMethodLabel, formatDate, formatMoney, humanize } from "@/lib/format";
@@ -20,7 +20,7 @@ export default async function CommissionsPage({
 }: {
   searchParams: Promise<Record<string, string | string[] | undefined>>;
 }) {
-  const user = await requireTmsAccess();
+  const user = await requirePlanFeature("commissions");
   const params = await searchParams;
   const filters = parseCommissionSearchParams(params);
 

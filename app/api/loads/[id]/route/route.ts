@@ -3,6 +3,7 @@ import { getCurrentUser } from "@/lib/auth";
 import { prisma } from "@/lib/db";
 import { getLoadRoute } from "@/lib/load-route";
 import { canAccessRecord } from "@/lib/branch-filter-server";
+import { planHasFeature } from "@/lib/plans";
 import { isRateLimited } from "@/lib/rate-limit";
 
 const RATE_LIMIT_WINDOW_MS = 60_000;
@@ -15,6 +16,10 @@ export async function GET(
   const user = await getCurrentUser();
   if (!user) {
     return NextResponse.json({ error: "Unauthorized" }, { status: 401 });
+  }
+
+  if (!planHasFeature(user.plan, "route_map")) {
+    return NextResponse.json({ error: "Route maps require Premium." }, { status: 403 });
   }
 
   const { id } = await context.params;

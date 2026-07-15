@@ -40,7 +40,7 @@ import {
 } from "@/lib/commission-actions";
 import { recalculateLoadCommission } from "@/lib/commission";
 import { toDocumentTableRows } from "@/lib/document-rows";
-import { requireTmsAccess } from "@/lib/permissions";
+import { requireTmsAccess, userHasPlanFeature } from "@/lib/permissions";
 import { canAccessRecord, getBranchScope } from "@/lib/branch-filter-server";
 import { canManageUsers, canPickBranch, canSettleCommission, canWrite, isAdminRole } from "@/lib/scope";
 import { expenseTypes, loadStatuses } from "@/lib/constants";
@@ -254,6 +254,20 @@ export default async function LoadDetailPage({
 
   const publicNotes = load.notes.filter((note) => !isPrivateLoadNote(note));
   const privateNotes = load.notes.filter((note) => isPrivateLoadNote(note));
+  const canNotes = userHasPlanFeature(user, "load_notes");
+  const canRoute = userHasPlanFeature(user, "route_map");
+  const canDocs = userHasPlanFeature(user, "documents_upload");
+  const canEmail = userHasPlanFeature(user, "email_ops");
+  const canCommission = userHasPlanFeature(user, "commissions");
+  const canDelete = userHasPlanFeature(user, "delete_loads");
+  const canAccounting = userHasPlanFeature(user, "accounting_ar_ap");
+  const detailTiles = LOAD_DETAIL_TILES.filter((tile) => {
+    if (tile.id === "route-map") return canRoute;
+    if (tile.id === "documents") return canDocs;
+    if (tile.id === "email") return canEmail;
+    if (tile.id === "commission") return canCommission;
+    return true;
+  });
 
   return (
     <>
@@ -264,7 +278,7 @@ export default async function LoadDetailPage({
           canWrite(user) ? (
             <>
               <CloneLoadButton loadId={load.id} loadNumber={load.loadNumber} />
-              <DeleteLoadButton loadId={load.id} loadNumber={load.loadNumber} />
+              {canDelete ? <DeleteLoadButton loadId={load.id} loadNumber={load.loadNumber} /> : null}
             </>
           ) : undefined
         }
@@ -288,7 +302,7 @@ export default async function LoadDetailPage({
         </div>
       ) : null}
 
-      {!mailbox ? (
+      {!mailbox && canEmail ? (
         <div className="mb-4 rounded-lg border border-amber-200 bg-amber-50 p-3 text-sm text-amber-800">
           Connect your mailbox in{" "}
           <a href="/settings/email" className="font-semibold underline">
@@ -298,7 +312,7 @@ export default async function LoadDetailPage({
         </div>
       ) : null}
 
-      <TileBoard pageId="load-detail" tiles={LOAD_DETAIL_TILES} initialLayouts={layouts ?? null}>
+      <TileBoard pageId="load-detail" tiles={detailTiles} initialLayouts={layouts ?? null}>
         <Tile id="summary">
           <div className="grid gap-8">
             <LoadDetailsEditor
@@ -376,6 +390,7 @@ export default async function LoadDetailPage({
               </div>
             </div>
 
+            {canNotes ? (
             <div className="grid gap-3 border-t border-border pt-6">
               <div>
                 <h3 className="font-semibold text-foreground">Notes</h3>
@@ -458,7 +473,9 @@ export default async function LoadDetailPage({
                 </div>
               </div>
             </div>
+            ) : null}
 
+            {canAccounting ? (
             <div className="grid gap-3 border-t border-border pt-6">
               <h3 className="font-semibold text-foreground">Accounting</h3>
               <div className="grid gap-3">
@@ -517,6 +534,7 @@ export default async function LoadDetailPage({
                 })}
               </div>
             </div>
+            ) : null}
           </div>
         </Tile>
 
@@ -536,9 +554,11 @@ export default async function LoadDetailPage({
           </form>
         </Tile>
 
+        {canRoute ? (
         <Tile id="route-map">
           <LoadRoutePanel loadId={load.id} />
         </Tile>
+        ) : null}
 
         <Tile id="rate-terms">
           <p className="muted">
@@ -578,6 +598,7 @@ export default async function LoadDetailPage({
           )}
         </Tile>
 
+        {canDocs ? (
         <Tile id="documents">
           <div className="flex flex-wrap items-start justify-between gap-4">
             <div>
@@ -663,7 +684,9 @@ export default async function LoadDetailPage({
             />
           </div>
         </Tile>
+        ) : null}
 
+        {canEmail ? (
         <Tile id="email">
           <div className="flex flex-wrap items-start justify-between gap-4">
             <div>
@@ -711,6 +734,7 @@ export default async function LoadDetailPage({
             )}
           </div>
         </Tile>
+        ) : null}
 
         <Tile id="carrier">
           <p className="muted">
@@ -794,6 +818,7 @@ export default async function LoadDetailPage({
           </Tile>
         ) : null}
 
+        {canCommission ? (
         <Tile id="commission">
           <p className="muted">
             Branch: {load.branch?.name ?? "Unassigned"} — payable once the customer has paid.
@@ -898,6 +923,7 @@ export default async function LoadDetailPage({
             </button>
           </form>
         </Tile>
+        ) : null}
 
         <Tile id="activity">
           {canWrite(user) ? (

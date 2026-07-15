@@ -105,8 +105,8 @@ export const ADMIN_TILES: TileDefinition[] = [
 ];
 
 export const ADMIN_BILLING_TILES: TileDefinition[] = [
-  { id: "seat-summary", title: "Seat Summary", minW: 3, minH: 4, default: { x: 0, y: 0, w: 4, h: 8 } },
-  { id: "purchase", title: "Purchase Seats", minW: 3, minH: 4, default: { x: 4, y: 0, w: 4, h: 10 } },
+  { id: "seat-summary", title: "Plan Summary", minW: 3, minH: 4, default: { x: 0, y: 0, w: 4, h: 8 } },
+  { id: "purchase", title: "Choose Plan", minW: 3, minH: 4, default: { x: 4, y: 0, w: 4, h: 10 } },
   { id: "assign", title: "Assign Seats", minW: 3, minH: 4, default: { x: 8, y: 0, w: 4, h: 10 } }
 ];
 

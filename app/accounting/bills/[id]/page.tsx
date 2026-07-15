@@ -5,7 +5,7 @@ import { PageHeader } from "@/components/page-header";
 import { updateCarrierBill } from "@/lib/actions";
 import { buildDefaultCarrierBillForm } from "@/lib/carrier-bill-form";
 import { resolveCarrierApPayee } from "@/lib/accounting-payee";
-import { requireTmsAccess } from "@/lib/permissions";
+import { requirePlanFeature } from "@/lib/permissions";
 import { canAccessRecord } from "@/lib/branch-filter-server";
 import { prisma } from "@/lib/db";
 
@@ -14,7 +14,7 @@ export default async function EditCarrierBillPage({
 }: {
   params: Promise<{ id: string }>;
 }) {
-  const user = await requireTmsAccess();
+  const user = await requirePlanFeature("accounting_ar_ap");
   const { id } = await params;
 
   const bill = await prisma.carrierBill.findUnique({

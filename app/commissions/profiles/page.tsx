@@ -4,11 +4,13 @@ import { PageHeader } from "@/components/page-header";
 import { TileBoard, Tile } from "@/components/tile-board";
 import { assignBranchCommissionProfile, createCommissionProfile, updateCommissionProfile } from "@/lib/commission-actions";
 import { requireAdmin } from "@/lib/auth";
+import { requirePlanFeature } from "@/lib/permissions";
 import { prisma } from "@/lib/db";
 import { COMMISSION_PROFILES_TILES } from "@/lib/tile-defaults";
 import { loadPageLayouts } from "@/lib/ui-preferences-load";
 
 export default async function CommissionProfilesPage() {
+  await requirePlanFeature("commissions");
   const user = await requireAdmin();
 
   const [profiles, branches, layouts] = await Promise.all([

@@ -1,23 +1,34 @@
-# Stripe Seat Billing Setup
+# Stripe Plan Billing Setup
 
-This TMS bills per organization for seats at **$25/seat/month** via Stripe.
+This TMS bills per organization for **subscription plans**:
+
+| Plan | Price | Seats |
+|------|-------|-------|
+| Free | $0 | 1 |
+| Lite | $20/month | up to 5 |
+| Premium | $60/month | unlimited (stored as 999) |
+
+Feature access is controlled by `SeatSubscription.plan` (`FREE` | `LITE` | `PREMIUM`). See `lib/plans.ts`.
 
 ## Dashboard setup
 
-1. Create a **Product** named `TMS Seat`.
-2. Add a recurring **Price** at `$25.00` / month with per-unit billing (quantity = number of seats).
-3. Copy the Price ID into `STRIPE_SEAT_PRICE_ID`.
-4. Create a **Coupon** with 100% off (duration: forever or repeating).
-5. Create a **Promotion code** from that coupon (recommended dev code: `DEV100`).
+1. Create products **TMS Lite** and **TMS Premium**.
+2. Add recurring monthly Prices: **$20.00** (Lite) and **$60.00** (Premium).
+3. Copy Price IDs into:
+   - `STRIPE_LITE_PRICE_ID`
+   - `STRIPE_PREMIUM_PRICE_ID`
+4. (Optional) Keep a legacy per-seat Price as `STRIPE_SEAT_PRICE_ID` — existing subscriptions on that price map to Premium and keep their seat quantity.
+5. Create a **Coupon** with 100% off and a promotion code (e.g. `DEV100` / `tms100`).
 6. Add API keys to `.env`:
    - `STRIPE_SECRET_KEY`
    - `NEXT_PUBLIC_STRIPE_PUBLISHABLE_KEY`
-   - `STRIPE_SEAT_PRICE_ID`
-   - `STRIPE_DEV_PROMO_CODE=DEV100` (optional default for checkout)
+   - `STRIPE_LITE_PRICE_ID`
+   - `STRIPE_PREMIUM_PRICE_ID`
+   - `STRIPE_DEV_PROMO_CODE` (optional)
+   - `STRIPE_WEBHOOK_SECRET`
 7. Configure a webhook endpoint:
    - URL: `{APP_BASE_URL}/api/stripe/webhook`
    - Events: `checkout.session.completed`, `customer.subscription.updated`, `customer.subscription.deleted`, `invoice.payment_failed`
-   - Copy the signing secret to `STRIPE_WEBHOOK_SECRET`
 
 ## Local webhook testing
 
@@ -29,8 +40,8 @@ Use the signing secret printed by the Stripe CLI in `STRIPE_WEBHOOK_SECRET` whil
 
 ## Behavior
 
-- Seats are purchased per organization and stored on `SeatSubscription.seatQuantity`.
-- Admins assign seats to members in **Admin**.
-- Operational TMS pages require an assigned seat.
+- New companies start on **Free** with one seat assigned to the owner.
+- Admins upgrade to Lite or Premium from **Admin → Billing**.
+- Seat counts and feature gates follow the plan (nav, pages, and server actions).
+- Canceling a paid Stripe subscription returns the org to Free (1 seat); excess seats are unassigned.
 - Admin and Billing remain available to owners/admins without a seat.
-- Invites to existing accounts are allowed; accepting auto-assigns a seat when one is available.

@@ -11,7 +11,7 @@ import { TileBoard, Tile } from "@/components/tile-board";
 import { createInvoice, generateCustomerInvoice } from "@/lib/actions";
 import { recomputeOverdueStatuses } from "@/lib/accounting-actions";
 import { getBranchScope } from "@/lib/branch-filter-server";
-import { requireTmsAccess } from "@/lib/permissions";
+import { requirePlanFeature } from "@/lib/permissions";
 import { paymentStatuses } from "@/lib/constants";
 import { prisma } from "@/lib/db";
 import { formatMoney, humanize } from "@/lib/format";
@@ -65,7 +65,7 @@ export default async function AccountingPage({
     billSaved?: string;
   }>;
 }) {
-  const user = await requireTmsAccess();
+  const user = await requirePlanFeature("accounting_ar_ap");
   const params = await searchParams;
   const tab = resolveTab(params.tab);
   const loadScope = await getBranchScope(user);

@@ -13,7 +13,7 @@ import {
 import { getBranchScope } from "@/lib/branch-filter-server";
 import { isSearchSubmitted } from "@/lib/list-search";
 import { parsePaginationParams } from "@/lib/pagination";
-import { requireTmsAccess } from "@/lib/permissions";
+import { requirePlanFeature } from "@/lib/permissions";
 import { prisma } from "@/lib/db";
 import { formatDate, humanize } from "@/lib/format";
 import { LIST_SEARCH_ADD_TILES } from "@/lib/tile-defaults";
@@ -29,7 +29,7 @@ export default async function LocationsPage({
 }: {
   searchParams: Promise<Record<string, string | string[] | undefined>>;
 }) {
-  const user = await requireTmsAccess();
+  const user = await requirePlanFeature("locations");
   const params = await searchParams;
   const { saved, ...filterParams } = params;
   const filters = parseLocationSearchParams(filterParams);

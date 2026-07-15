@@ -32,6 +32,7 @@ import {
   X
 } from "lucide-react";
 import type { CurrentUser } from "@/lib/auth";
+import { NAV_FEATURE_REQUIREMENTS, planHasFeature } from "@/lib/plans";
 import { canManageUsers } from "@/lib/scope";
 import { canAccessAdmin } from "@/lib/seats";
 import { OrgSwitcher } from "@/components/org-switcher";
@@ -46,6 +47,8 @@ type NavItem = {
   label: string;
   icon: ComponentType<{ className?: string }>;
   adminOnly?: boolean;
+  /** When set, item is hidden unless the org plan includes this feature. */
+  feature?: import("@/lib/plans").PlanFeature;
 };
 
 type NavGroup = {
@@ -63,8 +66,8 @@ const navGroups: NavGroup[] = [
     items: [
       { href: "/", label: "Dashboard", icon: LayoutDashboard },
       { href: "/loads", label: "Loads", icon: Truck },
-      { href: "/search", label: "Search", icon: Search },
-      { href: "/dispatch", label: "Dispatch", icon: Gauge }
+      { href: "/search", label: "Search", icon: Search, feature: "search" },
+      { href: "/dispatch", label: "Dispatch", icon: Gauge, feature: "dispatch" }
     ]
   },
   {
@@ -74,7 +77,7 @@ const navGroups: NavGroup[] = [
     items: [
       { href: "/customers", label: "Customers", icon: Building2 },
       { href: "/carriers", label: "Carriers", icon: ShieldCheck },
-      { href: "/locations", label: "Locations", icon: MapPin }
+      { href: "/locations", label: "Locations", icon: MapPin, feature: "locations" }
     ]
   },
   {
@@ -82,11 +85,17 @@ const navGroups: NavGroup[] = [
     label: "Records",
     icon: FileText,
     items: [
-      { href: "/documents", label: "Documents", icon: FileText },
-      { href: "/accounting", label: "Accounting", icon: Landmark },
-      { href: "/commissions", label: "Commissions", icon: Percent },
-      { href: "/commissions/profiles", label: "Commission Profiles", icon: Percent, adminOnly: true },
-      { href: "/reports", label: "Reports", icon: BarChart3 }
+      { href: "/documents", label: "Documents", icon: FileText, feature: "documents_upload" },
+      { href: "/accounting", label: "Accounting", icon: Landmark, feature: "accounting_ar_ap" },
+      { href: "/commissions", label: "Commissions", icon: Percent, feature: "commissions" },
+      {
+        href: "/commissions/profiles",
+        label: "Commission Profiles",
+        icon: Percent,
+        adminOnly: true,
+        feature: "commissions"
+      },
+      { href: "/reports", label: "Reports", icon: BarChart3, feature: "reports_summary" }
     ]
   },
   {
@@ -95,10 +104,21 @@ const navGroups: NavGroup[] = [
     icon: Settings,
     items: [
       { href: "/admin", label: "Admin", icon: Settings, adminOnly: true },
-      { href: "/admin/accounting", label: "Accounting Settings", icon: Landmark, adminOnly: true },
+      {
+        href: "/admin/accounting",
+        label: "Accounting Settings",
+        icon: Landmark,
+        adminOnly: true,
+        feature: "factoring_admin"
+      },
       { href: "/admin/billing", label: "Billing", icon: Landmark, adminOnly: true },
-      { href: "/integrations", label: "Integrations", icon: Plug },
-      { href: "/settings/email", label: "Email settings", icon: FileText }
+      {
+        href: "/integrations",
+        label: "Integrations",
+        icon: Plug,
+        feature: "marketplace_integrations"
+      },
+      { href: "/settings/email", label: "Email settings", icon: FileText, feature: "email_mailbox" }
     ]
   }
 ];
@@ -421,10 +441,17 @@ export function AppShell({
 
   const visibleGroups = useMemo(() => {
     const canAdmin = Boolean(currentUser && canManageUsers(currentUser));
+    const plan = currentUser?.plan ?? "FREE";
     return navGroups
       .map((group) => ({
         ...group,
-        items: group.items.filter((item) => !item.adminOnly || canAdmin)
+        items: group.items.filter((item) => {
+          if (item.adminOnly && !canAdmin) return false;
+          const required =
+            item.feature ?? NAV_FEATURE_REQUIREMENTS[item.href];
+          if (required && !planHasFeature(plan, required)) return false;
+          return true;
+        })
       }))
       .filter((group) => group.items.length > 0);
   }, [currentUser]);

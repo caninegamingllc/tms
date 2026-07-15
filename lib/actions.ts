@@ -7,7 +7,9 @@ import { prisma } from "@/lib/db";
 import type { SessionUser } from "@/lib/types";
 import { canAccessRecord } from "@/lib/branch-filter-server";
 import { resolveBranchId } from "@/lib/scope";
-import { requireWriteUser } from "@/lib/permissions";
+import { assertPlanFeature, requireWriteUser } from "@/lib/permissions";
+import { getPlan } from "@/lib/plans";
+import { getCompanyPlan } from "@/lib/seats";
 import { documentTitle, isPrivateLoadNote } from "@/lib/document-templates";
 import {
   getCompanyBranding,
@@ -426,6 +428,7 @@ export async function updateCustomerRateConfirmationTerms(formData: FormData) {
 
 export async function addCustomerActivityNote(formData: FormData) {
   const user = await requireWriteUser();
+  await assertPlanFeature(user.companyId, "crm_documents_activity");
   const customerId = requiredString(formData, "customerId");
   const body = requiredString(formData, "body");
   await requireCompanyCustomer(customerId, user);
@@ -451,6 +454,7 @@ export async function createCarrier(formData: FormData) {
   const dotNumberNormalized = normalizeCarrierNumber(dotNumber);
   const factoringCompanyId = optionalString(formData, "factoringCompanyId");
   if (factoringCompanyId) {
+    await assertPlanFeature(user.companyId, "factoring_assignment");
     await prisma.factoringCompany.findUniqueOrThrow({
       where: { id: factoringCompanyId, companyId: user.companyId }
     });
@@ -542,6 +546,7 @@ export async function updateCarrier(formData: FormData) {
 
   const factoringCompanyId = optionalString(formData, "factoringCompanyId");
   if (factoringCompanyId) {
+    await assertPlanFeature(user.companyId, "factoring_assignment");
     await prisma.factoringCompany.findUniqueOrThrow({
       where: { id: factoringCompanyId, companyId: user.companyId }
     });
@@ -646,6 +651,7 @@ export async function updateCarrier(formData: FormData) {
 
 export async function addCarrierActivityNote(formData: FormData) {
   const user = await requireWriteUser();
+  await assertPlanFeature(user.companyId, "crm_documents_activity");
   const carrierId = requiredString(formData, "carrierId");
   const body = requiredString(formData, "body");
   await requireCompanyCarrier(carrierId, user.companyId);
@@ -787,6 +793,23 @@ export async function updateFacility(formData: FormData) {
 
 export async function createLoad(formData: FormData) {
   const user = await requireWriteUser();
+  await assertPlanFeature(user.companyId, "loads_create");
+
+  const plan = getPlan(await getCompanyPlan(user.companyId));
+  if (plan.monthlyLoadCap != null) {
+    const monthStart = new Date();
+    monthStart.setUTCDate(1);
+    monthStart.setUTCHours(0, 0, 0, 0);
+    const createdThisMonth = await prisma.load.count({
+      where: { companyId: user.companyId, createdAt: { gte: monthStart } }
+    });
+    if (createdThisMonth >= plan.monthlyLoadCap) {
+      throw new Error(
+        `Free plan allows ${plan.monthlyLoadCap} loads per month. Upgrade to Lite or Premium for unlimited loads.`
+      );
+    }
+  }
+
   const customerId = requiredString(formData, "customerId");
   await requireCompanyCustomer(customerId, user);
   const branchId = await resolveBranchId(user, optionalString(formData, "branchId"), prisma);
@@ -1145,6 +1168,11 @@ export async function updateLoadStatus(formData: FormData) {
   const status = requiredString(formData, "status");
   await requireCompanyLoad(loadId, user);
 
+  const fullStatuses = new Set(["INVOICED", "PAID", "CANCELED"]);
+  if (fullStatuses.has(status)) {
+    await assertPlanFeature(user.companyId, "loads_full_status");
+  }
+
   await prisma.load.update({
     where: { id: loadId },
     data: {
@@ -1174,6 +1202,7 @@ export async function updateLoadStatus(formData: FormData) {
 
 export async function addLoadNote(formData: FormData) {
   const user = await requireWriteUser();
+  await assertPlanFeature(user.companyId, "load_notes");
   const loadId = requiredString(formData, "loadId");
   const body = requiredString(formData, "body");
   const visibility = String(formData.get("visibility") ?? "public").trim().toLowerCase();
@@ -1204,6 +1233,7 @@ export async function addLoadNote(formData: FormData) {
 
 export async function addLoadActivityNote(formData: FormData) {
   const user = await requireWriteUser();
+  await assertPlanFeature(user.companyId, "load_notes");
   const loadId = requiredString(formData, "loadId");
   const body = requiredString(formData, "body");
   await requireCompanyLoad(loadId, user);
@@ -1247,6 +1277,7 @@ export async function updateLoadRateConfirmationTerms(formData: FormData) {
 
 export async function deleteLoad(formData: FormData) {
   const user = await requireWriteUser();
+  await assertPlanFeature(user.companyId, "delete_loads");
   const loadId = requiredString(formData, "loadId");
   await requireCompanyLoad(loadId, user);
 
@@ -1537,6 +1568,7 @@ function revalidateDocumentPaths(
 
 export async function uploadDocument(formData: FormData) {
   const user = await requireWriteUser();
+  await assertPlanFeature(user.companyId, "documents_upload");
   const loadId = optionalString(formData, "loadId");
   const customerId = optionalString(formData, "customerId");
   const carrierId = optionalString(formData, "carrierId");
@@ -1721,6 +1753,7 @@ export async function addDocument(formData: FormData) {
 
 export async function generateRateConfirmation(formData: FormData) {
   const user = await requireWriteUser();
+  await assertPlanFeature(user.companyId, "generate_rate_con");
   const loadId = requiredString(formData, "loadId");
   const load = await loadForDocument(loadId, user);
 
@@ -1769,6 +1802,7 @@ export async function generateRateConfirmation(formData: FormData) {
 
 export async function generateBillOfLading(formData: FormData) {
   const user = await requireWriteUser();
+  await assertPlanFeature(user.companyId, "generate_bol");
   const loadId = requiredString(formData, "loadId");
   const load = await loadForDocument(loadId, user);
   const documentNumber = `BOL-${load.loadNumber}`;
@@ -1812,6 +1846,7 @@ export async function generateBillOfLading(formData: FormData) {
 
 export async function generateCustomerInvoice(formData: FormData) {
   const user = await requireWriteUser();
+  await assertPlanFeature(user.companyId, "generate_invoice_pdf");
   const loadId = requiredString(formData, "loadId");
   const load = await loadForDocument(loadId, user);
   const invoiceNumber = await nextInvoiceNumber(user.companyId);
@@ -1876,6 +1911,7 @@ export async function generateCustomerInvoice(formData: FormData) {
 
 export async function createInvoice(formData: FormData) {
   const user = await requireWriteUser();
+  await assertPlanFeature(user.companyId, "accounting_ar_ap");
   const loadId = requiredString(formData, "loadId");
   const load = await requireCompanyLoad(loadId, user);
   const totalCents = parseMoneyToCents(formData.get("total"));
@@ -1902,6 +1938,7 @@ export async function createInvoice(formData: FormData) {
 
 export async function createCarrierBill(formData: FormData) {
   const user = await requireWriteUser();
+  await assertPlanFeature(user.companyId, "accounting_ar_ap");
   const loadId = requiredString(formData, "loadId");
   const carrierId = requiredString(formData, "carrierId");
   await requireCompanyLoad(loadId, user);

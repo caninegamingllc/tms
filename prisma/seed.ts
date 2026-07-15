@@ -151,6 +151,7 @@ async function main() {
   await prisma.seatSubscription.create({
     data: {
       companyId: company.id,
+      plan: "PREMIUM",
       seatQuantity: 2,
       status: "ACTIVE"
     }

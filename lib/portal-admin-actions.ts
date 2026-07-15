@@ -6,7 +6,7 @@ import { appBaseUrl } from "@/lib/app-url";
 import { canAccessRecord } from "@/lib/branch-filter-server";
 import { prisma } from "@/lib/db";
 import { sendPortalInviteEmail } from "@/lib/mail";
-import { requireWriteUser } from "@/lib/permissions";
+import { assertPlanFeature, requireWriteUser } from "@/lib/permissions";
 import { createPortalRawToken, hashPortalToken } from "@/lib/portal-auth";
 
 const INVITE_DAYS = 7;
@@ -26,6 +26,7 @@ function requiredString(formData: FormData, key: string) {
 
 async function requireAccessibleCustomer(customerId: string) {
   const user = await requireWriteUser();
+  await assertPlanFeature(user.companyId, "customer_portal");
   const customer = await prisma.customer.findFirst({
     where: { id: customerId, companyId: user.companyId },
     include: { company: { select: { name: true } } }

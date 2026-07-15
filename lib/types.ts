@@ -1,9 +1,12 @@
+import type { PlanId } from "@/lib/plans";
+
 export type OrganizationSummary = {
   membershipId: string;
   companyId: string;
   companyName: string;
   role: string;
   hasSeat: boolean;
+  plan: PlanId;
 };
 
 export type SessionUser = {
@@ -19,5 +22,6 @@ export type SessionUser = {
   branchId: string | null;
   branchIds: string[];
   hasSeat: boolean;
+  plan: PlanId;
   organizations: OrganizationSummary[];
 };

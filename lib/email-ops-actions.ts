@@ -6,7 +6,9 @@ import { redirect } from "next/navigation";
 import { prisma } from "@/lib/db";
 import type { SessionUser } from "@/lib/types";
 import { canAccessRecord } from "@/lib/branch-filter-server";
-import { requireWriteUser } from "@/lib/permissions";
+import { requireWriteUser, assertPlanFeature } from "@/lib/permissions";
+import { planHasFeature } from "@/lib/plans";
+import { getCompanyPlan } from "@/lib/seats";
 import {
   buildPodRequestEmail,
   defaultEmailMessage,
@@ -477,6 +479,7 @@ async function regenerateInvoiceDocument(
 
 export async function sendPreparedEmail(formData: FormData) {
   const user = await requireWriteUser();
+  await assertPlanFeature(user.companyId, "email_ops");
   const loadId = String(formData.get("loadId") ?? "").trim();
   const purpose = String(formData.get("purpose") ?? "").trim() as EmailPurpose;
   const to = String(formData.get("to") ?? "").trim();
@@ -493,10 +496,13 @@ export async function sendPreparedEmail(formData: FormData) {
   const invoiceId = ensured.invoiceId;
 
   if (purpose === "INVOICE" && invoiceId) {
-    const { feesApplied } = await applyLateFeesForInvoiceSend({ loadId, invoiceId });
-    if (feesApplied > 0) {
-      load = await loadForEmail(loadId, user);
-      document = await regenerateInvoiceDocument(load, user, document);
+    const plan = await getCompanyPlan(user.companyId);
+    if (planHasFeature(plan, "late_fees")) {
+      const { feesApplied } = await applyLateFeesForInvoiceSend({ loadId, invoiceId });
+      if (feesApplied > 0) {
+        load = await loadForEmail(loadId, user);
+        document = await regenerateInvoiceDocument(load, user, document);
+      }
     }
   }
 
@@ -655,6 +661,7 @@ export async function emailPodRequest(formData: FormData) {
 
 export async function generateCustomerLoadConfirmation(formData: FormData) {
   const user = await requireWriteUser();
+  await assertPlanFeature(user.companyId, "generate_load_con");
   const loadId = String(formData.get("loadId") ?? "").trim();
   const load = await loadForEmail(loadId, user);
   const documentNumber = await nextDocumentNumber(user.companyId, "CLC");

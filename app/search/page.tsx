@@ -13,7 +13,7 @@ import { SearchPrompt } from "@/components/search-prompt";
 import { ServerPagination } from "@/components/server-pagination";
 import { TileBoard, Tile } from "@/components/tile-board";
 import { getBranchScope } from "@/lib/branch-filter-server";
-import { requireTmsAccess } from "@/lib/permissions";
+import { requirePlanFeature } from "@/lib/permissions";
 import { isSearchSubmitted } from "@/lib/list-search";
 import {
   describeActiveFilters,
@@ -32,7 +32,7 @@ type SearchPageProps = {
 };
 
 export default async function SearchPage({ searchParams }: SearchPageProps) {
-  const user = await requireTmsAccess();
+  const user = await requirePlanFeature("search");
   const resolvedSearchParams = await searchParams;
   const filters = parseLoadSearchParams(resolvedSearchParams);
   const pagination = parsePaginationParams(resolvedSearchParams);

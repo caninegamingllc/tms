@@ -15,13 +15,15 @@ export function AdminConsole({
   branches,
   currentUserId,
   currentUserRole,
-  seatAvailable
+  seatAvailable,
+  canInvite = true
 }: {
   users: AdminUserRow[];
   branches: BranchOption[];
   currentUserId: string;
   currentUserRole: string;
   seatAvailable: number;
+  canInvite?: boolean;
 }) {
   const [selectedMembershipId, setSelectedMembershipId] = useState<string | null>(
     users[0]?.membershipId ?? null
@@ -37,14 +39,17 @@ export function AdminConsole({
           <h2 className="section-title">Users</h2>
           <p className="muted">
             {users.length} team member{users.length === 1 ? "" : "s"}. Select a user to edit their access and branches.
+            {!canInvite ? " Upgrade to Lite or Premium to invite teammates." : null}
           </p>
         </div>
-        <button type="button" className="btn" onClick={() => setShowInvite((current) => !current)}>
-          {showInvite ? "Close Invite Form" : "Invite User"}
-        </button>
+        {canInvite ? (
+          <button type="button" className="btn" onClick={() => setShowInvite((current) => !current)}>
+            {showInvite ? "Close Invite Form" : "Invite User"}
+          </button>
+        ) : null}
       </div>
 
-      {showInvite ? (
+      {showInvite && canInvite ? (
         <section className="card">
           <h3 className="section-title">Invite User</h3>
           <p className="muted">Send an invite email so the user can set their password and join your organization.</p>

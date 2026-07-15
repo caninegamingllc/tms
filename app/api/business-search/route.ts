@@ -8,6 +8,7 @@ import {
   searchPlacesByText,
   shouldUseTextSearch
 } from "@/lib/business-search";
+import { planHasFeature } from "@/lib/plans";
 import { isRateLimited } from "@/lib/rate-limit";
 
 const RATE_LIMIT_WINDOW_MS = 60_000;
@@ -17,6 +18,10 @@ export async function GET(request: NextRequest) {
   const user = await getCurrentUser();
   if (!user) {
     return NextResponse.json({ error: "Unauthorized" }, { status: 401 });
+  }
+
+  if (!planHasFeature(user.plan, "business_search")) {
+    return NextResponse.json({ error: "Business search requires Premium." }, { status: 403 });
   }
 
   const sessionToken = request.nextUrl.searchParams.get("sessionToken")?.trim() || undefined;

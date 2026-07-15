@@ -3,7 +3,7 @@
 import { revalidatePath } from "next/cache";
 import { prisma } from "@/lib/db";
 import { requireAdmin, requireUser } from "@/lib/auth";
-import { requireWriteUser } from "@/lib/permissions";
+import { assertPlanFeature, requireWriteUser } from "@/lib/permissions";
 import { canAccessRecord } from "@/lib/branch-filter-server";
 import { canSettleCommission } from "@/lib/scope";
 import { parseMoneyToCents } from "@/lib/format";
@@ -178,6 +178,7 @@ export async function settleBranchCommission(formData: FormData) {
 
 export async function settleLoadCommission(formData: FormData) {
   const user = await requireUser();
+  await assertPlanFeature(user.companyId, "commissions");
 
   if (!canSettleCommission(user)) {
     throw new Error("You do not have permission to settle commissions.");
@@ -213,6 +214,7 @@ export async function settleLoadCommission(formData: FormData) {
 
 export async function createCommissionProfile(formData: FormData) {
   const user = await requireAdmin();
+  await assertPlanFeature(user.companyId, "commissions");
   const name = requiredString(formData, "name");
   const branchSharePercent = Number(formData.get("branchSharePercent") ?? 60);
   const companySharePercent = Number(formData.get("companySharePercent") ?? 40);
@@ -247,6 +249,7 @@ export async function createCommissionProfile(formData: FormData) {
 
 export async function updateCommissionProfile(formData: FormData) {
   const user = await requireAdmin();
+  await assertPlanFeature(user.companyId, "commissions");
   const profileId = requiredString(formData, "profileId");
   const name = requiredString(formData, "name");
   const branchSharePercent = Number(formData.get("branchSharePercent") ?? 60);

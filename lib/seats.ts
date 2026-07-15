@@ -1,10 +1,19 @@
 import { prisma } from "@/lib/db";
+import {
+  getPlan,
+  includedSeatQuantity,
+  normalizePlanId,
+  type PlanId
+} from "@/lib/plans";
 
 export type SeatSummary = {
   purchased: number;
   assigned: number;
   available: number;
   subscriptionStatus: string;
+  plan: PlanId;
+  planName: string;
+  maxSeats: number | null;
 };
 
 export function canAccessTms(membership: { seatAssignedAt: Date | null }) {
@@ -15,6 +24,14 @@ export function canAccessAdmin(role: string) {
   return role === "OWNER" || role === "ADMIN";
 }
 
+export async function getCompanyPlan(companyId: string): Promise<PlanId> {
+  const subscription = await prisma.seatSubscription.findUnique({
+    where: { companyId },
+    select: { plan: true }
+  });
+  return normalizePlanId(subscription?.plan);
+}
+
 export async function getSeatSummary(companyId: string): Promise<SeatSummary> {
   const [subscription, assigned] = await Promise.all([
     prisma.seatSubscription.findUnique({ where: { companyId } }),
@@ -23,14 +40,22 @@ export async function getSeatSummary(companyId: string): Promise<SeatSummary> {
     })
   ]);
 
-  const purchased = subscription?.seatQuantity ?? 0;
+  const plan = normalizePlanId(subscription?.plan);
+  const definition = getPlan(plan);
+  const purchased =
+    subscription?.seatQuantity && subscription.seatQuantity > 0
+      ? subscription.seatQuantity
+      : includedSeatQuantity(plan);
   const subscriptionStatus = subscription?.status ?? "NONE";
 
   return {
     purchased,
     assigned,
     available: Math.max(0, purchased - assigned),
-    subscriptionStatus
+    subscriptionStatus,
+    plan,
+    planName: definition.name,
+    maxSeats: definition.maxSeats
   };
 }
 
@@ -44,12 +69,20 @@ export async function assignSeat(membershipId: string, companyId: string) {
       tx.companyMembership.findUniqueOrThrow({ where: { id: membershipId } })
     ]);
 
-    const purchased = subscription?.seatQuantity ?? 0;
+    const plan = normalizePlanId(subscription?.plan);
+    const purchased =
+      subscription?.seatQuantity && subscription.seatQuantity > 0
+        ? subscription.seatQuantity
+        : includedSeatQuantity(plan);
     const subscriptionStatus = subscription?.status ?? "NONE";
     const available = Math.max(0, purchased - assigned);
 
     if (available <= 0) {
-      throw new Error("No available seats. Purchase more seats in Billing.");
+      throw new Error(
+        plan === "FREE"
+          ? "Free plan includes only one seat. Upgrade to Lite or Premium to add users."
+          : "No available seats. Upgrade your plan or free a seat in Admin."
+      );
     }
 
     if (subscriptionStatus === "CANCELED" || subscriptionStatus === "PAST_DUE") {
@@ -115,4 +148,40 @@ export async function autoAssignOwnerOnPurchase(companyId: string, actorMembersh
   }
 
   await tryAutoAssignSeat(actorMembershipId, companyId);
+}
+
+/** When seats shrink (e.g. Free), keep OWNER seats and drop extras. */
+export async function pruneSeatsToQuantity(companyId: string, maxSeats: number) {
+  const seated = await prisma.companyMembership.findMany({
+    where: { companyId, seatAssignedAt: { not: null }, status: { not: "INVITED" } },
+    orderBy: [{ role: "asc" }, { seatAssignedAt: "asc" }]
+  });
+
+  if (seated.length <= maxSeats) {
+    return;
+  }
+
+  const owners = seated.filter((member) => member.role === "OWNER");
+  const others = seated.filter((member) => member.role !== "OWNER");
+  const keepIds = new Set<string>();
+
+  for (const owner of owners) {
+    if (keepIds.size >= maxSeats) break;
+    keepIds.add(owner.id);
+  }
+
+  for (const member of others) {
+    if (keepIds.size >= maxSeats) break;
+    keepIds.add(member.id);
+  }
+
+  const dropIds = seated.filter((member) => !keepIds.has(member.id)).map((member) => member.id);
+  if (dropIds.length === 0) {
+    return;
+  }
+
+  await prisma.companyMembership.updateMany({
+    where: { id: { in: dropIds } },
+    data: { seatAssignedAt: null }
+  });
 }

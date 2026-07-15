@@ -62,12 +62,14 @@ async function main() {
       where: { companyId: legacyUser.companyId },
       create: {
         companyId: legacyUser.companyId,
-        seatQuantity: assignedCount,
-        status: assignedCount > 0 ? "ACTIVE" : "NONE"
+        plan: assignedCount > 0 ? "PREMIUM" : "FREE",
+        seatQuantity: assignedCount > 0 ? assignedCount : 1,
+        status: assignedCount > 0 ? "ACTIVE" : "ACTIVE"
       },
       update: {
-        seatQuantity: assignedCount,
-        status: assignedCount > 0 ? "ACTIVE" : "NONE"
+        plan: assignedCount > 0 ? "PREMIUM" : "FREE",
+        seatQuantity: assignedCount > 0 ? assignedCount : 1,
+        status: assignedCount > 0 ? "ACTIVE" : "ACTIVE"
       }
     });
 

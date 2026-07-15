@@ -1,6 +1,7 @@
 import { NextRequest, NextResponse } from "next/server";
 import { getCurrentUser } from "@/lib/auth";
 import { lookupCarriers } from "@/lib/carrier-lookup";
+import { planHasFeature } from "@/lib/plans";
 import { isRateLimited } from "@/lib/rate-limit";
 
 const RATE_LIMIT_WINDOW_MS = 60_000;
@@ -10,6 +11,10 @@ export async function GET(request: NextRequest) {
   const user = await getCurrentUser();
   if (!user) {
     return NextResponse.json({ error: "Unauthorized" }, { status: 401 });
+  }
+
+  if (!planHasFeature(user.plan, "fmcsa_lookup")) {
+    return NextResponse.json({ error: "FMCSA lookup requires Lite or Premium." }, { status: 403 });
   }
 
   const typeParam = request.nextUrl.searchParams.get("type");

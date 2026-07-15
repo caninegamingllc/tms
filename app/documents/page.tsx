@@ -3,11 +3,11 @@ import { PageHeader } from "@/components/page-header";
 import { DocumentsTable } from "@/components/documents-table";
 import { getBranchScope } from "@/lib/branch-filter-server";
 import { toDocumentTableRows } from "@/lib/document-rows";
-import { requireTmsAccess } from "@/lib/permissions";
+import { requirePlanFeature } from "@/lib/permissions";
 import { prisma } from "@/lib/db";
 
 export default async function DocumentsPage() {
-  const user = await requireTmsAccess();
+  const user = await requirePlanFeature("documents_upload");
   const loadScope = await getBranchScope(user);
   const customerScope = loadScope;
   const documents = await prisma.loadDocument.findMany({

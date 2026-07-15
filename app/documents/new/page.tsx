@@ -2,11 +2,11 @@ import Link from "next/link";
 import { DocumentUploadForm } from "@/components/document-upload-form";
 import { PageHeader } from "@/components/page-header";
 import { getBranchScope } from "@/lib/branch-filter-server";
-import { requireTmsAccess } from "@/lib/permissions";
+import { requirePlanFeature } from "@/lib/permissions";
 import { prisma } from "@/lib/db";
 
 export default async function NewDocumentPage() {
-  const user = await requireTmsAccess();
+  const user = await requirePlanFeature("documents_upload");
   const scope = await getBranchScope(user);
   const [loads, customers, carriers] = await Promise.all([
     prisma.load.findMany({

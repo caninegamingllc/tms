@@ -50,7 +50,9 @@ export default async function SelectOrganizationPage({
                   <p className="font-semibold text-foreground">{org.companyName}</p>
                   <p className="text-sm text-muted-foreground">Role: {org.role}</p>
                   <p className="text-sm text-muted-foreground">
-                    {org.hasSeat ? "Seat assigned — full TMS access" : "No seat — admin/billing only"}
+                    {org.hasSeat
+                      ? `Seat assigned · ${org.plan} plan`
+                      : "No seat — admin/billing only"}
                   </p>
                 </button>
               </form>
