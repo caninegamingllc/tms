@@ -22,6 +22,7 @@ export type CarrierTableRow = {
 export function CarriersTable({ carriers }: { carriers: CarrierTableRow[] }) {
   return (
     <SortableTable
+      tableId="carriers"
       data={carriers}
       keyExtractor={(carrier) => carrier.id}
       getRowHref={(carrier) => `/carriers/${carrier.id}`}

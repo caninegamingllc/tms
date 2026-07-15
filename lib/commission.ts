@@ -271,12 +271,11 @@ export async function recalculateLoadCommission(loadId: string) {
 export async function syncMissingCommissions(companyId: string) {
   const loads = await prisma.load.findMany({
     where: { companyId, commission: null },
-    select: { id: true }
+    select: { id: true },
+    take: 25
   });
 
-  for (const load of loads) {
-    await recalculateLoadCommission(load.id);
-  }
+  await Promise.all(loads.map((load) => recalculateLoadCommission(load.id)));
 }
 
 export async function syncStalePayableCommissions(companyId: string) {
@@ -289,10 +288,9 @@ export async function syncStalePayableCommissions(companyId: string) {
         OR: [{ status: "PAID" }, { invoices: { some: { paidAt: { not: null } } } }]
       }
     },
-    select: { loadId: true }
+    select: { loadId: true },
+    take: 25
   });
 
-  for (const { loadId } of stale) {
-    await recalculateLoadCommission(loadId);
-  }
+  await Promise.all(stale.map(({ loadId }) => recalculateLoadCommission(loadId)));
 }

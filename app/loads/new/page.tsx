@@ -1,11 +1,14 @@
+import { EquipmentFields } from "@/components/equipment-fields";
+import { FreightLinesEditor } from "@/components/freight-lines-editor";
+import { LoadStopsEditor } from "@/components/load-stops-editor";
 import { PageHeader } from "@/components/page-header";
-import { FacilityCombobox, SearchCombobox } from "@/components/search-combobox";
+import { SearchCombobox } from "@/components/search-combobox";
 import { createLoad } from "@/lib/actions";
 import { getBranchScope } from "@/lib/branch-filter-server";
 import { ensureCompanyCatalogs } from "@/lib/catalogs";
 import { requireTmsAccess } from "@/lib/permissions";
 import { canPickBranch, isAdminRole } from "@/lib/scope";
-import { equipmentTypes, loadStatuses } from "@/lib/constants";
+import { loadStatuses } from "@/lib/constants";
 import { prisma } from "@/lib/db";
 import { humanize } from "@/lib/format";
 
@@ -53,13 +56,14 @@ export default async function NewLoadPage() {
     state: facility.state,
     postalCode: facility.postalCode
   }));
+  const commoditySuggestions = commodities.map((item) => item.name);
   const nextAutoLoadNumber = `${company.loadNumberPrefix}-${String(company.nextLoadSequence).padStart(4, "0")}`;
 
   return (
     <>
       <PageHeader
         title="Create Load"
-        description="Enter the customer, lane, stop appointments, equipment, and first financial estimate."
+        description="Enter the customer, stops, equipment, freight lines, and first financial estimate."
       />
 
       <form action={createLoad} className="card grid gap-6">
@@ -106,66 +110,29 @@ export default async function NewLoadPage() {
           <input name="referenceNumber" className="input" placeholder="PO / tender number" />
         </label>
 
-        <div className="grid gap-4 md:grid-cols-4">
-          <label className="grid gap-2">
-            <span className="label">Equipment</span>
-            <select name="equipmentType" className="select" defaultValue="Dry Van">
-              {equipmentTypes.map((type) => (
-                <option key={type}>{type}</option>
-              ))}
-            </select>
-          </label>
-          <label className="grid gap-2">
-            <span className="label">Commodity</span>
-            <select name="commodity" className="select" defaultValue="">
-              <option value="">Select commodity</option>
-              {commodities.map((item) => (
-                <option key={item.id} value={item.name}>
-                  {item.name}
-                </option>
-              ))}
-            </select>
-          </label>
-          <label className="grid gap-2">
-            <span className="label">Weight</span>
-            <input name="weight" className="input" type="number" min="0" />
-          </label>
+        <div className="grid gap-4 md:grid-cols-3">
+          <EquipmentFields />
           <label className="grid gap-2">
             <span className="label">Customer Rate</span>
             <input name="revenue" className="input" placeholder="2500" required />
           </label>
+          <label className="grid gap-2">
+            <span className="label">Estimated Carrier Cost</span>
+            <input name="carrierCost" className="input" placeholder="1900" />
+          </label>
         </div>
 
-        <div className="grid gap-4 md:grid-cols-2">
-          <div className="grid gap-4">
-            <FacilityCombobox prefix="pickup" legend="Pickup" facilities={facilityOptions} />
-            <label className="grid gap-2">
-              <span className="label">Appointment</span>
-              <input name="pickupDate" className="input" type="datetime-local" required />
-            </label>
-            <label className="grid gap-2">
-              <span className="label">Instructions</span>
-              <textarea name="pickupInstructions" className="textarea" rows={3} />
-            </label>
+        <div className="grid gap-3">
+          <div>
+            <h3 className="text-sm font-semibold text-foreground">Freight lines</h3>
+            <p className="muted text-sm">
+              Add each commodity on the trailer. Quantity, description, and weight are required.
+            </p>
           </div>
-
-          <div className="grid gap-4">
-            <FacilityCombobox prefix="delivery" legend="Delivery" facilities={facilityOptions} />
-            <label className="grid gap-2">
-              <span className="label">Appointment</span>
-              <input name="deliveryDate" className="input" type="datetime-local" required />
-            </label>
-            <label className="grid gap-2">
-              <span className="label">Instructions</span>
-              <textarea name="deliveryInstructions" className="textarea" rows={3} />
-            </label>
-          </div>
+          <FreightLinesEditor descriptionSuggestions={commoditySuggestions} />
         </div>
 
-        <label className="grid gap-2 md:max-w-xs">
-          <span className="label">Estimated Carrier Cost</span>
-          <input name="carrierCost" className="input" placeholder="1900" />
-        </label>
+        <LoadStopsEditor facilities={facilityOptions} />
 
         <label className="grid gap-2">
           <span className="label">Rate confirmation terms override</span>

@@ -108,38 +108,28 @@ export function FuelIndexCard({ data }: FuelIndexCardProps) {
 
   if (!data.configured || data.error || data.series.length === 0) {
     return (
-      <section className="card">
-        <div className="flex items-start justify-between gap-4">
-          <div>
-            <div className="flex items-center gap-3">
-              <div className="rounded-lg bg-lightprimary p-3 text-primary">
-                <Fuel className="h-5 w-5" />
-              </div>
-              <div>
-                <h2 className="section-title">Current Fuel Index</h2>
-                <p className="muted">On-Highway Diesel · $/gal</p>
-              </div>
-            </div>
-            <p className="mt-4 text-sm text-muted-foreground">
-              {data.error ?? "Fuel prices unavailable."}
-            </p>
+      <div>
+        <div className="flex items-center gap-3">
+          <div className="rounded-lg bg-lightprimary p-3 text-primary">
+            <Fuel className="h-5 w-5" />
           </div>
+          <p className="muted">On-Highway Diesel · $/gal</p>
         </div>
-      </section>
+        <p className="mt-4 text-sm text-muted-foreground">
+          {data.error ?? "Fuel prices unavailable."}
+        </p>
+      </div>
     );
   }
 
   return (
-    <section className="card">
+    <div>
       <div className="flex flex-wrap items-start justify-between gap-4">
         <div className="flex items-center gap-3">
           <div className="rounded-lg bg-lightprimary p-3 text-primary">
             <Fuel className="h-5 w-5" />
           </div>
-          <div>
-            <h2 className="section-title">Current Fuel Index</h2>
-            <p className="muted">On-Highway Diesel · $/gal</p>
-          </div>
+          <p className="muted">On-Highway Diesel · $/gal</p>
         </div>
 
         <div className="inline-flex rounded-lg border border-border bg-muted p-1">
@@ -312,6 +302,6 @@ export function FuelIndexCard({ data }: FuelIndexCardProps) {
           <ExternalLink className="h-4 w-4" />
         </a>
       </div>
-    </section>
+    </div>
   );
 }

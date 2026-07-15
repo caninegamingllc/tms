@@ -3,6 +3,7 @@ import { CustomerSearchFilters } from "@/components/customer-search-filters";
 import { CustomersTable } from "@/components/customers-table";
 import { PageHeader } from "@/components/page-header";
 import { SearchPrompt } from "@/components/search-prompt";
+import { TileBoard, Tile } from "@/components/tile-board";
 import { createCustomer } from "@/lib/actions";
 import {
   parseCustomerSearchParams,
@@ -13,6 +14,13 @@ import { isSearchSubmitted } from "@/lib/list-search";
 import { requireTmsAccess } from "@/lib/permissions";
 import { canPickBranch, isAdminRole } from "@/lib/scope";
 import { prisma } from "@/lib/db";
+import { LIST_SEARCH_ADD_TILES } from "@/lib/tile-defaults";
+import { loadPageLayouts } from "@/lib/ui-preferences-load";
+
+const tiles = LIST_SEARCH_ADD_TILES.map((t) => ({
+  ...t,
+  title: t.id === "search" ? "Search Customers" : t.id === "results" ? "Search Results" : "Add Customer"
+}));
 
 export default async function CustomersPage({
   searchParams
@@ -26,7 +34,7 @@ export default async function CustomersPage({
   const showResults = isSearchSubmitted(params);
 
   const scope = await getBranchScope(user);
-  const [customers, branches] = await Promise.all([
+  const [customers, branches, layouts] = await Promise.all([
     showResults ? searchCustomers(scope, filters) : Promise.resolve([]),
     canPickBranch(user)
       ? prisma.branch.findMany({
@@ -36,7 +44,8 @@ export default async function CustomersPage({
           },
           orderBy: { name: "asc" }
         })
-      : Promise.resolve([])
+      : Promise.resolve([]),
+    loadPageLayouts("customers")
   ]);
 
   const rows = customers.map((customer) => {
@@ -73,32 +82,31 @@ export default async function CustomersPage({
         </div>
       ) : null}
 
-      <div className="grid gap-6 xl:grid-cols-[1.3fr_0.8fr]">
-        <div className="grid gap-6">
+      <TileBoard pageId="customers" tiles={tiles} initialLayouts={layouts}>
+        <Tile id="search">
           <CustomerSearchFilters filters={filters} />
+        </Tile>
 
+        <Tile id="results">
           {showResults ? (
-            <section className="card overflow-hidden p-0">
-              <div className="border-b border-border p-5">
-                <h2 className="section-title">Search Results</h2>
-                <p className="muted">
-                  {customers.length} customer{customers.length === 1 ? "" : "s"} found. Click column headers to sort.
-                </p>
-              </div>
+            <>
+              <p className="muted mb-3">
+                {customers.length} customer{customers.length === 1 ? "" : "s"} found. Click column headers
+                to sort.
+              </p>
               <div className="overflow-x-auto">
                 <CustomersTable customers={rows} />
               </div>
-            </section>
+            </>
           ) : (
             <SearchPrompt entity="customers" />
           )}
-        </div>
+        </Tile>
 
-        <section className="card">
-          <h2 className="section-title">Add Customer</h2>
+        <Tile id="add">
           <CustomerForm action={createCustomer} branches={branches} showBranchPicker={canPickBranch(user)} />
-        </section>
-      </div>
+        </Tile>
+      </TileBoard>
     </>
   );
 }

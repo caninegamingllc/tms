@@ -19,8 +19,7 @@ export type FactoringCompanyRow = {
 
 export function FactoringCompaniesAdmin({ companies }: { companies: FactoringCompanyRow[] }) {
   return (
-    <section className="card mt-6">
-      <h2 className="section-title">Factoring Companies</h2>
+    <div>
       <p className="muted">
         Assign a factoring company on a carrier so AP bills and QuickBooks vendors use the factor as payee
         and print the check name you set here.
@@ -114,6 +113,6 @@ export function FactoringCompaniesAdmin({ companies }: { companies: FactoringCom
           ))
         )}
       </div>
-    </section>
+    </div>
   );
 }

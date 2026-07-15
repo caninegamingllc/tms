@@ -25,11 +25,8 @@ export function CustomerSearchFilters({ filters }: { filters: CustomerFilters })
   }
 
   return (
-    <section className="card p-5">
-      <div className="mb-4">
-        <h2 className="section-title">Search Customers</h2>
-        <p className="muted">Search by name, city, state, or contact details to find customer accounts.</p>
-      </div>
+    <div className="grid gap-4">
+      <p className="muted">Search by name, city, state, or contact details to find customer accounts.</p>
 
       <form className="grid gap-4" onSubmit={handleSubmit}>
         <label className="grid gap-2">
@@ -51,6 +48,6 @@ export function CustomerSearchFilters({ filters }: { filters: CustomerFilters })
           </button>
         </div>
       </form>
-    </section>
+    </div>
   );
 }

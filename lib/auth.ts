@@ -1,6 +1,7 @@
 import { randomBytes, scryptSync, timingSafeEqual, createHash } from "crypto";
 import { cookies } from "next/headers";
 import { redirect } from "next/navigation";
+import { cache } from "react";
 import { prisma } from "@/lib/db";
 import { seedCompanyCatalogs } from "@/lib/catalogs";
 import { tryAutoAssignSeat } from "@/lib/seats";
@@ -10,6 +11,8 @@ import type { OrganizationSummary, SessionUser } from "@/lib/types";
 export const sessionCookieName = "tms_session";
 const sessionDays = 7;
 const passwordKeyLength = 64;
+/** Avoid a SQLite write on every layout/page/heartbeat when lastSeen is fresh. */
+const lastSeenThrottleMs = 5 * 60 * 1000;
 
 function shouldUseSecureCookies() {
   if (process.env.COOKIE_SECURE === "true") {
@@ -159,7 +162,7 @@ export async function destroySession() {
   cookieStore.delete(sessionCookieName);
 }
 
-export async function getCurrentUser(): Promise<CurrentUser | null> {
+export const getCurrentUser = cache(async (): Promise<CurrentUser | null> => {
   const cookieStore = await cookies();
   const token = cookieStore.get(sessionCookieName)?.value;
 
@@ -194,19 +197,23 @@ export async function getCurrentUser(): Promise<CurrentUser | null> {
     return null;
   }
 
-  await prisma.session.update({
-    where: { id: session.id },
-    data: { lastSeenAt: new Date() }
-  });
+  const now = Date.now();
+  const lastSeenAt = session.lastSeenAt?.getTime() ?? 0;
+  if (now - lastSeenAt >= lastSeenThrottleMs) {
+    await prisma.session.update({
+      where: { id: session.id },
+      data: { lastSeenAt: new Date(now) }
+    });
+  }
 
   const activeMemberships = await getActiveMemberships(session.userId);
   const organizations = activeMemberships.map(toOrganizationSummary);
   const branchIds = await ensureMembershipBranchesSynced(membership.id, membership.branchId);
 
   return buildSessionUser(session.user, membership, organizations, branchIds);
-}
+});
 
-export async function requireUser() {
+export const requireUser = cache(async () => {
   const user = await getCurrentUser();
 
   if (!user) {
@@ -225,7 +232,7 @@ export async function requireUser() {
   }
 
   return user;
-}
+});
 
 export async function requireAdmin() {
   const user = await requireUser();

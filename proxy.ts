@@ -13,7 +13,7 @@ const publicPaths = [
   "/api/stripe/webhook"
 ];
 
-export function middleware(request: NextRequest) {
+export function proxy(request: NextRequest) {
   const { pathname } = request.nextUrl;
   const isPublic = publicPaths.some((path) => pathname === path || pathname.startsWith(`${path}/`));
   const hasSession = Boolean(request.cookies.get(sessionCookieName)?.value);

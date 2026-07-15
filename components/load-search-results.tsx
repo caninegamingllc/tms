@@ -3,13 +3,14 @@
 import Link from "next/link";
 import { useMemo, useState } from "react";
 import { useRouter } from "next/navigation";
-import { ArrowDown, ArrowUp, ChevronsUpDown } from "lucide-react";
-import { clsx } from "clsx";
 import {
   navigateFromRowClick,
   navigateFromRowKeyDown,
   useSortedRows,
   useClientPagination,
+  useOrderedColumns,
+  SortableTableHeader,
+  ColumnLayoutControls,
   type SortableColumn
 } from "@/components/sortable-table";
 import { TablePagination } from "@/components/table-pagination";
@@ -40,11 +41,12 @@ export type SerializedSearchLoad = {
   marginCents: number;
 };
 
-const columns: SortableColumn<SerializedSearchLoad>[] = [
+const baseColumns: SortableColumn<SerializedSearchLoad>[] = [
   {
     id: "select",
     label: "",
     sortable: false,
+    reorderable: false,
     render: () => null
   },
   {
@@ -72,7 +74,8 @@ const columns: SortableColumn<SerializedSearchLoad>[] = [
   {
     id: "lane",
     label: "Lane",
-    sortValue: (load) => `${load.pickupCity}, ${load.pickupState} to ${load.deliveryCity}, ${load.deliveryState}`,
+    sortValue: (load) =>
+      `${load.pickupCity}, ${load.pickupState} to ${load.deliveryCity}, ${load.deliveryState}`,
     render: (load) => (
       <>
         {load.pickupCity}, {load.pickupState} to {load.deliveryCity}, {load.deliveryState}
@@ -129,7 +132,11 @@ export function LoadSearchResults({
 }) {
   const router = useRouter();
   const [selectedIds, setSelectedIds] = useState<Set<string>>(() => new Set(loads.map((load) => load.id)));
-  const { sortedData, sortState, handleSort } = useSortedRows(loads, columns, {
+  const { orderedColumns, moveColumn, resetOrder, isCustomized } = useOrderedColumns(
+    "load-search",
+    baseColumns
+  );
+  const { sortedData, sortState, handleSort } = useSortedRows(loads, orderedColumns, {
     columnId: "pickup",
     direction: "desc"
   });
@@ -159,39 +166,58 @@ export function LoadSearchResults({
     });
   }
 
-  function toggleOne(loadId: string) {
+  function toggleOne(id: string) {
     setSelectedIds((current) => {
       const next = new Set(current);
-      if (next.has(loadId)) {
-        next.delete(loadId);
+      if (next.has(id)) {
+        next.delete(id);
       } else {
-        next.add(loadId);
+        next.add(id);
       }
       return next;
     });
   }
 
+  const headerColumns = orderedColumns.map((column) =>
+    column.id === "select"
+      ? {
+          ...column,
+          label: (
+            <input
+              type="checkbox"
+              aria-label="Select all loads on this page"
+              checked={allPageSelected}
+              disabled={pageIds.length === 0}
+              onChange={toggleAllPage}
+            />
+          )
+        }
+      : column
+  );
+
   function handleExportCsv() {
-    const rows = buildLoadExportRows(selectedLoads);
-    exportLoadsCsv(rows);
+    exportLoadsCsv(buildLoadExportRows(selectedLoads));
   }
 
   function handleExportPdf() {
-    const rows = buildLoadExportRows(selectedLoads);
-    exportLoadsPdf(rows, buildExportMeta(companyName, "Loads Report", filterSummary));
+    exportLoadsPdf(
+      buildLoadExportRows(selectedLoads),
+      buildExportMeta(companyName, "Load search results", filterSummary)
+    );
   }
 
   return (
-    <section className="card overflow-hidden p-0">
-      <div className="flex flex-wrap items-center justify-between gap-3 border-b border-border p-5">
-        <div>
-          <h2 className="section-title">Load Results</h2>
-          <p className="muted">
-            {loads.length} load{loads.length === 1 ? "" : "s"} found · {filterSummary}
-          </p>
-          <p className="muted">{selectedLoads.length} selected for export</p>
-        </div>
-        <div className="flex flex-wrap gap-2">
+    <div>
+      <div className="mb-3 flex flex-wrap items-center justify-between gap-3">
+        <p className="muted">
+          {selectedLoads.length} of {loads.length} loads selected
+        </p>
+        <div className="flex flex-wrap items-center gap-2">
+          <ColumnLayoutControls
+            className="mb-0"
+            onReset={resetOrder}
+            isCustomized={isCustomized}
+          />
           <button
             type="button"
             className="btn-secondary"
@@ -213,61 +239,13 @@ export function LoadSearchResults({
 
       <div className="overflow-x-auto">
         <table className="table">
-          <thead>
-            <tr>
-              <th>
-                <input
-                  type="checkbox"
-                  aria-label="Select all loads on this page"
-                  checked={allPageSelected}
-                  disabled={pageIds.length === 0}
-                  onChange={toggleAllPage}
-                />
-              </th>
-              {columns.slice(1).map((column) => {
-                const isSortable = column.sortable !== false && column.sortValue != null;
-                const isActive = sortState.columnId === column.id;
-
-                return (
-                  <th
-                    key={column.id}
-                    className={clsx(isSortable && "sortable", column.headerClassName)}
-                    data-active={isActive || undefined}
-                    aria-sort={
-                      isSortable
-                        ? isActive
-                          ? sortState.direction === "asc"
-                            ? "ascending"
-                            : "descending"
-                          : "none"
-                        : undefined
-                    }
-                  >
-                    {isSortable ? (
-                      <button
-                        type="button"
-                        className="inline-flex items-center gap-1 text-left"
-                        onClick={() => handleSort(column.id)}
-                      >
-                        <span>{column.label}</span>
-                        {isActive ? (
-                          sortState.direction === "asc" ? (
-                            <ArrowUp className="sort-icon" aria-hidden="true" />
-                          ) : (
-                            <ArrowDown className="sort-icon" aria-hidden="true" />
-                          )
-                        ) : (
-                          <ChevronsUpDown className="sort-icon" aria-hidden="true" />
-                        )}
-                      </button>
-                    ) : (
-                      column.label
-                    )}
-                  </th>
-                );
-              })}
-            </tr>
-          </thead>
+          <SortableTableHeader
+            columns={headerColumns}
+            sortState={sortState}
+            onSort={handleSort}
+            columnReorder
+            onMoveColumn={moveColumn}
+          />
           <tbody>
             {pageRows.length ? (
               pageRows.map((load) => {
@@ -281,23 +259,26 @@ export function LoadSearchResults({
                     onClick={(event) => navigateFromRowClick(event, href, router.push)}
                     onKeyDown={(event) => navigateFromRowKeyDown(event, href, router.push)}
                   >
-                    <td>
-                      <input
-                        type="checkbox"
-                        aria-label={`Select load ${load.loadNumber}`}
-                        checked={selectedIds.has(load.id)}
-                        onChange={() => toggleOne(load.id)}
-                      />
-                    </td>
-                    {columns.slice(1).map((column) => (
-                      <td key={column.id}>{column.render(load)}</td>
-                    ))}
+                    {orderedColumns.map((column) =>
+                      column.id === "select" ? (
+                        <td key={column.id}>
+                          <input
+                            type="checkbox"
+                            aria-label={`Select load ${load.loadNumber}`}
+                            checked={selectedIds.has(load.id)}
+                            onChange={() => toggleOne(load.id)}
+                          />
+                        </td>
+                      ) : (
+                        <td key={column.id}>{column.render(load)}</td>
+                      )
+                    )}
                   </tr>
                 );
               })
             ) : (
               <tr>
-                <td colSpan={columns.length} className="p-8 text-center text-muted-foreground">
+                <td colSpan={orderedColumns.length} className="p-8 text-center text-muted-foreground">
                   No loads match the current filters.
                 </td>
               </tr>
@@ -305,18 +286,16 @@ export function LoadSearchResults({
           </tbody>
         </table>
       </div>
-      <div className="px-5 pb-5">
-        <TablePagination
-          page={pagination.page}
-          pageSize={pagination.pageSize}
-          total={pagination.total}
-          totalPages={pagination.totalPages}
-          start={pagination.start}
-          end={pagination.end}
-          onPageChange={pagination.setPage}
-          onPageSizeChange={pagination.setPageSize}
-        />
-      </div>
-    </section>
+      <TablePagination
+        page={pagination.page}
+        pageSize={pagination.pageSize}
+        total={pagination.total}
+        totalPages={pagination.totalPages}
+        start={pagination.start}
+        end={pagination.end}
+        onPageChange={pagination.setPage}
+        onPageSizeChange={pagination.setPageSize}
+      />
+    </div>
   );
 }

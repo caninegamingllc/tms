@@ -45,6 +45,7 @@ export function AdminUsersTable({
       </div>
 
       <SortableTable
+        tableId="admin-users"
         data={filtered}
         keyExtractor={(row) => row.membershipId}
         defaultSort={{ columnId: "user", direction: "asc" }}

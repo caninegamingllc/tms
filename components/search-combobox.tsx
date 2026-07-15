@@ -124,22 +124,42 @@ export function FacilityCombobox({
   prefix,
   legend,
   facilities,
+  fieldNames,
+  defaultFacilityId,
   defaultFacility,
   defaultCity,
   defaultState,
   defaultAddress,
   defaultPostalCode
 }: {
-  prefix: "pickup" | "delivery";
+  prefix?: string;
   legend: string;
   facilities: FacilityOption[];
+  fieldNames?: {
+    facilityId?: string;
+    facility?: string;
+    address?: string;
+    city?: string;
+    state?: string;
+    postalCode?: string;
+  };
+  defaultFacilityId?: string;
   defaultFacility?: string;
   defaultCity?: string;
   defaultState?: string;
   defaultAddress?: string;
   defaultPostalCode?: string;
 }) {
-  const [facilityId, setFacilityId] = useState("");
+  const namePrefix = prefix ?? "facility";
+  const names = {
+    facilityId: fieldNames?.facilityId ?? `${namePrefix}FacilityId`,
+    facility: fieldNames?.facility ?? `${namePrefix}Facility`,
+    address: fieldNames?.address ?? `${namePrefix}Address`,
+    city: fieldNames?.city ?? `${namePrefix}City`,
+    state: fieldNames?.state ?? `${namePrefix}State`,
+    postalCode: fieldNames?.postalCode ?? `${namePrefix}PostalCode`
+  };
+  const [facilityId, setFacilityId] = useState(defaultFacilityId ?? "");
   const [facilityName, setFacilityName] = useState(defaultFacility ?? "");
   const [address, setAddress] = useState(defaultAddress ?? "");
   const [city, setCity] = useState(defaultCity ?? "");
@@ -187,11 +207,11 @@ export function FacilityCombobox({
   return (
     <fieldset className="grid gap-4 rounded-lg border border-border p-4">
       <legend className="px-2 text-sm font-semibold text-foreground">{legend}</legend>
-      <input type="hidden" name={`${prefix}FacilityId`} value={facilityId} />
+      <input type="hidden" name={names.facilityId} value={facilityId} />
       <label className="relative grid gap-2" ref={rootRef}>
         <span className="label">Facility</span>
         <input
-          name={`${prefix}Facility`}
+          name={names.facility}
           className="input"
           value={facilityName}
           onChange={(event) => {
@@ -232,7 +252,7 @@ export function FacilityCombobox({
       <label className="grid gap-2">
         <span className="label">Address</span>
         <input
-          name={`${prefix}Address`}
+          name={names.address}
           className="input"
           value={address}
           onChange={(event) => setAddress(event.target.value)}
@@ -242,7 +262,7 @@ export function FacilityCombobox({
         <label className="grid gap-2">
           <span className="label">City</span>
           <input
-            name={`${prefix}City`}
+            name={names.city}
             className="input"
             value={city}
             onChange={(event) => setCity(event.target.value)}
@@ -252,7 +272,7 @@ export function FacilityCombobox({
         <label className="grid gap-2">
           <span className="label">State</span>
           <input
-            name={`${prefix}State`}
+            name={names.state}
             className="input"
             value={state}
             onChange={(event) => setState(event.target.value)}
@@ -263,7 +283,7 @@ export function FacilityCombobox({
         <label className="grid gap-2">
           <span className="label">Postal Code</span>
           <input
-            name={`${prefix}PostalCode`}
+            name={names.postalCode}
             className="input"
             value={postalCode}
             onChange={(event) => setPostalCode(event.target.value)}

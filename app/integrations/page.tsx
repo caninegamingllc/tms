@@ -1,10 +1,13 @@
 import Link from "next/link";
 import { PageHeader } from "@/components/page-header";
+import { TileBoard, Tile } from "@/components/tile-board";
 import { requireTmsAccess } from "@/lib/permissions";
 import { canManageUsers } from "@/lib/scope";
 import { prisma } from "@/lib/db";
 import { formatDate, humanize } from "@/lib/format";
 import { getCompanyQuickbooksMethod } from "@/lib/quickbooks/exports";
+import { integrationsTiles } from "@/lib/tile-defaults";
+import { loadPageLayouts } from "@/lib/ui-preferences-load";
 
 const capabilities: Record<string, string[]> = {
   DAT: ["Post available loads", "Search trucks", "Import market rates"],
@@ -18,14 +21,30 @@ const capabilities: Record<string, string[]> = {
 
 export default async function IntegrationsPage() {
   const user = await requireTmsAccess();
-  const [integrations, quickbooksMethod] = await Promise.all([
+  const [integrations, quickbooksMethod, layouts] = await Promise.all([
     prisma.integrationAccount.findMany({
       where: { companyId: user.companyId },
       orderBy: { provider: "asc" }
     }),
-    getCompanyQuickbooksMethod(user.companyId)
+    getCompanyQuickbooksMethod(user.companyId),
+    loadPageLayouts("integrations")
   ]);
   const isAdmin = canManageUsers(user);
+  const providerIds = integrations.map((integration) => integration.id);
+  const tiles = (() => {
+    const base = integrationsTiles(providerIds).map((tile) => {
+      if (!tile.id.startsWith("provider-")) {
+        return tile;
+      }
+      const id = tile.id.slice("provider-".length);
+      const integration = integrations.find((entry) => entry.id === id);
+      return {
+        ...tile,
+        title: integration?.displayName ?? humanize(integration?.provider ?? tile.title ?? id)
+      };
+    });
+    return isAdmin ? base : base.filter((tile) => tile.id !== "quickbooks");
+  })();
 
   return (
     <>
@@ -34,35 +53,31 @@ export default async function IntegrationsPage() {
         description="External services used by the brokerage. Connect personal email under Email settings. Configure QuickBooks export under Admin Accounting Settings."
       />
 
-      {isAdmin ? (
-        <div className="card mb-6">
-          <h2 className="section-title">QuickBooks</h2>
-          <p className="muted">
-            Active accounting method:{" "}
-            <span className="font-semibold text-foreground">
-              {quickbooksMethod === "ONLINE"
-                ? "QuickBooks Online"
-                : quickbooksMethod === "IIF"
-                  ? "IIF (Desktop)"
-                  : "Not configured"}
-            </span>
-          </p>
-          <div className="mt-4">
-            <Link href="/admin/accounting" className="btn">
-              Open Accounting Settings
-            </Link>
-          </div>
-        </div>
-      ) : null}
+      <TileBoard pageId="integrations" tiles={tiles} initialLayouts={layouts}>
+        {isAdmin ? (
+          <Tile id="quickbooks">
+            <p className="muted">
+              Active accounting method:{" "}
+              <span className="font-semibold text-foreground">
+                {quickbooksMethod === "ONLINE"
+                  ? "QuickBooks Online"
+                  : quickbooksMethod === "IIF"
+                    ? "IIF (Desktop)"
+                    : "Not configured"}
+              </span>
+            </p>
+            <div className="mt-4">
+              <Link href="/admin/accounting" className="btn">
+                Open Accounting Settings
+              </Link>
+            </div>
+          </Tile>
+        ) : null}
 
-      <div className="grid gap-4 md:grid-cols-2 xl:grid-cols-3">
         {integrations.map((integration) => (
-          <section key={integration.id} className="card">
+          <Tile key={integration.id} id={`provider-${integration.id}`}>
             <div className="flex items-start justify-between gap-3">
-              <div>
-                <h2 className="text-xl font-bold text-foreground">{integration.displayName}</h2>
-                <p className="muted">{humanize(integration.provider)}</p>
-              </div>
+              <p className="muted">{humanize(integration.provider)}</p>
               <span className="badge bg-slate-100 text-slate-700">{integration.status}</span>
             </div>
             <p className="mt-4 text-sm text-slate-700">{integration.notes}</p>
@@ -80,9 +95,9 @@ export default async function IntegrationsPage() {
               </ul>
             </div>
             <p className="mt-4 text-xs text-muted-foreground">Updated {formatDate(integration.updatedAt)}</p>
-          </section>
+          </Tile>
         ))}
-      </div>
+      </TileBoard>
     </>
   );
 }

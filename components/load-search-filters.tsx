@@ -62,13 +62,10 @@ export function LoadSearchFilters({
   }
 
   return (
-    <section className="card p-5">
-      <div className="mb-4">
-        <h2 className="section-title">Search Filters</h2>
-        <p className="muted">
-          Search by load number or combine date range, customer, lane, equipment, and commodity filters.
-        </p>
-      </div>
+    <div className="grid gap-4">
+      <p className="muted">
+        Search by load number or combine date range, customer, lane, equipment, and commodity filters.
+      </p>
 
       <form className="grid gap-4" onSubmit={handleSubmit}>
         <label className="grid gap-2 md:max-w-sm">
@@ -180,6 +177,6 @@ export function LoadSearchFilters({
           </button>
         </div>
       </form>
-    </section>
+    </div>
   );
 }

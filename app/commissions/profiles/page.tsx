@@ -1,14 +1,17 @@
 import Link from "next/link";
 import { CommissionProfilesTable } from "@/components/commission-profiles-table";
 import { PageHeader } from "@/components/page-header";
+import { TileBoard, Tile } from "@/components/tile-board";
 import { assignBranchCommissionProfile, createCommissionProfile, updateCommissionProfile } from "@/lib/commission-actions";
 import { requireAdmin } from "@/lib/auth";
 import { prisma } from "@/lib/db";
+import { COMMISSION_PROFILES_TILES } from "@/lib/tile-defaults";
+import { loadPageLayouts } from "@/lib/ui-preferences-load";
 
 export default async function CommissionProfilesPage() {
   const user = await requireAdmin();
 
-  const [profiles, branches] = await Promise.all([
+  const [profiles, branches, layouts] = await Promise.all([
     prisma.commissionProfile.findMany({
       where: { companyId: user.companyId },
       include: { rule: true, branches: true },
@@ -18,7 +21,8 @@ export default async function CommissionProfilesPage() {
       where: { companyId: user.companyId },
       include: { commissionProfile: true },
       orderBy: { name: "asc" }
-    })
+    }),
+    loadPageLayouts("commission-profiles")
   ]);
 
   const profileRows = profiles.map((profile) => ({
@@ -30,6 +34,11 @@ export default async function CommissionProfilesPage() {
     isDefault: profile.isDefault,
     branchNames: profile.branches.map((branch) => branch.name).join(", ")
   }));
+
+  const tiles =
+    profiles.length > 0
+      ? COMMISSION_PROFILES_TILES
+      : COMMISSION_PROFILES_TILES.filter((tile) => tile.id !== "edit");
 
   return (
     <>
@@ -43,20 +52,19 @@ export default async function CommissionProfilesPage() {
         }
       />
 
-      <div className="grid gap-6 xl:grid-cols-[1.2fr_0.8fr]">
-        <section className="card overflow-hidden p-0">
-          <div className="border-b border-border p-5">
-            <h2 className="section-title">Profiles</h2>
-            <p className="muted">Default rule: branch earns 60% of gross profit when company 40% meets the 10% expense floor. Click column headers to sort.</p>
-          </div>
+      <TileBoard pageId="commission-profiles" tiles={tiles} initialLayouts={layouts}>
+        <Tile id="profiles">
+          <p className="muted mb-3">
+            Default rule: branch earns 60% of gross profit when company 40% meets the 10% expense floor.
+            Click column headers to sort.
+          </p>
           <div className="overflow-x-auto">
             <CommissionProfilesTable profiles={profileRows} />
           </div>
-        </section>
+        </Tile>
 
-        <section className="card">
-          <h2 className="section-title">Create Profile</h2>
-          <form action={createCommissionProfile} className="mt-4 grid gap-3">
+        <Tile id="create">
+          <form action={createCommissionProfile} className="grid gap-3">
             <input name="name" className="input" placeholder="Profile name" required />
             <div className="grid gap-3 md:grid-cols-3">
               <label className="grid gap-2">
@@ -80,67 +88,70 @@ export default async function CommissionProfilesPage() {
               Create Profile
             </button>
           </form>
-        </section>
-      </div>
+        </Tile>
 
-      <div className="mt-6 grid gap-6 xl:grid-cols-2">
-        {profiles.map((profile) => (
-          <section key={profile.id} className="card">
-            <h2 className="section-title">Edit {profile.name}</h2>
-            <form action={updateCommissionProfile} className="mt-4 grid gap-3">
-              <input type="hidden" name="profileId" value={profile.id} />
-              <input name="name" className="input" defaultValue={profile.name} required />
-              <div className="grid gap-3 md:grid-cols-3">
-                <label className="grid gap-2">
-                  <span className="label">Branch %</span>
-                  <input
-                    name="branchSharePercent"
-                    className="input"
-                    type="number"
-                    min={0}
-                    max={100}
-                    defaultValue={profile.rule?.branchSharePercent ?? 60}
-                    required
-                  />
-                </label>
-                <label className="grid gap-2">
-                  <span className="label">Company %</span>
-                  <input
-                    name="companySharePercent"
-                    className="input"
-                    type="number"
-                    min={0}
-                    max={100}
-                    defaultValue={profile.rule?.companySharePercent ?? 40}
-                    required
-                  />
-                </label>
-                <label className="grid gap-2">
-                  <span className="label">Expense Floor %</span>
-                  <input
-                    name="companyMinimumExpensePercent"
-                    className="input"
-                    type="number"
-                    min={0}
-                    max={100}
-                    defaultValue={profile.rule?.companyMinimumExpensePercent ?? 10}
-                    required
-                  />
-                </label>
-              </div>
-              <label className="flex items-center gap-2 text-sm">
-                <input type="checkbox" name="isDefault" defaultChecked={profile.isDefault} />
-                Set as company default profile
-              </label>
-              <button type="submit" className="btn">
-                Save Profile
-              </button>
-            </form>
-          </section>
-        ))}
+        {profiles.length > 0 ? (
+          <Tile id="edit">
+            <div className="grid gap-6">
+              {profiles.map((profile) => (
+                <div key={profile.id} className="rounded-lg border border-border p-4">
+                  <p className="mb-3 text-[15px] font-semibold text-foreground">Edit {profile.name}</p>
+                  <form action={updateCommissionProfile} className="grid gap-3">
+                    <input type="hidden" name="profileId" value={profile.id} />
+                    <input name="name" className="input" defaultValue={profile.name} required />
+                    <div className="grid gap-3 md:grid-cols-3">
+                      <label className="grid gap-2">
+                        <span className="label">Branch %</span>
+                        <input
+                          name="branchSharePercent"
+                          className="input"
+                          type="number"
+                          min={0}
+                          max={100}
+                          defaultValue={profile.rule?.branchSharePercent ?? 60}
+                          required
+                        />
+                      </label>
+                      <label className="grid gap-2">
+                        <span className="label">Company %</span>
+                        <input
+                          name="companySharePercent"
+                          className="input"
+                          type="number"
+                          min={0}
+                          max={100}
+                          defaultValue={profile.rule?.companySharePercent ?? 40}
+                          required
+                        />
+                      </label>
+                      <label className="grid gap-2">
+                        <span className="label">Expense Floor %</span>
+                        <input
+                          name="companyMinimumExpensePercent"
+                          className="input"
+                          type="number"
+                          min={0}
+                          max={100}
+                          defaultValue={profile.rule?.companyMinimumExpensePercent ?? 10}
+                          required
+                        />
+                      </label>
+                    </div>
+                    <label className="flex items-center gap-2 text-sm">
+                      <input type="checkbox" name="isDefault" defaultChecked={profile.isDefault} />
+                      Set as company default profile
+                    </label>
+                    <button type="submit" className="btn">
+                      Save Profile
+                    </button>
+                  </form>
+                </div>
+              ))}
+            </div>
+          </Tile>
+        ) : null}
 
-        <section className="card">
-          <h2 className="section-title">Branch Profile Assignment</h2>
+        <Tile id="assignment">
           <p className="muted">Loads inherit the branch profile unless overridden on the load.</p>
           <div className="mt-4 grid gap-4">
             {branches.map((branch) => (
@@ -161,8 +172,8 @@ export default async function CommissionProfilesPage() {
               </form>
             ))}
           </div>
-        </section>
-      </div>
+        </Tile>
+      </TileBoard>
     </>
   );
 }

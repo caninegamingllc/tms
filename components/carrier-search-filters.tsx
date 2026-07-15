@@ -30,11 +30,8 @@ export function CarrierSearchFilters({ filters }: { filters: CarrierFilters }) {
   }
 
   return (
-    <section className="card p-5">
-      <div className="mb-4">
-        <h2 className="section-title">Search Carriers</h2>
-        <p className="muted">Search by name, MC/DOT number, compliance status, or equipment type.</p>
-      </div>
+    <div className="grid gap-4">
+      <p className="muted">Search by name, MC/DOT number, compliance status, or equipment type.</p>
 
       <form className="grid gap-4" onSubmit={handleSubmit}>
         <div className="grid gap-4 md:grid-cols-3">
@@ -82,6 +79,6 @@ export function CarrierSearchFilters({ filters }: { filters: CarrierFilters }) {
           </button>
         </div>
       </form>
-    </section>
+    </div>
   );
 }

@@ -29,6 +29,7 @@ export type LoadTableRow = {
 export function LoadsTable({ loads }: { loads: LoadTableRow[] }) {
   return (
     <SortableTable
+      tableId="loads"
       data={loads}
       keyExtractor={(load) => load.id}
       getRowHref={(load) => `/loads/${load.id}`}

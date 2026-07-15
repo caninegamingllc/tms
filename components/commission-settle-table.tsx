@@ -1,9 +1,14 @@
 "use client";
 
 import { useMemo, useState } from "react";
-import { ArrowDown, ArrowUp, ChevronsUpDown } from "lucide-react";
-import { clsx } from "clsx";
-import { useSortedRows, useClientPagination, type SortableColumn } from "@/components/sortable-table";
+import {
+  useSortedRows,
+  useClientPagination,
+  useOrderedColumns,
+  SortableTableHeader,
+  ColumnLayoutControls,
+  type SortableColumn
+} from "@/components/sortable-table";
 import { TablePagination } from "@/components/table-pagination";
 import { settleBranchCommission } from "@/lib/commission-actions";
 
@@ -40,6 +45,7 @@ function buildColumns(canSettle: boolean): SortableColumn<CommissionRow>[] {
       id: "select",
       label: "",
       sortable: false,
+      reorderable: false,
       render: () => null
     });
   }
@@ -153,7 +159,11 @@ export function CommissionSettleTable({
 }) {
   const [selected, setSelected] = useState<string[]>([]);
   const columns = useMemo(() => buildColumns(canSettle), [canSettle]);
-  const { sortedData, sortState, handleSort } = useSortedRows(rows, columns, {
+  const { orderedColumns, moveColumn, resetOrder, isCustomized } = useOrderedColumns(
+    "commission-settle",
+    columns
+  );
+  const { sortedData, sortState, handleSort } = useSortedRows(rows, orderedColumns, {
     columnId: "pickup",
     direction: "desc"
   });
@@ -183,137 +193,117 @@ export function CommissionSettleTable({
       return;
     }
 
-    setSelected((current) => (current.includes(id) ? current.filter((value) => value !== id) : [...current, id]));
+    setSelected((current) =>
+      current.includes(id) ? current.filter((value) => value !== id) : [...current, id]
+    );
   }
 
-  const dataColumns = canSettle ? columns.slice(1) : columns;
+  const headerColumns = orderedColumns.map((column) =>
+    column.id === "select"
+      ? {
+          ...column,
+          label: (
+            <input
+              type="checkbox"
+              className="h-4 w-4 rounded border-border"
+              checked={allPageSelected}
+              disabled={pagePayableIds.length === 0}
+              onChange={toggleAllPage}
+              aria-label="Select all payable commissions on this page"
+            />
+          )
+        }
+      : column
+  );
 
   return (
-    <section className="card overflow-hidden p-0">
-      <div className="flex flex-wrap items-center justify-between gap-4 border-b border-border p-5">
-        <div>
-          <h2 className="section-title">Commission & Settlement</h2>
-          <p className="muted">
-            Branch commission becomes payable once the customer has paid the load. Select payable rows to batch-settle branch commissions. Click column headers to sort.
-          </p>
+    <div className="grid gap-4">
+      <div className="flex flex-wrap items-center justify-between gap-4">
+        <p className="muted">
+          Branch commission becomes payable once the customer has paid the load. Select payable rows to
+          batch-settle branch commissions. Drag column handles to reorder.
+        </p>
+        <div className="flex flex-wrap items-center gap-2">
+          <ColumnLayoutControls
+            className="mb-0"
+            onReset={resetOrder}
+            isCustomized={isCustomized}
+          />
+          {canSettle ? (
+            <form action={settleBranchCommission}>
+              {selected.map((id) => (
+                <input key={id} type="hidden" name="commissionIds" value={id} />
+              ))}
+              <button type="submit" className="btn" disabled={selected.length === 0}>
+                {selected.length > 0
+                  ? `Mark ${selected.length} selected as settled`
+                  : "Mark selected as settled"}
+              </button>
+            </form>
+          ) : null}
         </div>
-        {canSettle ? (
-          <form action={settleBranchCommission}>
-            {selected.map((id) => (
-              <input key={id} type="hidden" name="commissionIds" value={id} />
-            ))}
-            <button type="submit" className="btn" disabled={selected.length === 0}>
-              {selected.length > 0
-                ? `Mark ${selected.length} selected as settled`
-                : "Mark selected as settled"}
-            </button>
-          </form>
-        ) : null}
       </div>
 
       <div className="overflow-x-auto">
         <table className="table">
-          <thead>
-            <tr>
-              {canSettle ? (
-                <th>
-                  <input
-                    type="checkbox"
-                    className="h-4 w-4 rounded border-border"
-                    checked={allPageSelected}
-                    disabled={pagePayableIds.length === 0}
-                    onChange={toggleAllPage}
-                    aria-label="Select all payable commissions on this page"
-                  />
-                </th>
-              ) : null}
-              {dataColumns.map((column) => {
-                const isSortable = column.sortable !== false && column.sortValue != null;
-                const isActive = sortState.columnId === column.id;
-
-                return (
-                  <th
-                    key={column.id}
-                    className={clsx(isSortable && "sortable")}
-                    data-active={isActive || undefined}
-                  >
-                    {isSortable ? (
-                      <button
-                        type="button"
-                        className="inline-flex items-center gap-1 text-left"
-                        onClick={() => handleSort(column.id)}
-                      >
-                        <span>{column.label}</span>
-                        {isActive ? (
-                          sortState.direction === "asc" ? (
-                            <ArrowUp className="sort-icon" aria-hidden="true" />
-                          ) : (
-                            <ArrowDown className="sort-icon" aria-hidden="true" />
-                          )
-                        ) : (
-                          <ChevronsUpDown className="sort-icon" aria-hidden="true" />
-                        )}
-                      </button>
-                    ) : (
-                      column.label
-                    )}
-                  </th>
-                );
-              })}
-            </tr>
-          </thead>
+          <SortableTableHeader
+            columns={headerColumns}
+            sortState={sortState}
+            onSort={handleSort}
+            columnReorder
+            onMoveColumn={moveColumn}
+          />
           <tbody>
             {sortedData.length === 0 ? (
               <tr>
-                <td colSpan={columns.length} className="muted">
+                <td colSpan={orderedColumns.length} className="muted">
                   No commission records match the current filters.
                 </td>
               </tr>
             ) : (
               pageRows.map((row) => (
                 <tr key={row.id}>
-                  {canSettle ? (
-                    <td>
-                      <input
-                        type="checkbox"
-                        className="h-4 w-4 rounded border-border disabled:cursor-not-allowed disabled:opacity-40"
-                        checked={row.canSettle && selected.includes(row.id)}
-                        disabled={!row.canSettle}
-                        onChange={() => toggleOne(row.id)}
-                        title={
-                          row.canSettle
-                            ? `Select load ${row.loadNumber}`
-                            : "Payable after the customer pays this load"
-                        }
-                        aria-label={
-                          row.canSettle
-                            ? `Select load ${row.loadNumber}`
-                            : `Load ${row.loadNumber} is not yet payable`
-                        }
-                      />
-                    </td>
-                  ) : null}
-                  {dataColumns.map((column) => (
-                    <td key={column.id}>{column.render(row)}</td>
-                  ))}
+                  {orderedColumns.map((column) =>
+                    column.id === "select" ? (
+                      <td key={column.id}>
+                        <input
+                          type="checkbox"
+                          className="h-4 w-4 rounded border-border disabled:cursor-not-allowed disabled:opacity-40"
+                          checked={row.canSettle && selected.includes(row.id)}
+                          disabled={!row.canSettle}
+                          onChange={() => toggleOne(row.id)}
+                          title={
+                            row.canSettle
+                              ? `Select load ${row.loadNumber}`
+                              : "Payable after the customer pays this load"
+                          }
+                          aria-label={
+                            row.canSettle
+                              ? `Select load ${row.loadNumber}`
+                              : `Load ${row.loadNumber} is not yet payable`
+                          }
+                        />
+                      </td>
+                    ) : (
+                      <td key={column.id}>{column.render(row)}</td>
+                    )
+                  )}
                 </tr>
               ))
             )}
           </tbody>
         </table>
       </div>
-      <div className="px-5 pb-5">
-        <TablePagination
-          page={pagination.page}
-          pageSize={pagination.pageSize}
-          total={pagination.total}
-          totalPages={pagination.totalPages}
-          start={pagination.start}
-          end={pagination.end}
-          onPageChange={pagination.setPage}
-          onPageSizeChange={pagination.setPageSize}
-        />
-      </div>
-    </section>
+      <TablePagination
+        page={pagination.page}
+        pageSize={pagination.pageSize}
+        total={pagination.total}
+        totalPages={pagination.totalPages}
+        start={pagination.start}
+        end={pagination.end}
+        onPageChange={pagination.setPage}
+        onPageSizeChange={pagination.setPageSize}
+      />
+    </div>
   );
 }

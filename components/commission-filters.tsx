@@ -29,11 +29,8 @@ export function CommissionFilters({ filters }: { filters: CommissionFilters }) {
   }
 
   return (
-    <section className="card p-5">
-      <div className="mb-4">
-        <h2 className="section-title">Filters</h2>
-        <p className="muted">Filter by settlement status, commissionable flag, and pickup date.</p>
-      </div>
+    <div className="grid gap-4">
+      <p className="muted">Filter by settlement status, commissionable flag, and pickup date.</p>
 
       <form className="grid gap-4" onSubmit={handleSubmit}>
         <div className="grid gap-4 md:grid-cols-2 xl:grid-cols-4">
@@ -78,6 +75,6 @@ export function CommissionFilters({ filters }: { filters: CommissionFilters }) {
           </button>
         </div>
       </form>
-    </section>
+    </div>
   );
 }

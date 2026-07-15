@@ -2,6 +2,7 @@ import { FacilityForm } from "@/components/facility-form";
 import { LocationSearchFilters } from "@/components/location-search-filters";
 import { PageHeader } from "@/components/page-header";
 import { SearchPrompt } from "@/components/search-prompt";
+import { TileBoard, Tile } from "@/components/tile-board";
 import { createFacility, updateFacility } from "@/lib/actions";
 import {
   parseLocationSearchParams,
@@ -12,6 +13,13 @@ import { isSearchSubmitted } from "@/lib/list-search";
 import { requireTmsAccess } from "@/lib/permissions";
 import { prisma } from "@/lib/db";
 import { formatDate, humanize } from "@/lib/format";
+import { LIST_SEARCH_ADD_TILES } from "@/lib/tile-defaults";
+import { loadPageLayouts } from "@/lib/ui-preferences-load";
+
+const tiles = LIST_SEARCH_ADD_TILES.map((t) => ({
+  ...t,
+  title: t.id === "search" ? "Search Locations" : t.id === "results" ? "Search Results" : "Add Location"
+}));
 
 export default async function LocationsPage({
   searchParams
@@ -25,12 +33,13 @@ export default async function LocationsPage({
   const showResults = isSearchSubmitted(params);
 
   const scope = await getBranchScope(user);
-  const [facilities, customers] = await Promise.all([
+  const [facilities, customers, layouts] = await Promise.all([
     showResults ? searchLocations(scope, filters) : Promise.resolve([]),
     prisma.customer.findMany({
       where: scope,
       orderBy: { name: "asc" }
-    })
+    }),
+    loadPageLayouts("locations")
   ]);
 
   const customerOptions = customers.map((customer) => ({
@@ -51,22 +60,22 @@ export default async function LocationsPage({
         </div>
       ) : null}
 
-      <div className="grid gap-6 xl:grid-cols-[1.35fr_0.8fr]">
-        <div className="grid gap-6">
+      <TileBoard pageId="locations" tiles={tiles} initialLayouts={layouts}>
+        <Tile id="search">
           <LocationSearchFilters filters={filters} customers={customerOptions} />
+        </Tile>
 
+        <Tile id="results">
           {showResults ? (
-            <section className="card overflow-hidden p-0">
-              <div className="border-b border-border p-5">
-                <h2 className="section-title">Search Results</h2>
-                <p className="muted">
-                  {facilities.length} location{facilities.length === 1 ? "" : "s"} found. Selecting a saved location on a load snapshots its address onto the stop.
-                </p>
-              </div>
-              <div className="grid gap-4 p-5">
+            <>
+              <p className="muted mb-3">
+                {facilities.length} location{facilities.length === 1 ? "" : "s"} found. Selecting a saved
+                location on a load snapshots its address onto the stop.
+              </p>
+              <div className="grid gap-4">
                 {facilities.map((facility) => (
                   <div key={facility.id}>
-                    <div className="mb-3 flex flex-wrap items-start justify-between gap-3 px-1">
+                    <div className="mb-3 flex flex-wrap items-start justify-between gap-3">
                       <div>
                         <p className="font-semibold text-foreground">{facility.name}</p>
                         <p className="muted">
@@ -102,17 +111,16 @@ export default async function LocationsPage({
                   </div>
                 ))}
               </div>
-            </section>
+            </>
           ) : (
             <SearchPrompt entity="locations" />
           )}
-        </div>
+        </Tile>
 
-        <section className="card">
-          <h2 className="section-title">Add Location</h2>
+        <Tile id="add">
           <FacilityForm action={createFacility} customers={customerOptions} />
-        </section>
-      </div>
+        </Tile>
+      </TileBoard>
     </>
   );
 }

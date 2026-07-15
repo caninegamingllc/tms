@@ -411,7 +411,8 @@ async function main() {
       branchId: branch.id,
       referenceNumber: "PO-884201",
       equipmentType: "Reefer",
-      commodity: "Frozen prepared meals",
+      reeferTempF: -10,
+      commodity: "Frozen prepared meals; Dry ice packs",
       weight: 38500,
       pickupCity: "Detroit",
       pickupState: "MI",
@@ -421,6 +422,27 @@ async function main() {
       deliveryDate: daysFromNow(2),
       revenueCents: 285000,
       carrierCostCents: 220000,
+      commodityLines: {
+        create: [
+          {
+            sequence: 1,
+            quantity: 20,
+            description: "Frozen prepared meals",
+            weightLbs: 36000,
+            pieces: "20 PLT",
+            lengthIn: 48,
+            widthIn: 40,
+            heightIn: 60
+          },
+          {
+            sequence: 2,
+            quantity: 4,
+            description: "Dry ice packs",
+            weightLbs: 2500,
+            pieces: "4 PLT"
+          }
+        ]
+      },
       stops: {
         create: [
           {
@@ -578,6 +600,17 @@ async function main() {
       deliveryDate: daysFromNow(4),
       revenueCents: 195000,
       carrierCostCents: 150000,
+      commodityLines: {
+        create: [
+          {
+            sequence: 1,
+            quantity: 1,
+            description: "Store fixtures",
+            weightLbs: 22000,
+            pieces: "12 PLT"
+          }
+        ]
+      },
       stops: {
         create: [
           {
@@ -648,6 +681,17 @@ async function main() {
       deliveryDate: daysFromNow(-4),
       revenueCents: 100000,
       carrierCostCents: 70000,
+      commodityLines: {
+        create: [
+          {
+            sequence: 1,
+            quantity: 1,
+            description: "Paper products",
+            weightLbs: 41000,
+            pieces: "26 PLT"
+          }
+        ]
+      },
       stops: {
         create: [
           {

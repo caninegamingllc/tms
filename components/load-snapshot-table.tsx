@@ -23,6 +23,7 @@ export type LoadSnapshotRow = {
 export function LoadSnapshotTable({ loads }: { loads: LoadSnapshotRow[] }) {
   return (
     <SortableTable
+      tableId="load-snapshot"
       data={loads}
       keyExtractor={(load) => load.id}
       defaultSort={{ columnId: "pickup", direction: "desc" }}

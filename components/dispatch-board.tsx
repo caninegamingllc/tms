@@ -101,6 +101,13 @@ function buildColumns(visibleColumnIds: Set<DispatchBoardColumnId>): SortableCol
       render: (row) => row.equipmentType
     },
     {
+      id: "reeferTemp",
+      label: "Reefer Temp",
+      sortValue: (row) => row.reeferTempF ?? Number.NEGATIVE_INFINITY,
+      render: (row) =>
+        row.reeferTempF != null ? `${row.reeferTempF}°F` : <span className="muted">—</span>
+    },
+    {
       id: "commodity",
       label: "Commodity",
       sortValue: (row) => row.commodity ?? "General freight",
@@ -295,7 +302,7 @@ export function DispatchBoard({
                 <div className="mb-3 flex items-center justify-between gap-3">
                   <p className="text-sm font-semibold text-foreground">Visible columns</p>
                   <button type="button" className="text-sm font-semibold text-primary" onClick={resetColumns}>
-                    Reset
+                    Reset to default
                   </button>
                 </div>
                 <div className="grid max-h-80 gap-2 overflow-y-auto">
@@ -353,6 +360,7 @@ export function DispatchBoard({
 
       <div className="overflow-x-auto">
         <SortableTable
+          tableId="dispatch-board"
           data={filteredRows}
           columns={columns}
           keyExtractor={(row) => row.id}

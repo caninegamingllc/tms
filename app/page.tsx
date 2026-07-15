@@ -4,12 +4,19 @@ import { FuelIndexCard } from "@/components/fuel-index-card";
 import { LoadSnapshotTable } from "@/components/load-snapshot-table";
 import { MetricCard } from "@/components/metric-card";
 import { PageHeader } from "@/components/page-header";
+import { TileBoard, Tile } from "@/components/tile-board";
 import { getDieselPrices } from "@/lib/eia-diesel";
 import { formatDateTime, formatMoney } from "@/lib/format";
 import { getDashboardData } from "@/lib/queries";
+import { DASHBOARD_TILES } from "@/lib/tile-defaults";
+import { loadPageLayouts } from "@/lib/ui-preferences-load";
 
 export default async function DashboardPage() {
-  const [data, dieselPrices] = await Promise.all([getDashboardData(), getDieselPrices()]);
+  const [data, dieselPrices, layouts] = await Promise.all([
+    getDashboardData(),
+    getDieselPrices(),
+    loadPageLayouts("dashboard")
+  ]);
 
   return (
     <>
@@ -24,51 +31,50 @@ export default async function DashboardPage() {
         }
       />
 
-      <div className="overflow-hidden rounded-lg border border-border bg-card">
-        <div className="grid md:grid-cols-2 xl:grid-cols-4 xl:[&>*:nth-child(4n)]:border-r-0">
-          <MetricCard
-            label="Active Loads"
-            value={data.activeLoads.length}
-            detail={`${data.loads.length} total loads in the system`}
-            icon={<ClipboardList className="h-4 w-4" />}
-          />
-          <MetricCard
-            label="Booked Revenue"
-            value={formatMoney(data.revenueCents)}
-            detail={`Margin ${formatMoney(data.marginCents)} across visible loads`}
-            icon={<Banknote className="h-4 w-4" />}
-          />
-          <MetricCard
-            label="Open AR"
-            value={formatMoney(data.openArCents)}
-            detail="Customer invoices not yet paid"
-            icon={<AlertCircle className="h-4 w-4" />}
-          />
-          <MetricCard
-            label="Carrier Network"
-            value={data.carriers}
-            detail={`${data.customers} active customer accounts`}
-            icon={<Truck className="h-4 w-4" />}
-          />
-        </div>
-      </div>
-
-      <div className="mt-4">
-        <FuelIndexCard data={dieselPrices} />
-      </div>
-
-      <div className="mt-4 grid gap-4 xl:grid-cols-[1.5fr_1fr]">
-        <section className="card overflow-hidden p-0">
-          <div className="flex items-center justify-between border-b border-border px-4 py-3 md:px-5">
-            <div>
-              <h2 className="section-title">Load board snapshot</h2>
-              <p className="muted">Most recent freight, coverage, and margin.</p>
+      <TileBoard pageId="dashboard" tiles={DASHBOARD_TILES} initialLayouts={layouts}>
+        <Tile id="metrics">
+          <div className="overflow-hidden rounded-lg border border-border bg-card">
+            <div className="grid md:grid-cols-2 xl:grid-cols-4 xl:[&>*:nth-child(4n)]:border-r-0">
+              <MetricCard
+                label="Active Loads"
+                value={data.activeLoads.length}
+                detail={`${data.loads.length} total loads in the system`}
+                icon={<ClipboardList className="h-4 w-4" />}
+              />
+              <MetricCard
+                label="Booked Revenue"
+                value={formatMoney(data.revenueCents)}
+                detail={`Margin ${formatMoney(data.marginCents)} across visible loads`}
+                icon={<Banknote className="h-4 w-4" />}
+              />
+              <MetricCard
+                label="Open AR"
+                value={formatMoney(data.openArCents)}
+                detail="Customer invoices not yet paid"
+                icon={<AlertCircle className="h-4 w-4" />}
+              />
+              <MetricCard
+                label="Carrier Network"
+                value={data.carriers}
+                detail={`${data.customers} active customer accounts`}
+                icon={<Truck className="h-4 w-4" />}
+              />
             </div>
+          </div>
+        </Tile>
+
+        <Tile id="fuel-index">
+          <FuelIndexCard data={dieselPrices} />
+        </Tile>
+
+        <Tile id="load-board">
+          <div className="flex items-center justify-between gap-3">
+            <p className="muted">Most recent freight, coverage, and margin.</p>
             <Link href="/loads" className="btn-secondary">
               View All
             </Link>
           </div>
-          <div className="overflow-x-auto">
+          <div className="mt-3 overflow-x-auto">
             <LoadSnapshotTable
               loads={data.loads.map((load) => ({
                 id: load.id,
@@ -86,10 +92,9 @@ export default async function DashboardPage() {
               }))}
             />
           </div>
-        </section>
+        </Tile>
 
-        <section className="card !p-4">
-          <h2 className="section-title">Recent check calls</h2>
+        <Tile id="check-calls">
           <p className="muted">Latest driver and carrier updates.</p>
           <div className="mt-3 grid gap-2">
             {data.checkCalls.map((call) => (
@@ -111,8 +116,8 @@ export default async function DashboardPage() {
               </div>
             ))}
           </div>
-        </section>
-      </div>
+        </Tile>
+      </TileBoard>
     </>
   );
 }

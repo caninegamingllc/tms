@@ -1,3 +1,4 @@
+import { cache } from "react";
 import { redirect } from "next/navigation";
 import { canAccessAdmin, canAccessTms } from "@/lib/seats";
 import { canWrite } from "@/lib/scope";
@@ -15,7 +16,7 @@ export async function requireWriteUser() {
   return user;
 }
 
-export async function requireTmsAccess() {
+export const requireTmsAccess = cache(async () => {
   const { requireUser } = await import("@/lib/auth");
   const user = await requireUser();
 
@@ -28,4 +29,4 @@ export async function requireTmsAccess() {
   }
 
   return user;
-}
+});

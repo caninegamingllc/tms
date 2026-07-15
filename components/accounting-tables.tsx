@@ -50,6 +50,7 @@ export function InvoicesTable({
 }) {
   return (
     <SortableTable
+      tableId="accounting-invoices"
       data={invoices}
       keyExtractor={(invoice) => invoice.id}
       defaultSort={{ columnId: "due", direction: "desc" }}
@@ -150,6 +151,7 @@ export function CarrierBillsTable({
 }) {
   return (
     <SortableTable
+      tableId="accounting-bills"
       data={bills}
       keyExtractor={(bill) => bill.id}
       defaultSort={{ columnId: "due", direction: "desc" }}

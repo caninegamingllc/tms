@@ -54,7 +54,7 @@ export function SearchViewToggle({ view }: { view: "loads" | "revenue" }) {
   );
 }
 
-export function RevenueReportPanel({
+export function RevenueMetricsHeader({
   summary,
   companyName,
   filterSummary
@@ -89,8 +89,9 @@ export function RevenueReportPanel({
     );
   }
 
+
   return (
-    <>
+    <div className="grid gap-4">
       <div className="flex flex-wrap items-center justify-between gap-3">
         <p className="muted">{filterSummary}</p>
         <div className="flex flex-wrap gap-2">
@@ -103,7 +104,7 @@ export function RevenueReportPanel({
         </div>
       </div>
 
-      <div className="mt-4 grid gap-4 md:grid-cols-4">
+      <div className="grid gap-4 md:grid-cols-2 xl:grid-cols-4">
         <MetricCard
           label="Total Revenue"
           value={formatMoney(summary.totalRevenueCents)}
@@ -125,136 +126,164 @@ export function RevenueReportPanel({
           detail="Based on filtered results"
         />
       </div>
+    </div>
+  );
+}
 
-      <div className="mt-6 grid gap-6 xl:grid-cols-2">
-        <section className="card overflow-hidden p-0">
-          <div className="border-b border-border p-5">
-            <h2 className="section-title">Load Profitability</h2>
-            <p className="muted">Revenue, carrier cost, and margin by load.</p>
-          </div>
-          <div className="overflow-x-auto">
-            <SortableTable
-              data={summary.loads}
-              keyExtractor={(load) => load.id}
-              defaultSort={{ columnId: "pickup", direction: "desc" }}
-              emptyMessage="No loads match the current filters."
-              columns={[
-                {
-                  id: "load",
-                  label: "Load",
-                  sortValue: (load) => load.loadNumber,
-                  render: (load) => <span className="font-semibold">{load.loadNumber}</span>
-                },
-                {
-                  id: "customer",
-                  label: "Customer",
-                  sortValue: (load) => load.customer,
-                  render: (load) => load.customer
-                },
-                {
-                  id: "pickup",
-                  label: "Pickup",
-                  sortValue: (load) => load.pickupDate,
-                  render: (load) => formatDate(load.pickupDate)
-                },
-                {
-                  id: "revenue",
-                  label: "Revenue",
-                  sortValue: (load) => load.revenueCents,
-                  render: (load) => formatMoney(load.revenueCents)
-                },
-                {
-                  id: "cost",
-                  label: "Cost",
-                  sortValue: (load) => load.costCents,
-                  render: (load) => formatMoney(load.costCents)
-                },
-                {
-                  id: "margin",
-                  label: "Margin",
-                  sortValue: (load) => load.marginCents,
-                  render: (load) => (
-                    <>
-                      {formatMoney(load.marginCents)}
-                      <p className="muted">{load.marginPercent}</p>
-                    </>
-                  )
-                }
-              ]}
-            />
-          </div>
-        </section>
-
-        <section className="card overflow-hidden p-0">
-          <div className="border-b border-border p-5">
-            <h2 className="section-title">Lane Summary</h2>
-            <p className="muted">Freight flow by lane for the filtered set.</p>
-          </div>
-          <div className="overflow-x-auto">
-            <SortableTable
-              data={summary.lanes}
-              keyExtractor={(lane) => lane.lane}
-              defaultSort={{ columnId: "revenue", direction: "desc" }}
-              emptyMessage="No lane data for the current filters."
-              columns={[
-                {
-                  id: "lane",
-                  label: "Lane",
-                  sortValue: (lane) => lane.lane,
-                  render: (lane) => <span className="font-semibold">{lane.lane}</span>
-                },
-                {
-                  id: "loads",
-                  label: "Loads",
-                  sortValue: (lane) => lane.count,
-                  render: (lane) => lane.count
-                },
-                {
-                  id: "revenue",
-                  label: "Revenue",
-                  sortValue: (lane) => lane.revenueCents,
-                  render: (lane) => formatMoney(lane.revenueCents)
-                }
-              ]}
-            />
-          </div>
-        </section>
+export function LoadProfitabilityTable({ summary }: { summary: RevenueSummary }) {
+  return (
+    <div className="grid gap-3">
+      <p className="muted">Revenue, carrier cost, and margin by load.</p>
+      <div className="overflow-x-auto">
+        <SortableTable
+          tableId="revenue-loads"
+          data={summary.loads}
+          keyExtractor={(load) => load.id}
+          defaultSort={{ columnId: "pickup", direction: "desc" }}
+          emptyMessage="No loads match the current filters."
+          columns={[
+            {
+              id: "load",
+              label: "Load",
+              sortValue: (load) => load.loadNumber,
+              render: (load) => <span className="font-semibold">{load.loadNumber}</span>
+            },
+            {
+              id: "customer",
+              label: "Customer",
+              sortValue: (load) => load.customer,
+              render: (load) => load.customer
+            },
+            {
+              id: "pickup",
+              label: "Pickup",
+              sortValue: (load) => load.pickupDate,
+              render: (load) => formatDate(load.pickupDate)
+            },
+            {
+              id: "revenue",
+              label: "Revenue",
+              sortValue: (load) => load.revenueCents,
+              render: (load) => formatMoney(load.revenueCents)
+            },
+            {
+              id: "cost",
+              label: "Cost",
+              sortValue: (load) => load.costCents,
+              render: (load) => formatMoney(load.costCents)
+            },
+            {
+              id: "margin",
+              label: "Margin",
+              sortValue: (load) => load.marginCents,
+              render: (load) => (
+                <>
+                  {formatMoney(load.marginCents)}
+                  <p className="muted">{load.marginPercent}</p>
+                </>
+              )
+            }
+          ]}
+        />
       </div>
+    </div>
+  );
+}
 
-      <section className="card mt-6 overflow-hidden p-0">
-        <div className="border-b border-border p-5">
-          <h2 className="section-title">Customer Volume</h2>
-          <p className="muted">Load counts and revenue by customer.</p>
-        </div>
-        <div className="overflow-x-auto">
-          <SortableTable
-            data={summary.customers}
-            keyExtractor={(customer) => customer.customer}
-            defaultSort={{ columnId: "revenue", direction: "desc" }}
-            emptyMessage="No customer data for the current filters."
-            columns={[
-              {
-                id: "customer",
-                label: "Customer",
-                sortValue: (customer) => customer.customer,
-                render: (customer) => <span className="font-semibold">{customer.customer}</span>
-              },
-              {
-                id: "loads",
-                label: "Loads",
-                sortValue: (customer) => customer.count,
-                render: (customer) => customer.count
-              },
-              {
-                id: "revenue",
-                label: "Revenue",
-                sortValue: (customer) => customer.revenueCents,
-                render: (customer) => formatMoney(customer.revenueCents)
-              }
-            ]}
-          />
-        </div>
-      </section>
-    </>
+export function LaneSummaryTable({ summary }: { summary: RevenueSummary }) {
+  return (
+    <div className="grid gap-3">
+      <p className="muted">Freight flow by lane for the filtered set.</p>
+      <div className="overflow-x-auto">
+        <SortableTable
+          tableId="revenue-lanes"
+          data={summary.lanes}
+          keyExtractor={(lane) => lane.lane}
+          defaultSort={{ columnId: "revenue", direction: "desc" }}
+          emptyMessage="No lane data for the current filters."
+          columns={[
+            {
+              id: "lane",
+              label: "Lane",
+              sortValue: (lane) => lane.lane,
+              render: (lane) => <span className="font-semibold">{lane.lane}</span>
+            },
+            {
+              id: "loads",
+              label: "Loads",
+              sortValue: (lane) => lane.count,
+              render: (lane) => lane.count
+            },
+            {
+              id: "revenue",
+              label: "Revenue",
+              sortValue: (lane) => lane.revenueCents,
+              render: (lane) => formatMoney(lane.revenueCents)
+            }
+          ]}
+        />
+      </div>
+    </div>
+  );
+}
+
+export function CustomerVolumeTable({ summary }: { summary: RevenueSummary }) {
+  return (
+    <div className="grid gap-3">
+      <p className="muted">Load counts and revenue by customer.</p>
+      <div className="overflow-x-auto">
+        <SortableTable
+          tableId="revenue-customers"
+          data={summary.customers}
+          keyExtractor={(customer) => customer.customer}
+          defaultSort={{ columnId: "revenue", direction: "desc" }}
+          emptyMessage="No customer data for the current filters."
+          columns={[
+            {
+              id: "customer",
+              label: "Customer",
+              sortValue: (customer) => customer.customer,
+              render: (customer) => <span className="font-semibold">{customer.customer}</span>
+            },
+            {
+              id: "loads",
+              label: "Loads",
+              sortValue: (customer) => customer.count,
+              render: (customer) => customer.count
+            },
+            {
+              id: "revenue",
+              label: "Revenue",
+              sortValue: (customer) => customer.revenueCents,
+              render: (customer) => formatMoney(customer.revenueCents)
+            }
+          ]}
+        />
+      </div>
+    </div>
+  );
+}
+
+/** @deprecated Prefer the split tile components above. */
+export function RevenueReportPanel({
+  summary,
+  companyName,
+  filterSummary
+}: {
+  summary: RevenueSummary;
+  companyName: string;
+  filterSummary: string;
+}) {
+  return (
+    <div className="grid gap-6">
+      <RevenueMetricsHeader
+        summary={summary}
+        companyName={companyName}
+        filterSummary={filterSummary}
+      />
+      <LoadProfitabilityTable summary={summary} />
+      <LaneSummaryTable summary={summary} />
+      <CustomerVolumeTable summary={summary} />
+    </div>
   );
 }

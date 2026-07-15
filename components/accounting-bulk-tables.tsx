@@ -6,7 +6,9 @@ import { ChevronDown, ChevronRight } from "lucide-react";
 import {
   SortableTableHeader,
   useClientPagination,
+  useOrderedColumns,
   useSortedRows,
+  ColumnLayoutControls,
   type SortableColumn
 } from "@/components/sortable-table";
 import { TablePagination } from "@/components/table-pagination";
@@ -134,25 +136,40 @@ export function AccountingInvoicesPanel({
         id: "select",
         label: "",
         sortable: false,
+        reorderable: false,
         render: () => null
       },
       {
         id: "customer",
         label: "Company Name",
         sortValue: (row) => row.customerName,
-        render: (row) => row.customerName
+        render: (row) => <span className="font-medium">{row.customerName}</span>
       },
       {
         id: "invoice",
         label: "Invoice #",
         sortValue: (row) => row.invoiceNo,
-        render: (row) => row.invoiceNo
+        render: (row) => (
+          <>
+            <span className="font-semibold">{row.invoiceNo}</span>{" "}
+            <StatusBadge value={row.status} />
+          </>
+        )
       },
       {
         id: "load",
         label: "Load / Ref",
         sortValue: (row) => row.loadNumber,
-        render: (row) => row.loadNumber
+        render: (row) => (
+          <>
+            <Link href={`/loads/${row.loadId}`} className="text-primary">
+              {row.loadNumber}
+            </Link>
+            {row.referenceNumber ? (
+              <span className="block text-xs text-muted-foreground">{row.referenceNumber}</span>
+            ) : null}
+          </>
+        )
       },
       {
         id: "delivery",
@@ -188,7 +205,7 @@ export function AccountingInvoicesPanel({
         id: "balance",
         label: "Balance",
         sortValue: (row) => row.balanceCents,
-        render: (row) => formatMoney(row.balanceCents)
+        render: (row) => <span className="font-semibold">{formatMoney(row.balanceCents)}</span>
       },
       ...(quickbooksMethod !== "NONE"
         ? [
@@ -204,13 +221,28 @@ export function AccountingInvoicesPanel({
         id: "actions",
         label: "Actions",
         sortable: false,
-        render: () => null
+        reorderable: false,
+        render: (row: AccountingInvoiceRow) =>
+          row.canMarkPaid ? (
+            <form action={markInvoicePaid}>
+              <input type="hidden" name="invoiceId" value={row.id} />
+              <button type="submit" className="text-xs font-semibold text-primary">
+                Mark paid
+              </button>
+            </form>
+          ) : (
+            "—"
+          )
       }
     ],
     [quickbooksMethod]
   );
 
-  const { sortedData, sortState, handleSort } = useSortedRows(filtered, columns, {
+  const { orderedColumns, moveColumn, resetOrder, isCustomized } = useOrderedColumns(
+    "accounting-bulk-invoices",
+    columns
+  );
+  const { sortedData, sortState, handleSort } = useSortedRows(filtered, orderedColumns, {
     columnId: "due",
     direction: "desc"
   });
@@ -225,7 +257,7 @@ export function AccountingInvoicesPanel({
     selectedRows.every((row) => row.customerId === selectedRows[0].customerId);
   const allPageSelected = pageIds.length > 0 && pageIds.every((id) => selection.selected.has(id));
 
-  const headerColumns = columns.map((column) =>
+  const headerColumns = orderedColumns.map((column) =>
     column.id === "select"
       ? {
           ...column,
@@ -339,61 +371,42 @@ export function AccountingInvoicesPanel({
           value={query}
           onChange={(event) => setQuery(event.target.value)}
         />
+        <ColumnLayoutControls className="mb-0" onReset={resetOrder} isCustomized={isCustomized} />
       </div>
 
       <div className="overflow-x-auto">
         <table className="table min-w-full text-left text-sm">
-          <SortableTableHeader columns={headerColumns} sortState={sortState} onSort={handleSort} />
+          <SortableTableHeader
+            columns={headerColumns}
+            sortState={sortState}
+            onSort={handleSort}
+            columnReorder
+            onMoveColumn={moveColumn}
+          />
           <tbody>
             {pageRows.map((row) => (
               <tr
                 key={row.id}
                 className={selection.selected.has(row.id) ? "bg-amber-50" : undefined}
               >
-                <td>
-                  <input
-                    type="checkbox"
-                    checked={selection.selected.has(row.id)}
-                    onChange={() => selection.toggle(row.id)}
-                  />
-                </td>
-                <td className="font-medium">{row.customerName}</td>
-                <td>
-                  <span className="font-semibold">{row.invoiceNo}</span>{" "}
-                  <StatusBadge value={row.status} />
-                </td>
-                <td>
-                  <Link href={`/loads/${row.loadId}`} className="text-primary">
-                    {row.loadNumber}
-                  </Link>
-                  {row.referenceNumber ? (
-                    <span className="block text-xs text-muted-foreground">{row.referenceNumber}</span>
-                  ) : null}
-                </td>
-                <td>{row.deliveryAt ? formatDate(row.deliveryAt) : "—"}</td>
-                <td>{row.sentLabel}</td>
-                <td>{row.issuedAt ? formatDate(row.issuedAt) : "—"}</td>
-                <td>{row.dueAt ? formatDate(row.dueAt) : "—"}</td>
-                <td>{formatMoney(row.totalCents)}</td>
-                <td className="font-semibold">{formatMoney(row.balanceCents)}</td>
-                {quickbooksMethod !== "NONE" ? <td>{row.exportLabel ?? "—"}</td> : null}
-                <td>
-                  {row.canMarkPaid ? (
-                    <form action={markInvoicePaid}>
-                      <input type="hidden" name="invoiceId" value={row.id} />
-                      <button type="submit" className="text-xs font-semibold text-primary">
-                        Mark paid
-                      </button>
-                    </form>
+                {orderedColumns.map((column) =>
+                  column.id === "select" ? (
+                    <td key={column.id}>
+                      <input
+                        type="checkbox"
+                        checked={selection.selected.has(row.id)}
+                        onChange={() => selection.toggle(row.id)}
+                      />
+                    </td>
                   ) : (
-                    "—"
-                  )}
-                </td>
+                    <td key={column.id}>{column.render(row)}</td>
+                  )
+                )}
               </tr>
             ))}
             {sortedData.length === 0 ? (
               <tr>
-                <td colSpan={columns.length} className="p-8 text-center text-muted-foreground">
+                <td colSpan={orderedColumns.length} className="p-8 text-center text-muted-foreground">
                   No invoices match this search.
                 </td>
               </tr>
@@ -448,19 +461,26 @@ export function AccountingBillsPanel({
 
   const columns: SortableColumn<AccountingApLoadRow>[] = useMemo(
     () => [
-      { id: "expand", label: "", sortable: false, render: () => null },
-      { id: "select", label: "", sortable: false, render: () => null },
+      { id: "expand", label: "", sortable: false, reorderable: false, render: () => null },
+      { id: "select", label: "", sortable: false, reorderable: false, render: () => null },
       {
         id: "company",
         label: "Company Name",
         sortValue: (row) => row.carrierName,
-        render: (row) => row.carrierName
+        render: (row) => <span className="font-medium">{row.carrierName}</span>
       },
       {
         id: "load",
         label: "Load #",
         sortValue: (row) => row.loadNumber,
-        render: (row) => row.loadNumber
+        render: (row) => (
+          <>
+            <Link href={`/loads/${row.loadId}`} className="text-primary">
+              {row.loadNumber}
+            </Link>{" "}
+            <StatusBadge value={row.loadStatus} />
+          </>
+        )
       },
       {
         id: "ref",
@@ -490,7 +510,16 @@ export function AccountingBillsPanel({
         id: "billRef",
         label: "Bill Ref #",
         sortValue: (row) => row.billReference ?? "",
-        render: (row) => row.billReference ?? "—"
+        render: (row) => (
+          <>
+            {row.billReference ?? "—"}
+            {row.billStatus ? (
+              <span className="ml-1">
+                <StatusBadge value={row.billStatus} />
+              </span>
+            ) : null}
+          </>
+        )
       },
       {
         id: "expenses",
@@ -502,13 +531,18 @@ export function AccountingBillsPanel({
         id: "billed",
         label: "Amount Billed",
         sortValue: (row) => row.amountBilledCents,
-        render: (row) => formatMoney(row.amountBilledCents)
+        render: (row) => (row.billId ? formatMoney(row.amountBilledCents) : "—")
       },
       {
         id: "balance",
         label: "Balance to Pay",
         sortValue: (row) => row.balanceCents,
-        render: (row) => formatMoney(row.balanceCents)
+        render: (row) =>
+          row.billId ? (
+            <span className="font-semibold">{formatMoney(row.balanceCents)}</span>
+          ) : (
+            "—"
+          )
       },
       {
         id: "remit",
@@ -520,7 +554,11 @@ export function AccountingBillsPanel({
     []
   );
 
-  const { sortedData, sortState, handleSort } = useSortedRows(filtered, columns, {
+  const { orderedColumns, moveColumn, resetOrder, isCustomized } = useOrderedColumns(
+    "accounting-bulk-bills",
+    columns
+  );
+  const { sortedData, sortState, handleSort } = useSortedRows(filtered, orderedColumns, {
     columnId: "delivery",
     direction: "desc"
   });
@@ -539,7 +577,7 @@ export function AccountingBillsPanel({
   const allPageSelected =
     pageBillIds.length > 0 && pageBillIds.every((id) => selection.selected.has(id));
 
-  const headerColumns = columns.map((column) =>
+  const headerColumns = orderedColumns.map((column) =>
     column.id === "select"
       ? {
           ...column,
@@ -653,18 +691,25 @@ export function AccountingBillsPanel({
         </div>
       ) : null}
 
-      <div className="mb-3">
+      <div className="mb-3 flex flex-wrap items-center gap-3">
         <input
           className="input max-w-xl"
           placeholder="Search company name, remit to, load #, bill #, or reference"
           value={query}
           onChange={(event) => setQuery(event.target.value)}
         />
+        <ColumnLayoutControls className="mb-0" onReset={resetOrder} isCustomized={isCustomized} />
       </div>
 
       <div className="overflow-x-auto">
         <table className="table min-w-full text-left text-sm">
-          <SortableTableHeader columns={headerColumns} sortState={sortState} onSort={handleSort} />
+          <SortableTableHeader
+            columns={headerColumns}
+            sortState={sortState}
+            onSort={handleSort}
+            columnReorder
+            onMoveColumn={moveColumn}
+          />
           <tbody>
             {pageRows.map((row) => {
               const isOpen = expanded.has(row.rowKey);
@@ -675,60 +720,48 @@ export function AccountingBillsPanel({
                       row.billId && selection.selected.has(row.billId) ? "bg-amber-50" : undefined
                     }
                   >
-                    <td>
-                      <button
-                        type="button"
-                        className="rounded p-1 text-muted-foreground hover:bg-muted"
-                        onClick={() => toggleExpanded(row.rowKey)}
-                        aria-label={isOpen ? "Collapse row" : "Expand row"}
-                      >
-                        {isOpen ? (
-                          <ChevronDown className="h-4 w-4" />
-                        ) : (
-                          <ChevronRight className="h-4 w-4" />
-                        )}
-                      </button>
-                    </td>
-                    <td>
-                      {row.billId ? (
-                        <input
-                          type="checkbox"
-                          checked={selection.selected.has(row.billId)}
-                          onChange={() => selection.toggle(row.billId!)}
-                        />
-                      ) : (
-                        <span className="text-muted-foreground">—</span>
-                      )}
-                    </td>
-                    <td className="font-medium">{row.carrierName}</td>
-                    <td>
-                      <Link href={`/loads/${row.loadId}`} className="text-primary">
-                        {row.loadNumber}
-                      </Link>{" "}
-                      <StatusBadge value={row.loadStatus} />
-                    </td>
-                    <td>{row.referenceNumber ?? "—"}</td>
-                    <td>{row.deliveryAt ? formatDate(row.deliveryAt) : "—"}</td>
-                    <td>{row.receivedAt ? formatDate(row.receivedAt) : "—"}</td>
-                    <td>{row.dueAt ? formatDate(row.dueAt) : "—"}</td>
-                    <td>
-                      {row.billReference ?? "—"}
-                      {row.billStatus ? (
-                        <span className="ml-1">
-                          <StatusBadge value={row.billStatus} />
-                        </span>
-                      ) : null}
-                    </td>
-                    <td>{formatMoney(row.loadExpenseCents)}</td>
-                    <td>{row.billId ? formatMoney(row.amountBilledCents) : "—"}</td>
-                    <td className="font-semibold">
-                      {row.billId ? formatMoney(row.balanceCents) : "—"}
-                    </td>
-                    <td>{row.remitTo}</td>
+                    {orderedColumns.map((column) => {
+                      if (column.id === "expand") {
+                        return (
+                          <td key={column.id}>
+                            <button
+                              type="button"
+                              className="rounded p-1 text-muted-foreground hover:bg-muted"
+                              onClick={() => toggleExpanded(row.rowKey)}
+                              aria-label={isOpen ? "Collapse row" : "Expand row"}
+                            >
+                              {isOpen ? (
+                                <ChevronDown className="h-4 w-4" />
+                              ) : (
+                                <ChevronRight className="h-4 w-4" />
+                              )}
+                            </button>
+                          </td>
+                        );
+                      }
+
+                      if (column.id === "select") {
+                        return (
+                          <td key={column.id}>
+                            {row.billId ? (
+                              <input
+                                type="checkbox"
+                                checked={selection.selected.has(row.billId)}
+                                onChange={() => selection.toggle(row.billId!)}
+                              />
+                            ) : (
+                              <span className="text-muted-foreground">—</span>
+                            )}
+                          </td>
+                        );
+                      }
+
+                      return <td key={column.id}>{column.render(row)}</td>;
+                    })}
                   </tr>
                   {isOpen ? (
                     <tr className="bg-slate-50">
-                      <td colSpan={columns.length} className="p-4">
+                      <td colSpan={orderedColumns.length} className="p-4">
                         {row.billId ? (
                           <div className="flex flex-wrap items-center gap-3">
                             <p className="text-sm text-slate-700">
@@ -757,7 +790,7 @@ export function AccountingBillsPanel({
             })}
             {sortedData.length === 0 ? (
               <tr>
-                <td colSpan={columns.length} className="p-8 text-center text-muted-foreground">
+                <td colSpan={orderedColumns.length} className="p-8 text-center text-muted-foreground">
                   No covered loads or bills match this search.
                 </td>
               </tr>

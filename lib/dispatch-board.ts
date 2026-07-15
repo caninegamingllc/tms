@@ -46,6 +46,7 @@ export const dispatchBoardColumnOptions = [
   { id: "pickup", label: "Pickup", defaultVisible: true },
   { id: "delivery", label: "Delivery", defaultVisible: false },
   { id: "equipment", label: "Equipment", defaultVisible: true },
+  { id: "reeferTemp", label: "Reefer Temp", defaultVisible: true },
   { id: "commodity", label: "Commodity", defaultVisible: false },
   { id: "carrier", label: "Carrier", defaultVisible: true },
   { id: "driver", label: "Driver", defaultVisible: true },
@@ -71,6 +72,7 @@ export type DispatchBoardRow = {
   pickupDate: string;
   deliveryDate: string;
   equipmentType: string;
+  reeferTempF: number | null;
   commodity: string | null;
   carrierName: string;
   driverName: string | null;
@@ -193,6 +195,7 @@ type DispatchBoardLoad = {
   pickupDate: Date;
   deliveryDate: Date;
   equipmentType: string;
+  reeferTempF: number | null;
   commodity: string | null;
   revenueCents: number;
   carrierCostCents: number;
@@ -234,6 +237,7 @@ export function serializeDispatchBoardRow(load: DispatchBoardLoad): DispatchBoar
     pickupDate: load.pickupDate.toISOString(),
     deliveryDate: load.deliveryDate.toISOString(),
     equipmentType: load.equipmentType,
+    reeferTempF: load.reeferTempF,
     commodity: load.commodity,
     carrierName: load.dispatchAssignment?.carrier.name ?? "Uncovered",
     driverName: load.dispatchAssignment?.driverName ?? null,

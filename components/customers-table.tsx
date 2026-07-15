@@ -21,6 +21,7 @@ export type CustomerTableRow = {
 export function CustomersTable({ customers }: { customers: CustomerTableRow[] }) {
   return (
     <SortableTable
+      tableId="customers"
       data={customers}
       keyExtractor={(customer) => customer.id}
       getRowHref={(customer) => `/customers/${customer.id}`}

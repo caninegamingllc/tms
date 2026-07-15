@@ -50,11 +50,8 @@ export function LocationSearchFilters({
   }
 
   return (
-    <section className="card p-5">
-      <div className="mb-4">
-        <h2 className="section-title">Search Locations</h2>
-        <p className="muted">Search by facility name, address, city, state, type, or linked customer.</p>
-      </div>
+    <div className="grid gap-4">
+      <p className="muted">Search by facility name, address, city, state, type, or linked customer.</p>
 
       <form className="grid gap-4" onSubmit={handleSubmit}>
         <div className="grid gap-4 md:grid-cols-3">
@@ -98,6 +95,6 @@ export function LocationSearchFilters({
           </button>
         </div>
       </form>
-    </section>
+    </div>
   );
 }

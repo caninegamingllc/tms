@@ -2,7 +2,16 @@
 
 import Link from "next/link";
 import { usePathname, useRouter } from "next/navigation";
-import { useEffect, useMemo, useState, type ComponentType } from "react";
+import {
+  useCallback,
+  useEffect,
+  useId,
+  useMemo,
+  useRef,
+  useState,
+  type ComponentType
+} from "react";
+import { createPortal } from "react-dom";
 import { clsx } from "clsx";
 import {
   BarChart3,
@@ -30,6 +39,7 @@ import { BranchSwitcher } from "@/components/branch-switcher";
 import type { BranchSwitcherData } from "@/lib/branch-filter";
 
 const SESSION_HEARTBEAT_MS = 30_000;
+const FLYOUT_CLOSE_DELAY_MS = 120;
 
 type NavItem = {
   href: string;
@@ -112,14 +122,31 @@ function initials(name: string) {
 function NavFlyout({
   group,
   pathname,
+  top,
+  left,
+  labelledBy,
+  onMouseEnter,
+  onMouseLeave,
   onNavigate
 }: {
   group: NavGroup;
   pathname: string;
+  top: number;
+  left: number;
+  labelledBy: string;
+  onMouseEnter: () => void;
+  onMouseLeave: () => void;
   onNavigate?: () => void;
 }) {
   return (
-    <div className="absolute top-0 left-[54px] z-40 min-w-[220px] rounded-md border border-border bg-card text-foreground shadow-lifted">
+    <div
+      role="menu"
+      aria-labelledby={labelledBy}
+      onMouseEnter={onMouseEnter}
+      onMouseLeave={onMouseLeave}
+      className="fixed z-[60] min-w-[220px] rounded-md border border-border bg-card text-foreground shadow-[0_8px_24px_-12px_rgba(15,23,42,0.18)]"
+      style={{ top, left }}
+    >
       <div className="border-b border-border px-3 py-2 text-[10px] font-semibold uppercase tracking-[0.14em] text-muted-foreground">
         {group.label}
       </div>
@@ -131,18 +158,113 @@ function NavFlyout({
             <Link
               key={item.href}
               href={item.href}
+              role="menuitem"
               onClick={onNavigate}
               className={clsx(
-                "flex items-center gap-2 rounded px-2 py-1.5 text-[13px] transition",
-                active ? "bg-muted font-medium text-foreground" : "hover:bg-muted"
+                "flex items-center gap-2 rounded px-2 py-1.5 text-[13px] text-foreground transition",
+                active ? "bg-muted font-medium" : "hover:bg-muted"
               )}
             >
-              <Icon className="h-4 w-4 text-muted-foreground" />
-              <span>{item.label}</span>
+              <Icon className="h-4 w-4 shrink-0 text-muted-foreground" />
+              <span className="text-foreground">{item.label}</span>
             </Link>
           );
         })}
       </div>
+    </div>
+  );
+}
+
+function RailNavGroup({
+  group,
+  pathname,
+  active,
+  open,
+  onOpen,
+  onClose
+}: {
+  group: NavGroup;
+  pathname: string;
+  active: boolean;
+  open: boolean;
+  onOpen: () => void;
+  onClose: () => void;
+}) {
+  const Icon = group.icon;
+  const buttonId = useId();
+  const buttonRef = useRef<HTMLButtonElement>(null);
+  const [coords, setCoords] = useState<{ top: number; left: number } | null>(null);
+  const [mounted, setMounted] = useState(false);
+
+  useEffect(() => {
+    setMounted(true);
+  }, []);
+
+  const updateCoords = useCallback(() => {
+    const button = buttonRef.current;
+    if (!button) {
+      return;
+    }
+    const rect = button.getBoundingClientRect();
+    setCoords({
+      top: rect.top,
+      left: rect.right + 6
+    });
+  }, []);
+
+  useEffect(() => {
+    if (!open) {
+      return;
+    }
+
+    updateCoords();
+    const onScrollOrResize = () => updateCoords();
+    window.addEventListener("resize", onScrollOrResize);
+    window.addEventListener("scroll", onScrollOrResize, true);
+    return () => {
+      window.removeEventListener("resize", onScrollOrResize);
+      window.removeEventListener("scroll", onScrollOrResize, true);
+    };
+  }, [open, updateCoords]);
+
+  return (
+    <div className="relative" onMouseEnter={onOpen} onFocus={onOpen}>
+      <button
+        ref={buttonRef}
+        id={buttonId}
+        type="button"
+        className={clsx(
+          "relative flex h-11 w-11 items-center justify-center rounded-md transition",
+          active || open ? "bg-white/10 text-white" : "text-white/60 hover:bg-white/5 hover:text-white"
+        )}
+        aria-label={group.label}
+        aria-expanded={open}
+        aria-haspopup="menu"
+        onClick={() => {
+          updateCoords();
+          onOpen();
+        }}
+      >
+        <Icon className="h-5 w-5" />
+        {active ? (
+          <span className="absolute top-2 -left-px h-7 w-[3px] rounded-r bg-rail-accent" />
+        ) : null}
+      </button>
+      {mounted && open && coords
+        ? createPortal(
+            <NavFlyout
+              group={group}
+              pathname={pathname}
+              top={coords.top}
+              left={coords.left}
+              labelledBy={buttonId}
+              onMouseEnter={onOpen}
+              onMouseLeave={onClose}
+              onNavigate={onClose}
+            />,
+            document.body
+          )
+        : null}
     </div>
   );
 }
@@ -240,6 +362,7 @@ export function AppShell({
   const router = useRouter();
   const [mobileNavOpen, setMobileNavOpen] = useState(false);
   const [openGroup, setOpenGroup] = useState<string | null>(null);
+  const closeTimer = useRef<ReturnType<typeof setTimeout> | null>(null);
 
   const publicPage =
     pathname === "/login" ||
@@ -266,6 +389,36 @@ export function AppShell({
       null,
     [pathname, visibleGroups]
   );
+
+  const openRailGroup = useCallback((groupId: string) => {
+    if (closeTimer.current) {
+      clearTimeout(closeTimer.current);
+      closeTimer.current = null;
+    }
+    setOpenGroup(groupId);
+  }, []);
+
+  const scheduleCloseRailGroup = useCallback(() => {
+    if (closeTimer.current) {
+      clearTimeout(closeTimer.current);
+    }
+    closeTimer.current = setTimeout(() => {
+      setOpenGroup(null);
+      closeTimer.current = null;
+    }, FLYOUT_CLOSE_DELAY_MS);
+  }, []);
+
+  useEffect(() => {
+    return () => {
+      if (closeTimer.current) {
+        clearTimeout(closeTimer.current);
+      }
+    };
+  }, []);
+
+  useEffect(() => {
+    setOpenGroup(null);
+  }, [pathname]);
 
   useEffect(() => {
     if (publicPage || !currentUser) {
@@ -345,11 +498,8 @@ export function AppShell({
         />
       ) : null}
 
-      {/* Desktop icon rail */}
-      <aside
-        className="app-rail rail-gradient sticky top-0 z-30 hidden h-screen w-[68px] flex-col items-center border-r border-black/40 text-rail-foreground lg:flex"
-        onMouseLeave={() => setOpenGroup(null)}
-      >
+      {/* Desktop icon rail — fixed so Safari does not clip popovers under sticky. */}
+      <aside className="app-rail rail-gradient fixed inset-y-0 left-0 z-30 hidden w-[68px] flex-col items-center border-r border-black/40 text-rail-foreground lg:flex">
         <Link
           href="/"
           className="brand-gradient mt-4 mb-3 flex h-10 w-10 items-center justify-center rounded-md text-white shadow-[0_4px_16px_-4px_rgba(0,0,0,0.5)]"
@@ -358,35 +508,21 @@ export function AppShell({
           <span className="font-display text-lg font-semibold">S</span>
         </Link>
 
-        <div className="mt-2 flex flex-1 flex-col gap-1 py-2">
-          {visibleGroups.map((group) => {
-            const Icon = group.icon;
-            const active = activeGroup?.id === group.id;
-            return (
-              <div
-                key={group.id}
-                className="relative"
-                onMouseEnter={() => setOpenGroup(group.id)}
-              >
-                <button
-                  type="button"
-                  className={clsx(
-                    "relative flex h-11 w-11 items-center justify-center rounded-md transition",
-                    active ? "bg-white/10 text-white" : "text-white/60 hover:bg-white/5 hover:text-white"
-                  )}
-                  aria-label={group.label}
-                >
-                  <Icon className="h-5 w-5" />
-                  {active ? (
-                    <span className="absolute top-2 -left-px h-7 w-[3px] rounded-r bg-rail-accent" />
-                  ) : null}
-                </button>
-                {openGroup === group.id ? (
-                  <NavFlyout group={group} pathname={pathname} />
-                ) : null}
-              </div>
-            );
-          })}
+        <div
+          className="mt-2 flex flex-1 flex-col gap-1 py-2"
+          onMouseLeave={scheduleCloseRailGroup}
+        >
+          {visibleGroups.map((group) => (
+            <RailNavGroup
+              key={group.id}
+              group={group}
+              pathname={pathname}
+              active={activeGroup?.id === group.id}
+              open={openGroup === group.id}
+              onOpen={() => openRailGroup(group.id)}
+              onClose={scheduleCloseRailGroup}
+            />
+          ))}
         </div>
 
         <div className="mb-3 flex flex-col items-center gap-2 pb-2">
@@ -422,7 +558,7 @@ export function AppShell({
         />
       </aside>
 
-      <div className="flex min-w-0 flex-1 flex-col">
+      <div className="flex min-w-0 flex-1 flex-col lg:pl-[68px]">
         <header className="app-topbar sticky top-0 z-20 flex h-14 shrink-0 items-center gap-3 border-b border-border bg-card/90 px-4 backdrop-blur md:px-5">
           <button
             type="button"

@@ -2,6 +2,7 @@
 
 import { revalidatePath } from "next/cache";
 import { redirect } from "next/navigation";
+import { Prisma } from "@prisma/client";
 import { prisma } from "@/lib/db";
 import type { SessionUser } from "@/lib/types";
 import { canAccessRecord } from "@/lib/branch-filter-server";
@@ -26,6 +27,19 @@ import {
 import { ensureCompanyCatalogs } from "@/lib/catalogs";
 import { dueDateFromTerms, parsePaymentTermsDays } from "@/lib/accounting-aging";
 import { resolveCarrierApPayee } from "@/lib/accounting-payee";
+import {
+  commodityLinesCreateData,
+  parseFreightLinesFromForm,
+  rollupCommodity,
+  rollupWeight
+} from "@/lib/load-commodity";
+import {
+  firstPickup,
+  lastDelivery,
+  laneTitle,
+  parseLoadStopsFromForm,
+  stopsCreateData
+} from "@/lib/load-stops";
 
 function requiredString(formData: FormData, key: string) {
   const value = String(formData.get(key) ?? "").trim();
@@ -46,12 +60,23 @@ function optionalDate(formData: FormData, key: string) {
   return value ? new Date(value) : undefined;
 }
 
+function optionalFloat(formData: FormData, key: string) {
+  const value = String(formData.get(key) ?? "").trim();
+  if (!value) {
+    return undefined;
+  }
+
+  const parsed = Number(value);
+  return Number.isFinite(parsed) ? parsed : undefined;
+}
+
 async function loadForDocument(loadId: string, user: SessionUser) {
   const load = await prisma.load.findUniqueOrThrow({
     where: { id: loadId, companyId: user.companyId },
     include: {
       customer: { include: { contacts: true } },
       stops: true,
+      commodityLines: { orderBy: { sequence: "asc" } },
       charges: true,
       carrierPayLines: {
         orderBy: { sortOrder: "asc" },
@@ -183,33 +208,6 @@ function summarizeFieldChanges(
   }
 
   return `Updated ${changed.map((key) => labels[key] ?? key).join(", ")}.`;
-}
-
-async function facilitySnapshot(formData: FormData, prefix: "pickup" | "delivery", companyId: string) {
-  const facilityId = optionalString(formData, `${prefix}FacilityId`);
-
-  if (facilityId) {
-    const facility = await prisma.facility.findUniqueOrThrow({
-      where: { id: facilityId, companyId }
-    });
-
-    return {
-      facilityId: facility.id,
-      facilityName: facility.name,
-      address: facility.address ?? undefined,
-      city: facility.city,
-      state: facility.state,
-      postalCode: facility.postalCode ?? undefined
-    };
-  }
-
-  return {
-    facilityName: requiredString(formData, `${prefix}Facility`),
-    address: optionalString(formData, `${prefix}Address`),
-    city: requiredString(formData, `${prefix}City`),
-    state: requiredString(formData, `${prefix}State`),
-    postalCode: optionalString(formData, `${prefix}PostalCode`)
-  };
 }
 
 export async function createCustomer(formData: FormData) {
@@ -784,12 +782,16 @@ export async function createLoad(formData: FormData) {
   const branchId = await resolveBranchId(user, optionalString(formData, "branchId"), prisma);
 
   const manualLoadNumber = optionalString(formData, "loadNumber");
-  const pickupDate = optionalDate(formData, "pickupDate") ?? new Date();
-  const deliveryDate = optionalDate(formData, "deliveryDate") ?? pickupDate;
   const revenueCents = parseMoneyToCents(formData.get("revenue"));
   const carrierCostCents = parseMoneyToCents(formData.get("carrierCost"));
-  const pickup = await facilitySnapshot(formData, "pickup", user.companyId);
-  const delivery = await facilitySnapshot(formData, "delivery", user.companyId);
+  const equipmentType = requiredString(formData, "equipmentType");
+  const reeferTempF = equipmentType === "Reefer" ? optionalFloat(formData, "reeferTempF") : null;
+  const freightLines = parseFreightLinesFromForm(formData);
+  const commodity = rollupCommodity(freightLines);
+  const weight = rollupWeight(freightLines);
+  const stops = await parseLoadStopsFromForm(formData, user.companyId);
+  const origin = firstPickup(stops);
+  const destination = lastDelivery(stops);
 
   const load = await prisma.$transaction(async (tx) => {
     const company = await tx.company.findUniqueOrThrow({ where: { id: user.companyId } });
@@ -802,39 +804,28 @@ export async function createLoad(formData: FormData) {
         companyId: user.companyId,
         branchId,
         loadNumber,
-        title: `${pickup.city}, ${pickup.state} → ${delivery.city}, ${delivery.state}`,
+        title: laneTitle(stops),
         status: requiredString(formData, "status"),
         customerId,
         referenceNumber: optionalString(formData, "referenceNumber"),
-        equipmentType: requiredString(formData, "equipmentType"),
-        commodity: optionalString(formData, "commodity"),
-        weight: Number(formData.get("weight") || 0) || undefined,
-        pickupCity: pickup.city,
-        pickupState: pickup.state,
-        deliveryCity: delivery.city,
-        deliveryState: delivery.state,
-        pickupDate,
-        deliveryDate,
+        equipmentType,
+        reeferTempF,
+        commodity,
+        weight,
+        pickupCity: origin.city,
+        pickupState: origin.state,
+        deliveryCity: destination.city,
+        deliveryState: destination.state,
+        pickupDate: origin.appointmentAt,
+        deliveryDate: destination.appointmentAt,
         revenueCents,
         carrierCostCents,
         rateConfirmationTerms: optionalString(formData, "rateConfirmationTerms"),
         stops: {
-          create: [
-            {
-              type: "PICKUP",
-              sequence: 1,
-              ...pickup,
-              appointmentAt: pickupDate,
-              instructions: optionalString(formData, "pickupInstructions")
-            },
-            {
-              type: "DELIVERY",
-              sequence: 2,
-              ...delivery,
-              appointmentAt: deliveryDate,
-              instructions: optionalString(formData, "deliveryInstructions")
-            }
-          ]
+          create: stopsCreateData(stops)
+        },
+        commodityLines: {
+          create: commodityLinesCreateData(freightLines)
         },
         charges: {
           create: {
@@ -868,6 +859,91 @@ export async function createLoad(formData: FormData) {
   revalidatePath("/loads");
   revalidatePath("/commissions");
   redirect(`/loads/${load.id}?saved=1`);
+}
+
+export async function updateLoad(formData: FormData) {
+  const user = await requireWriteUser();
+  const loadId = requiredString(formData, "loadId");
+  await requireCompanyLoad(loadId, user);
+
+  const customerId = requiredString(formData, "customerId");
+  await requireCompanyCustomer(customerId, user);
+  const branchId = await resolveBranchId(user, optionalString(formData, "branchId"), prisma);
+
+  const revenueCents = parseMoneyToCents(formData.get("revenue"));
+  const carrierCostCents = parseMoneyToCents(formData.get("carrierCost"));
+  const equipmentType = requiredString(formData, "equipmentType");
+  const reeferTempF = equipmentType === "Reefer" ? optionalFloat(formData, "reeferTempF") ?? null : null;
+  const freightLines = parseFreightLinesFromForm(formData);
+  const commodity = rollupCommodity(freightLines);
+  const weight = rollupWeight(freightLines);
+  const stops = await parseLoadStopsFromForm(formData, user.companyId);
+  const origin = firstPickup(stops);
+  const destination = lastDelivery(stops);
+
+  await prisma.$transaction(async (tx) => {
+    await tx.loadCommodityLine.deleteMany({ where: { loadId } });
+    await tx.loadStop.deleteMany({ where: { loadId } });
+
+    await tx.load.update({
+      where: { id: loadId },
+      data: {
+        customerId,
+        branchId,
+        referenceNumber: optionalString(formData, "referenceNumber") ?? null,
+        equipmentType,
+        reeferTempF,
+        commodity,
+        weight,
+        title: laneTitle(stops),
+        pickupCity: origin.city,
+        pickupState: origin.state,
+        deliveryCity: destination.city,
+        deliveryState: destination.state,
+        pickupDate: origin.appointmentAt,
+        deliveryDate: destination.appointmentAt,
+        revenueCents,
+        carrierCostCents,
+        routeTotalMiles: null,
+        routeStateMiles: Prisma.DbNull,
+        routePolyline: null,
+        routeComputedAt: null,
+        commodityLines: {
+          create: commodityLinesCreateData(freightLines)
+        },
+        stops: {
+          create: stopsCreateData(stops)
+        },
+        activities: {
+          create: {
+            userId: user.id,
+            action: "Load details updated",
+            details: "Updated load details, stops, and freight lines."
+          }
+        }
+      }
+    });
+
+    const linehaul = await tx.loadCharge.findFirst({
+      where: { loadId, chargeType: "Linehaul" },
+      orderBy: { id: "asc" }
+    });
+    if (linehaul) {
+      await tx.loadCharge.update({
+        where: { id: linehaul.id },
+        data: { amountCents: revenueCents }
+      });
+    }
+  });
+
+  await recalculateLoadCommission(loadId);
+
+  revalidatePath("/loads");
+  revalidatePath(`/loads/${loadId}`);
+  revalidatePath("/dispatch");
+  revalidatePath("/commissions");
+  revalidatePath("/search");
+  redirect(`/loads/${loadId}?saved=1`);
 }
 
 export async function updateLoadStatus(formData: FormData) {

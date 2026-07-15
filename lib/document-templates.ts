@@ -6,6 +6,7 @@ export type LoadForDocument = Prisma.LoadGetPayload<{
   include: {
     customer: { include: { contacts: true } };
     stops: true;
+    commodityLines: true;
     charges: true;
     carrierPayLines: { include: { lineType: true } };
     dispatchAssignment: { include: { carrier: { include: { contacts: true } } } };
@@ -96,6 +97,41 @@ export function brandingFromCompany(company: CompanyBranding): StructuredDocumen
     logoFilePath: company.logoFilePath,
     logoMimeType: company.logoMimeType
   };
+}
+
+function formatEquipment(load: Pick<LoadForDocument, "equipmentType" | "reeferTempF">) {
+  if (!load.equipmentType) {
+    return "N/A";
+  }
+
+  if (load.equipmentType === "Reefer" && load.reeferTempF != null) {
+    return `${load.equipmentType} @ ${load.reeferTempF}°F`;
+  }
+
+  return load.equipmentType;
+}
+
+function formatCommoditySummary(load: Pick<LoadForDocument, "commodity" | "commodityLines">) {
+  const lines = [...(load.commodityLines ?? [])].sort((a, b) => a.sequence - b.sequence);
+  if (lines.length === 0) {
+    return load.commodity || "N/A";
+  }
+  if (lines.length === 1) {
+    return lines[0].description;
+  }
+  return `${lines[0].description} (+${lines.length - 1} more)`;
+}
+
+function formatLineDims(line: {
+  lengthIn: number | null;
+  widthIn: number | null;
+  heightIn: number | null;
+}) {
+  const parts = [line.lengthIn, line.widthIn, line.heightIn].filter((value) => value != null);
+  if (!parts.length) {
+    return "";
+  }
+  return `${parts.join("x")} in`;
 }
 
 function mapStops(load: LoadForDocument): DocumentStop[] {
@@ -275,8 +311,8 @@ export function buildRateConfirmationDocument(
     details: [
       { label: "Customer", value: load.customer.name },
       { label: "Reference", value: load.referenceNumber || "N/A" },
-      { label: "Equipment", value: load.equipmentType || "N/A" },
-      { label: "Commodity", value: load.commodity || "N/A" },
+      { label: "Equipment", value: formatEquipment(load) },
+      { label: "Commodity", value: formatCommoditySummary(load) },
       {
         label: "Weight",
         value: load.weight ? `${load.weight.toLocaleString()} lbs` : "N/A"
@@ -351,6 +387,28 @@ export function buildBolFormData(
     .filter(Boolean);
   const publicNotes = publicLoadNoteLines(load);
   const specialInstructions = [...stopInstructions, ...publicNotes].join(" | ");
+  const freightLines = [...(load.commodityLines ?? [])].sort((a, b) => a.sequence - b.sequence);
+  const customerOrders =
+    freightLines.length > 0
+      ? freightLines.map((line) => {
+          const dims = formatLineDims(line);
+          return {
+            orderNumber: load.referenceNumber || load.loadNumber,
+            pkgs: line.pieces || String(line.quantity),
+            weight: line.weightLbs ? line.weightLbs.toLocaleString() : "",
+            palletSlip: "" as const,
+            additionalInfo: [line.description, dims, formatEquipment(load)].filter(Boolean).join(" · ")
+          };
+        })
+      : [
+          {
+            orderNumber: load.referenceNumber || load.loadNumber,
+            pkgs: "",
+            weight: weightLabel,
+            palletSlip: "" as const,
+            additionalInfo: formatEquipment(load)
+          }
+        ];
 
   return {
     date: formatDate(new Date()),
@@ -371,22 +429,16 @@ export function buildBolFormData(
     freightChargeTerms: "THIRD_PARTY",
     specialInstructions,
     masterBol: false,
-    customerOrders: [
-      {
-        orderNumber: load.referenceNumber || load.loadNumber,
-        pkgs: "",
-        weight: weightLabel,
-        palletSlip: "",
-        additionalInfo: load.equipmentType || ""
-      }
-    ],
-    handlingUnitQty: "",
+    customerOrders,
+    handlingUnitQty: freightLines.length
+      ? String(freightLines.reduce((sum, line) => sum + (line.quantity || 0), 0))
+      : "",
     handlingUnitType: "PLT",
     packageQty: "",
     packageType: "",
     weight: weightLabel,
     hazardous: false,
-    commodity: load.commodity || "",
+    commodity: formatCommoditySummary(load) === "N/A" ? "" : formatCommoditySummary(load),
     nmfc: "",
     freightClass: "",
     declaredValue: "",
@@ -570,8 +622,8 @@ export function buildCustomerLoadConfirmationDocument(
       load.referenceNumber ? `Reference: ${load.referenceNumber}` : ""
     ].filter(Boolean),
     details: [
-      { label: "Equipment", value: load.equipmentType || "N/A" },
-      { label: "Commodity", value: load.commodity || "N/A" },
+      { label: "Equipment", value: formatEquipment(load) },
+      { label: "Commodity", value: formatCommoditySummary(load) },
       {
         label: "Weight",
         value: load.weight ? `${load.weight.toLocaleString()} lbs` : "N/A"

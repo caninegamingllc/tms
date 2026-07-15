@@ -1,7 +1,7 @@
 export function SearchPrompt({ entity }: { entity: string }) {
   return (
-    <section className="card p-8 text-center">
-      <p className="text-sm text-muted-foreground">Enter search criteria above to find {entity}.</p>
-    </section>
+    <p className="py-4 text-center text-sm text-muted-foreground">
+      Enter search criteria above to find {entity}.
+    </p>
   );
 }

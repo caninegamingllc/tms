@@ -67,6 +67,7 @@ export function DocumentsTable({
 
       <div className="overflow-x-auto">
         <SortableTable
+          tableId="documents"
           data={filteredDocuments}
           keyExtractor={(document) => document.id}
           defaultSort={{ columnId: "uploaded", direction: "desc" }}

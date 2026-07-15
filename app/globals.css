@@ -84,6 +84,11 @@ textarea::placeholder {
   font-variant-numeric: tabular-nums;
 }
 
+.tile-board .tile-drag-handle {
+  touch-action: none;
+  user-select: none;
+}
+
 @layer components {
   .card {
     @apply rounded-lg border border-border bg-card p-4 shadow-card;
@@ -141,6 +146,19 @@ textarea::placeholder {
 
   .table th.sortable[data-active="true"] .sort-icon {
     @apply text-foreground opacity-100;
+  }
+
+  .table th.table-col-drag-over {
+    box-shadow: inset 2px 0 0 0 var(--color-primary);
+  }
+
+  .table th .table-col-handle {
+    opacity: 0.45;
+  }
+
+  .table th:hover .table-col-handle,
+  .table th.table-col-drag-over .table-col-handle {
+    opacity: 1;
   }
 
   .table td {

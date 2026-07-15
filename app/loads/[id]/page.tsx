@@ -1,11 +1,16 @@
 import { notFound } from "next/navigation";
+import { after } from "next/server";
 import { DocumentUploadForm } from "@/components/document-upload-form";
 import { DocumentsTable } from "@/components/documents-table";
 import { PageHeader } from "@/components/page-header";
 import { LoadRoutePanel } from "@/components/load-route-panel";
 import { SearchCombobox } from "@/components/search-combobox";
 import { CarrierPayLinesEditor } from "@/components/carrier-pay-lines-editor";
+import { LoadDetailsEditor } from "@/components/load-details-editor";
 import { StatusBadge } from "@/components/status-badge";
+import { Tile, TileBoard } from "@/components/tile-board";
+import { LOAD_DETAIL_TILES } from "@/lib/tile-defaults";
+import { loadPageLayouts } from "@/lib/ui-preferences-load";
 import {
   addCheckCall,
   addLoadActivityNote,
@@ -36,7 +41,7 @@ import { recalculateLoadCommission } from "@/lib/commission";
 import { toDocumentTableRows } from "@/lib/document-rows";
 import { requireTmsAccess } from "@/lib/permissions";
 import { canAccessRecord, getBranchScope } from "@/lib/branch-filter-server";
-import { canManageUsers, canSettleCommission, canWrite } from "@/lib/scope";
+import { canManageUsers, canPickBranch, canSettleCommission, canWrite, isAdminRole } from "@/lib/scope";
 import { expenseTypes, loadStatuses } from "@/lib/constants";
 import { ensureCompanyCatalogs } from "@/lib/catalogs";
 import { prisma } from "@/lib/db";
@@ -63,14 +68,19 @@ export default async function LoadDetailPage({
   const { id } = await params;
   const { emailed, saved, error } = await searchParams;
   const user = await requireTmsAccess();
-  await ensureCompanyCatalogs(user.companyId);
-  const [load, carriers, commissionProfiles, mailbox, payLineTypes] = await Promise.all([
+  after(() => {
+    void ensureCompanyCatalogs(user.companyId);
+  });
+  const scope = await getBranchScope(user);
+  const [load, carriers, commissionProfiles, mailbox, payLineTypes, layouts, customers, facilities, branches, commodities] =
+    await Promise.all([
     prisma.load.findUnique({
       where: { id, companyId: user.companyId },
       include: {
         customer: { include: { contacts: true } },
         branch: true,
         stops: { orderBy: { sequence: "asc" } },
+        commodityLines: { orderBy: { sequence: "asc" } },
         charges: true,
         expenses: true,
         carrierPayLines: {
@@ -98,7 +108,7 @@ export default async function LoadDetailPage({
         carrierBills: { include: { carrier: true } }
       }
     }),
-    prisma.carrier.findMany({ where: await getBranchScope(user), orderBy: { name: "asc" } }),
+    prisma.carrier.findMany({ where: scope, orderBy: { name: "asc" } }),
     canManageUsers(user)
       ? prisma.commissionProfile.findMany({
           where: { companyId: user.companyId },
@@ -107,6 +117,29 @@ export default async function LoadDetailPage({
       : Promise.resolve([]),
     getUserMailbox(user.id),
     prisma.carrierPayLineType.findMany({
+      where: { companyId: user.companyId, active: true },
+      orderBy: [{ sortOrder: "asc" }, { name: "asc" }]
+    }),
+    loadPageLayouts("load-detail"),
+    prisma.customer.findMany({
+      where: scope,
+      orderBy: { name: "asc" }
+    }),
+    prisma.facility.findMany({
+      where: { ...scope, status: "Active" },
+      include: { customer: true },
+      orderBy: [{ name: "asc" }, { city: "asc" }]
+    }),
+    canPickBranch(user)
+      ? prisma.branch.findMany({
+          where: {
+            companyId: user.companyId,
+            ...(isAdminRole(user.role) ? {} : { id: { in: user.branchIds } })
+          },
+          orderBy: { name: "asc" }
+        })
+      : Promise.resolve([]),
+    prisma.commodityOption.findMany({
       where: { companyId: user.companyId, active: true },
       orderBy: [{ sortOrder: "asc" }, { name: "asc" }]
     })
@@ -172,6 +205,30 @@ export default async function LoadDetailPage({
       .join(" - ")
   }));
 
+  const customerOptions = customers.map((customer) => ({
+    id: customer.id,
+    label: customer.name,
+    description: [customer.city, customer.state].filter(Boolean).join(", ")
+  }));
+  const facilityOptions = facilities.map((facility) => ({
+    id: facility.id,
+    label: facility.name,
+    description: facility.customer?.name,
+    address: facility.address,
+    city: facility.city,
+    state: facility.state,
+    postalCode: facility.postalCode
+  }));
+  const freightLines = load.commodityLines.map((line) => ({
+    quantity: line.quantity,
+    description: line.description,
+    weightLbs: line.weightLbs,
+    pieces: line.pieces,
+    lengthIn: line.lengthIn,
+    widthIn: line.widthIn,
+    heightIn: line.heightIn
+  }));
+
   const publicNotes = load.notes.filter((note) => !isPrivateLoadNote(note));
   const privateNotes = load.notes.filter((note) => isPrivateLoadNote(note));
 
@@ -215,624 +272,607 @@ export default async function LoadDetailPage({
         </div>
       ) : null}
 
-      <div className="grid gap-6 xl:grid-cols-[1.45fr_0.9fr]">
-        <div className="grid gap-6">
-          <section className="card">
-            <div className="flex flex-wrap items-start justify-between gap-4">
-              <div>
-                <StatusBadge value={load.status} />
-                <p className="mt-3 muted">
-                  {load.equipmentType} - {load.commodity ?? "General freight"} -{" "}
-                  {load.weight ? `${load.weight.toLocaleString()} lbs` : "Weight TBD"}
-                </p>
-              </div>
-              <div className="grid gap-1 text-right">
-                <span className="text-sm text-muted-foreground">Gross margin</span>
-                <span className="text-2xl font-bold text-foreground">
-                  {formatMoney(load.revenueCents - load.carrierCostCents)}
-                </span>
-                <span className="text-sm text-muted-foreground">
-                  {marginPercent(load.revenueCents, load.carrierCostCents)}
-                </span>
-              </div>
-            </div>
+      <TileBoard pageId="load-detail" tiles={LOAD_DETAIL_TILES} initialLayouts={layouts ?? null}>
+        <Tile id="summary">
+          <LoadDetailsEditor
+            loadId={load.id}
+            writable={canWrite(user)}
+            customerId={load.customerId}
+            customerOptions={customerOptions}
+            branchId={load.branchId}
+            branches={branches}
+            canPickBranch={canPickBranch(user)}
+            referenceNumber={load.referenceNumber}
+            equipmentType={load.equipmentType}
+            reeferTempF={load.reeferTempF}
+            revenueCents={load.revenueCents}
+            carrierCostCents={load.carrierCostCents}
+            commodity={load.commodity}
+            weight={load.weight}
+            freightLines={freightLines}
+            descriptionSuggestions={commodities.map((item) => item.name)}
+            stops={load.stops}
+            facilities={facilityOptions}
+            statusBadge={<StatusBadge value={load.status} />}
+            marginLabel={formatMoney(load.revenueCents - load.carrierCostCents)}
+            marginPercentLabel={marginPercent(load.revenueCents, load.carrierCostCents)}
+          />
+        </Tile>
 
-            <div className="mt-6 grid gap-4 md:grid-cols-3">
-              <div className="rounded-2xl bg-muted p-4">
-                <p className="label">Customer Rate</p>
-                <p className="mt-2 text-xl font-semibold">{formatMoney(load.revenueCents)}</p>
-              </div>
-              <div className="rounded-2xl bg-muted p-4">
-                <p className="label">Carrier Cost</p>
-                <p className="mt-2 text-xl font-semibold">{formatMoney(load.carrierCostCents)}</p>
-              </div>
-              <div className="rounded-2xl bg-muted p-4">
-                <p className="label">Reference</p>
-                <p className="mt-2 text-xl font-semibold">{load.referenceNumber ?? "None"}</p>
-              </div>
-            </div>
-          </section>
+        <Tile id="workflow">
+          <form action={updateLoadStatus} className="mt-4 grid gap-3">
+            <input type="hidden" name="loadId" value={load.id} />
+            <select name="status" className="select" defaultValue={load.status}>
+              {loadStatuses.map((status) => (
+                <option key={status} value={status}>
+                  {humanize(status)}
+                </option>
+              ))}
+            </select>
+            <button type="submit" className="btn">
+              Update Status
+            </button>
+          </form>
+        </Tile>
 
-          <section className="card">
-            <h2 className="section-title">Stops</h2>
-            <div className="mt-4 grid gap-3">
-              {load.stops.map((stop) => (
-                <div key={stop.id} className="rounded-2xl border border-border p-4">
-                  <div className="flex items-start justify-between gap-4">
-                    <div>
-                      <p className="font-semibold text-foreground">
-                        {stop.sequence}. {humanize(stop.type)} - {stop.facilityName}
-                      </p>
-                      <p className="muted">
-                        {stop.city}, {stop.state}
+        <Tile id="stops">
+          <p className="muted text-sm">
+            {canWrite(user)
+              ? "Use Edit details on Load summary to add, remove, or reorder pickups and deliveries."
+              : "Pickup and delivery stops for this load."}
+          </p>
+          <div className="mt-4 grid gap-3">
+            {load.stops.map((stop) => (
+              <div key={stop.id} className="rounded-2xl border border-border p-4">
+                <div className="flex items-start justify-between gap-4">
+                  <div>
+                    <p className="font-semibold text-foreground">
+                      {stop.sequence}. {humanize(stop.type)} - {stop.facilityName}
+                    </p>
+                    <p className="muted">
+                      {stop.city}, {stop.state}
+                    </p>
+                  </div>
+                  <span className="text-sm text-muted-foreground">{formatDateTime(stop.appointmentAt)}</span>
+                </div>
+                {stop.instructions ? (
+                  <p className="mt-3 rounded-xl bg-muted p-3 text-sm text-slate-700">
+                    {stop.instructions}
+                  </p>
+                ) : null}
+              </div>
+            ))}
+          </div>
+        </Tile>
+
+        <Tile id="route-map">
+          <LoadRoutePanel loadId={load.id} />
+        </Tile>
+
+        <Tile id="rate-terms">
+          <p className="muted">
+            Override customer default terms for this load only. Leave blank to use the customer
+            profile terms when generating a rate confirmation.
+          </p>
+          {!load.rateConfirmationTerms?.trim() && load.customer.rateConfirmationTerms?.trim() ? (
+            <div className="mt-3 rounded-2xl border border-dashed border-border bg-muted/60 p-3">
+              <p className="text-xs font-semibold uppercase tracking-wide text-muted-foreground">
+                Customer default (in use)
+              </p>
+              <p className="mt-2 whitespace-pre-wrap text-sm text-slate-700">
+                {load.customer.rateConfirmationTerms}
+              </p>
+            </div>
+          ) : null}
+          {canWrite(user) ? (
+            <form action={updateLoadRateConfirmationTerms} className="mt-4 grid gap-3">
+              <input type="hidden" name="loadId" value={load.id} />
+              <textarea
+                name="rateConfirmationTerms"
+                className="textarea"
+                rows={5}
+                defaultValue={load.rateConfirmationTerms ?? ""}
+                placeholder="Optional load-specific rate confirmation terms…"
+              />
+              <button type="submit" className="btn-secondary">
+                Save Rate Con Terms
+              </button>
+            </form>
+          ) : (
+            <p className="mt-4 whitespace-pre-wrap rounded-2xl bg-muted p-4 text-sm text-slate-700">
+              {load.rateConfirmationTerms?.trim() ||
+                load.customer.rateConfirmationTerms?.trim() ||
+                "No custom rate confirmation terms."}
+            </p>
+          )}
+        </Tile>
+
+        <Tile id="notes">
+          <p className="muted">
+            Public notes appear on rate confirmations, load confirmations, BOLs, invoices, and
+            related documents. Private notes stay internal only.
+          </p>
+
+          <div className="mt-4 grid gap-4 lg:grid-cols-2">
+            <div className="rounded-2xl border border-border p-4">
+              <h3 className="font-semibold text-foreground">Public Notes</h3>
+              <div className="mt-3 grid gap-3">
+                {publicNotes.length === 0 ? (
+                  <p className="text-sm text-muted-foreground">No public notes yet.</p>
+                ) : (
+                  publicNotes.map((note) => (
+                    <div key={note.id} className="rounded-xl bg-muted p-3 text-sm">
+                      <p className="text-slate-700 whitespace-pre-wrap">{note.body}</p>
+                      <p className="mt-2 text-xs text-muted-foreground">
+                        {note.user?.name ?? "System"} · {formatDateTime(note.createdAt)}
                       </p>
                     </div>
-                    <span className="text-sm text-muted-foreground">{formatDateTime(stop.appointmentAt)}</span>
-                  </div>
-                  {stop.instructions ? (
-                    <p className="mt-3 rounded-xl bg-muted p-3 text-sm text-slate-700">
-                      {stop.instructions}
-                    </p>
-                  ) : null}
-                </div>
-              ))}
-            </div>
-            <LoadRoutePanel loadId={load.id} />
-          </section>
-
-          <section className="card">
-            <h2 className="section-title">Rate Confirmation Terms</h2>
-            <p className="muted">
-              Override customer default terms for this load only. Leave blank to use the customer
-              profile terms when generating a rate confirmation.
-            </p>
-            {!load.rateConfirmationTerms?.trim() && load.customer.rateConfirmationTerms?.trim() ? (
-              <div className="mt-3 rounded-2xl border border-dashed border-border bg-muted/60 p-3">
-                <p className="text-xs font-semibold uppercase tracking-wide text-muted-foreground">
-                  Customer default (in use)
-                </p>
-                <p className="mt-2 whitespace-pre-wrap text-sm text-slate-700">
-                  {load.customer.rateConfirmationTerms}
-                </p>
+                  ))
+                )}
               </div>
-            ) : null}
-            {canWrite(user) ? (
-              <form action={updateLoadRateConfirmationTerms} className="mt-4 grid gap-3">
-                <input type="hidden" name="loadId" value={load.id} />
-                <textarea
-                  name="rateConfirmationTerms"
-                  className="textarea"
-                  rows={5}
-                  defaultValue={load.rateConfirmationTerms ?? ""}
-                  placeholder="Optional load-specific rate confirmation terms…"
-                />
-                <button type="submit" className="btn-secondary">
-                  Save Rate Con Terms
-                </button>
-              </form>
-            ) : (
-              <p className="mt-4 whitespace-pre-wrap rounded-2xl bg-muted p-4 text-sm text-slate-700">
-                {load.rateConfirmationTerms?.trim() ||
-                  load.customer.rateConfirmationTerms?.trim() ||
-                  "No custom rate confirmation terms."}
+              {canWrite(user) ? (
+                <form action={addLoadNote} className="mt-4 grid gap-3">
+                  <input type="hidden" name="loadId" value={load.id} />
+                  <input type="hidden" name="visibility" value="public" />
+                  <textarea
+                    name="body"
+                    className="textarea"
+                    rows={3}
+                    placeholder="Add a public note…"
+                    required
+                  />
+                  <button type="submit" className="btn-secondary">
+                    Save Public Note
+                  </button>
+                </form>
+              ) : null}
+            </div>
+
+            <div className="rounded-2xl border border-border p-4">
+              <h3 className="font-semibold text-foreground">Private Notes</h3>
+              <p className="mt-1 text-xs text-muted-foreground">
+                Never shown on documents, emails, or reports.
               </p>
-            )}
-          </section>
-
-          <section className="card">
-            <h2 className="section-title">Notes</h2>
-            <p className="muted">
-              Public notes appear on rate confirmations, load confirmations, BOLs, invoices, and
-              related documents. Private notes stay internal only.
-            </p>
-
-            <div className="mt-4 grid gap-4 lg:grid-cols-2">
-              <div className="rounded-2xl border border-border p-4">
-                <h3 className="font-semibold text-foreground">Public Notes</h3>
-                <div className="mt-3 grid gap-3">
-                  {publicNotes.length === 0 ? (
-                    <p className="text-sm text-muted-foreground">No public notes yet.</p>
-                  ) : (
-                    publicNotes.map((note) => (
-                        <div key={note.id} className="rounded-xl bg-muted p-3 text-sm">
-                          <p className="text-slate-700 whitespace-pre-wrap">{note.body}</p>
-                          <p className="mt-2 text-xs text-muted-foreground">
-                            {note.user?.name ?? "System"} · {formatDateTime(note.createdAt)}
-                          </p>
-                        </div>
-                      ))
-                  )}
-                </div>
-                {canWrite(user) ? (
-                  <form action={addLoadNote} className="mt-4 grid gap-3">
-                    <input type="hidden" name="loadId" value={load.id} />
-                    <input type="hidden" name="visibility" value="public" />
-                    <textarea
-                      name="body"
-                      className="textarea"
-                      rows={3}
-                      placeholder="Add a public note…"
-                      required
-                    />
-                    <button type="submit" className="btn-secondary">
-                      Save Public Note
-                    </button>
-                  </form>
-                ) : null}
+              <div className="mt-3 grid gap-3">
+                {privateNotes.length === 0 ? (
+                  <p className="text-sm text-muted-foreground">No private notes yet.</p>
+                ) : (
+                  privateNotes.map((note) => (
+                    <div key={note.id} className="rounded-xl bg-muted p-3 text-sm">
+                      <p className="text-slate-700 whitespace-pre-wrap">{note.body}</p>
+                      <p className="mt-2 text-xs text-muted-foreground">
+                        {note.user?.name ?? "System"} · {formatDateTime(note.createdAt)}
+                      </p>
+                    </div>
+                  ))
+                )}
               </div>
-
-              <div className="rounded-2xl border border-border p-4">
-                <h3 className="font-semibold text-foreground">Private Notes</h3>
-                <p className="mt-1 text-xs text-muted-foreground">
-                  Never shown on documents, emails, or reports.
-                </p>
-                <div className="mt-3 grid gap-3">
-                  {privateNotes.length === 0 ? (
-                    <p className="text-sm text-muted-foreground">No private notes yet.</p>
-                  ) : (
-                    privateNotes.map((note) => (
-                        <div key={note.id} className="rounded-xl bg-muted p-3 text-sm">
-                          <p className="text-slate-700 whitespace-pre-wrap">{note.body}</p>
-                          <p className="mt-2 text-xs text-muted-foreground">
-                            {note.user?.name ?? "System"} · {formatDateTime(note.createdAt)}
-                          </p>
-                        </div>
-                      ))
-                  )}
-                </div>
-                {canWrite(user) ? (
-                  <form action={addLoadNote} className="mt-4 grid gap-3">
-                    <input type="hidden" name="loadId" value={load.id} />
-                    <input type="hidden" name="visibility" value="private" />
-                    <textarea
-                      name="body"
-                      className="textarea"
-                      rows={3}
-                      placeholder="Add a private note…"
-                      required
-                    />
-                    <button type="submit" className="btn-secondary">
-                      Save Private Note
-                    </button>
-                  </form>
-                ) : null}
-              </div>
-            </div>
-          </section>
-
-          <section className="card">
-            <div className="flex flex-wrap items-start justify-between gap-4">
-              <div>
-                <h2 className="section-title">Documents</h2>
-                <p className="muted">Generate printable carrier, shipper, and customer paperwork.</p>
-              </div>
-              <div className="flex flex-wrap gap-2">
-                <form action={generateRateConfirmation}>
+              {canWrite(user) ? (
+                <form action={addLoadNote} className="mt-4 grid gap-3">
                   <input type="hidden" name="loadId" value={load.id} />
-                  <button className="btn-secondary" type="submit" disabled={!load.dispatchAssignment}>
-                    Generate Rate Con
+                  <input type="hidden" name="visibility" value="private" />
+                  <textarea
+                    name="body"
+                    className="textarea"
+                    rows={3}
+                    placeholder="Add a private note…"
+                    required
+                  />
+                  <button type="submit" className="btn-secondary">
+                    Save Private Note
                   </button>
                 </form>
-                <form action={generateCustomerLoadConfirmation}>
-                  <input type="hidden" name="loadId" value={load.id} />
-                  <button className="btn-secondary" type="submit">
-                    Generate Load Con
-                  </button>
-                </form>
-                <form action={generateBillOfLading}>
-                  <input type="hidden" name="loadId" value={load.id} />
-                  <button className="btn-secondary" type="submit">
-                    Generate BOL
-                  </button>
-                </form>
-                <form action={generateCustomerInvoice}>
-                  <input type="hidden" name="loadId" value={load.id} />
-                  <button className="btn-secondary" type="submit">
-                    Generate Invoice
-                  </button>
-                </form>
-              </div>
+              ) : null}
             </div>
+          </div>
+        </Tile>
 
-            <div className="mt-4 flex flex-wrap gap-2">
-              <EmailComposeButton
-                loadId={load.id}
-                purpose="CARRIER_RATE_CONFIRMATION"
-                label="Email Rate Con"
-                disabled={!mailbox || !load.dispatchAssignment || !canWrite(user)}
-              />
-              <EmailComposeButton
-                loadId={load.id}
-                purpose="CUSTOMER_LOAD_CONFIRMATION"
-                label="Email Load Con"
-                disabled={!mailbox || !canWrite(user)}
-              />
-              <EmailComposeButton
-                loadId={load.id}
-                purpose="BOL"
-                label="Email BOL"
-                disabled={!mailbox || !canWrite(user)}
-              />
-              <EmailComposeButton
-                loadId={load.id}
-                purpose="INVOICE"
-                label="Email Invoice"
-                disabled={!mailbox || !canWrite(user)}
-              />
-              <EmailComposeButton
-                loadId={load.id}
-                purpose="POD_REQUEST"
-                label="Email POD Request"
-                disabled={!mailbox || !load.dispatchAssignment || !canWrite(user)}
-              />
+        <Tile id="documents">
+          <div className="flex flex-wrap items-start justify-between gap-4">
+            <div>
+              <p className="muted">Generate printable carrier, shipper, and customer paperwork.</p>
             </div>
-
-            <div className="mt-4 overflow-hidden rounded-2xl border border-border">
-              <DocumentsTable
-                documents={toDocumentTableRows(load.documents)}
-                showFilter={false}
-                compact
-              />
-            </div>
-
-            <div className="mt-5 rounded-2xl bg-muted p-4">
-              <p className="mb-3 text-sm font-semibold text-foreground">Upload Load Document</p>
-              <DocumentUploadForm
-                defaultLoadId={load.id}
-                defaultCustomerId={load.customerId}
-                defaultCarrierId={load.dispatchAssignment?.carrierId}
-                showEntityPickers={false}
-                submitLabel="Add Document"
-              />
-            </div>
-          </section>
-
-          <section className="card">
-            <div className="flex flex-wrap items-start justify-between gap-4">
-              <div>
-                <h2 className="section-title">Email</h2>
-                <p className="muted">Outbound and reply threads for this load.</p>
-              </div>
-              <form action={syncLoadEmails}>
+            <div className="flex flex-wrap gap-2">
+              <form action={generateRateConfirmation}>
                 <input type="hidden" name="loadId" value={load.id} />
-                <button type="submit" className="btn-secondary" disabled={!mailbox}>
-                  Sync replies
+                <button className="btn-secondary" type="submit" disabled={!load.dispatchAssignment}>
+                  Generate Rate Con
+                </button>
+              </form>
+              <form action={generateCustomerLoadConfirmation}>
+                <input type="hidden" name="loadId" value={load.id} />
+                <button className="btn-secondary" type="submit">
+                  Generate Load Con
+                </button>
+              </form>
+              <form action={generateBillOfLading}>
+                <input type="hidden" name="loadId" value={load.id} />
+                <button className="btn-secondary" type="submit">
+                  Generate BOL
+                </button>
+              </form>
+              <form action={generateCustomerInvoice}>
+                <input type="hidden" name="loadId" value={load.id} />
+                <button className="btn-secondary" type="submit">
+                  Generate Invoice
                 </button>
               </form>
             </div>
-            <div className="mt-4 grid gap-3">
-              {load.emailThreads.length === 0 ? (
-                <p className="text-sm text-muted-foreground">No emails sent for this load yet.</p>
-              ) : (
-                load.emailThreads.map((thread) => (
-                  <div key={thread.id} className="rounded-2xl border border-border p-4">
-                    <div className="flex flex-wrap items-start justify-between gap-2">
-                      <div>
-                        <p className="font-semibold text-foreground">{thread.subject}</p>
-                        <p className="text-sm text-muted-foreground">
-                          {humanize(thread.purpose)} · {humanize(thread.provider)} · {thread.user.name}
+          </div>
+
+          <div className="mt-4 flex flex-wrap gap-2">
+            <EmailComposeButton
+              loadId={load.id}
+              purpose="CARRIER_RATE_CONFIRMATION"
+              label="Email Rate Con"
+              disabled={!mailbox || !load.dispatchAssignment || !canWrite(user)}
+            />
+            <EmailComposeButton
+              loadId={load.id}
+              purpose="CUSTOMER_LOAD_CONFIRMATION"
+              label="Email Load Con"
+              disabled={!mailbox || !canWrite(user)}
+            />
+            <EmailComposeButton
+              loadId={load.id}
+              purpose="BOL"
+              label="Email BOL"
+              disabled={!mailbox || !canWrite(user)}
+            />
+            <EmailComposeButton
+              loadId={load.id}
+              purpose="INVOICE"
+              label="Email Invoice"
+              disabled={!mailbox || !canWrite(user)}
+            />
+            <EmailComposeButton
+              loadId={load.id}
+              purpose="POD_REQUEST"
+              label="Email POD Request"
+              disabled={!mailbox || !load.dispatchAssignment || !canWrite(user)}
+            />
+          </div>
+
+          <div className="mt-4 overflow-hidden rounded-2xl border border-border">
+            <DocumentsTable
+              documents={toDocumentTableRows(load.documents)}
+              showFilter={false}
+              compact
+            />
+          </div>
+
+          <div className="mt-5 rounded-2xl bg-muted p-4">
+            <p className="mb-3 text-sm font-semibold text-foreground">Upload Load Document</p>
+            <DocumentUploadForm
+              defaultLoadId={load.id}
+              defaultCustomerId={load.customerId}
+              defaultCarrierId={load.dispatchAssignment?.carrierId}
+              showEntityPickers={false}
+              submitLabel="Add Document"
+            />
+          </div>
+        </Tile>
+
+        <Tile id="email">
+          <div className="flex flex-wrap items-start justify-between gap-4">
+            <div>
+              <p className="muted">Outbound and reply threads for this load.</p>
+            </div>
+            <form action={syncLoadEmails}>
+              <input type="hidden" name="loadId" value={load.id} />
+              <button type="submit" className="btn-secondary" disabled={!mailbox}>
+                Sync replies
+              </button>
+            </form>
+          </div>
+          <div className="mt-4 grid gap-3">
+            {load.emailThreads.length === 0 ? (
+              <p className="text-sm text-muted-foreground">No emails sent for this load yet.</p>
+            ) : (
+              load.emailThreads.map((thread) => (
+                <div key={thread.id} className="rounded-2xl border border-border p-4">
+                  <div className="flex flex-wrap items-start justify-between gap-2">
+                    <div>
+                      <p className="font-semibold text-foreground">{thread.subject}</p>
+                      <p className="text-sm text-muted-foreground">
+                        {humanize(thread.purpose)} · {humanize(thread.provider)} · {thread.user.name}
+                      </p>
+                    </div>
+                    <p className="text-xs text-muted-foreground">{formatDateTime(thread.updatedAt)}</p>
+                  </div>
+                  <div className="mt-3 grid gap-2">
+                    {thread.messages.map((message) => (
+                      <div key={message.id} className="rounded-xl bg-muted p-3 text-sm">
+                        <p className="font-semibold">
+                          {humanize(message.direction)} · {message.fromAddress} → {message.toAddresses}
+                        </p>
+                        <p className="mt-1 text-slate-700">
+                          {message.bodyPreview || message.subject}
+                        </p>
+                        <p className="mt-1 text-xs text-muted-foreground">
+                          {formatDateTime(message.sentAt ?? message.receivedAt ?? message.createdAt)}
                         </p>
                       </div>
-                      <p className="text-xs text-muted-foreground">{formatDateTime(thread.updatedAt)}</p>
-                    </div>
-                    <div className="mt-3 grid gap-2">
-                      {thread.messages.map((message) => (
-                        <div key={message.id} className="rounded-xl bg-muted p-3 text-sm">
-                          <p className="font-semibold">
-                            {humanize(message.direction)} · {message.fromAddress} → {message.toAddresses}
-                          </p>
-                          <p className="mt-1 text-slate-700">
-                            {message.bodyPreview || message.subject}
-                          </p>
-                          <p className="mt-1 text-xs text-muted-foreground">
-                            {formatDateTime(message.sentAt ?? message.receivedAt ?? message.createdAt)}
-                          </p>
-                        </div>
-                      ))}
-                    </div>
-                  </div>
-                ))
-              )}
-            </div>
-          </section>
-        </div>
-
-        <aside className="grid gap-6">
-          <section className="card">
-            <h2 className="section-title">Workflow</h2>
-            <form action={updateLoadStatus} className="mt-4 grid gap-3">
-              <input type="hidden" name="loadId" value={load.id} />
-              <select name="status" className="select" defaultValue={load.status}>
-                {loadStatuses.map((status) => (
-                  <option key={status} value={status}>
-                    {humanize(status)}
-                  </option>
-                ))}
-              </select>
-              <button type="submit" className="btn">
-                Update Status
-              </button>
-            </form>
-          </section>
-
-          <section className="card">
-            <h2 className="section-title">Carrier Assignment</h2>
-            <p className="muted">
-              Current carrier: {load.dispatchAssignment?.carrier.name ?? "Not covered"}
-            </p>
-            <form
-              key={load.dispatchAssignment?.id ?? "unassigned"}
-              action={assignCarrier}
-              className="mt-4 grid gap-3"
-            >
-              <input type="hidden" name="loadId" value={load.id} />
-              <SearchCombobox
-                name="carrierId"
-                label="Carrier"
-                placeholder="Search carriers"
-                options={carrierOptions}
-                defaultValue={load.dispatchAssignment?.carrierId ?? ""}
-                required
-              />
-              <div className="grid gap-2">
-                <span className="label">Payment line items</span>
-                <CarrierPayLinesEditor
-                  lineTypes={payLineTypes.map((type) => ({
-                    id: type.id,
-                    name: type.name,
-                    calculationMethod: type.calculationMethod
-                  }))}
-                  initialLines={load.carrierPayLines.map((line) => ({
-                    lineTypeId: line.lineTypeId,
-                    description: line.description,
-                    unitRateCents: line.unitRateCents,
-                    quantity: line.quantity,
-                    amountCents: line.amountCents
-                  }))}
-                  defaultMiles={load.routeTotalMiles}
-                />
-              </div>
-              <input name="driverName" className="input" placeholder="Driver name" defaultValue={load.dispatchAssignment?.driverName ?? ""} />
-              <input name="driverPhone" className="input" placeholder="Driver phone" defaultValue={load.dispatchAssignment?.driverPhone ?? ""} />
-              <div className="grid gap-3 md:grid-cols-2">
-                <input name="truckNumber" className="input" placeholder="Truck #" defaultValue={load.dispatchAssignment?.truckNumber ?? ""} />
-                <input name="trailerNumber" className="input" placeholder="Trailer #" defaultValue={load.dispatchAssignment?.trailerNumber ?? ""} />
-              </div>
-              <button type="submit" className="btn">
-                Save Assignment
-              </button>
-            </form>
-            {load.dispatchAssignment && canWrite(user) && !["INVOICED", "PAID"].includes(load.status) ? (
-              <form action={unassignCarrier} className="mt-3">
-                <input type="hidden" name="loadId" value={load.id} />
-                <button type="submit" className="btn-secondary w-full">
-                  Unassign Carrier
-                </button>
-              </form>
-            ) : null}
-          </section>
-
-          {load.dispatchAssignment ? (
-            <section className="card">
-              <h2 className="section-title">Check Calls</h2>
-              <div className="mt-4 grid gap-3">
-                {load.dispatchAssignment.checkCalls.map((call) => (
-                  <div key={call.id} className="rounded-2xl border border-border p-3">
-                    <p className="font-semibold text-foreground">{call.status}</p>
-                    <p className="muted">{call.location}</p>
-                    <p className="text-xs text-muted-foreground">{formatDateTime(call.occurredAt)}</p>
-                    {call.notes ? <p className="mt-2 text-sm text-slate-700">{call.notes}</p> : null}
-                  </div>
-                ))}
-              </div>
-              <form action={addCheckCall} className="mt-4 grid gap-3 rounded-2xl bg-muted p-4">
-                <input type="hidden" name="assignmentId" value={load.dispatchAssignment.id} />
-                <input type="hidden" name="loadId" value={load.id} />
-                <input name="location" className="input" placeholder="Location" required />
-                <input name="status" className="input" placeholder="Status update" required />
-                <textarea name="notes" className="textarea" placeholder="Notes" rows={3} />
-                <input name="nextCheckAt" className="input" type="datetime-local" />
-                <button className="btn" type="submit">
-                  Add Check Call
-                </button>
-              </form>
-            </section>
-          ) : null}
-
-          <section className="card">
-            <h2 className="section-title">Commission</h2>
-            <p className="muted">
-              Branch: {load.branch?.name ?? "Unassigned"} — payable once the customer has paid.
-            </p>
-
-            <form action={updateLoadCommissionable} className="mt-4 flex items-center gap-2">
-              <input type="hidden" name="loadId" value={load.id} />
-              <input type="hidden" name="isCommissionable" value={load.isCommissionable ? "false" : "true"} />
-              <button type="submit" className="btn-secondary">
-                Mark {load.isCommissionable ? "Non-Commissionable" : "Commissionable"}
-              </button>
-              <span className="text-sm text-muted-foreground">
-                Currently {load.isCommissionable ? "commissionable" : "non-commissionable"}
-              </span>
-            </form>
-
-            {canManageUsers(user) ? (
-              <form action={assignLoadCommissionProfile} className="mt-4 grid gap-3">
-                <input type="hidden" name="loadId" value={load.id} />
-                <label className="grid gap-2">
-                  <span className="label">Commission Profile Override</span>
-                  <select name="profileId" className="select" defaultValue={load.commissionProfileId ?? ""}>
-                    <option value="">Use branch/company default</option>
-                    {commissionProfiles.map((profile) => (
-                      <option key={profile.id} value={profile.id}>
-                        {profile.name}
-                      </option>
                     ))}
-                  </select>
-                </label>
-                <button type="submit" className="btn-secondary">
-                  Save Profile
-                </button>
-              </form>
-            ) : null}
-
-            {load.commission ? (
-              <div className="mt-4 grid gap-3 rounded-2xl bg-muted p-4 text-sm">
-                <div className="flex flex-wrap items-center justify-between gap-2">
-                  <p className="font-semibold text-foreground">Calculation Breakdown</p>
-                  <StatusBadge value={load.commission.status} />
-                </div>
-                <div className="grid gap-2 md:grid-cols-2">
-                  <p>Revenue: {formatMoney(load.commission.revenueCents)}</p>
-                  <p>Gross expenses: {formatMoney(load.commission.grossExpenseCents)}</p>
-                  <p>Gross profit: {formatMoney(load.commission.grossProfitCents)}</p>
-                  <p>Profile: {load.commission.profileName}</p>
-                  <p>Branch commission: {formatMoney(load.commission.branchShareCents)}</p>
-                  <p>Company share: {formatMoney(load.commission.companyShareCents)}</p>
-                  <p>Method: {commissionMethodLabel(load.commission.calculationMethod)}</p>
-                  <p>Carrier cost: {formatMoney(load.carrierCostCents)}</p>
-                  <p>
-                    Other expenses:{" "}
-                    {formatMoney(load.commission.grossExpenseCents - load.carrierCostCents)}
-                  </p>
-                </div>
-                {load.commission.status === "PAYABLE" && canSettleCommission(user) ? (
-                  <form action={settleLoadCommission}>
-                    <input type="hidden" name="loadId" value={load.id} />
-                    <button type="submit" className="btn">
-                      Mark Commission Settled
-                    </button>
-                  </form>
-                ) : null}
-              </div>
-            ) : null}
-
-            <div className="mt-4 grid gap-3">
-              <h3 className="font-semibold text-foreground">Load Expenses</h3>
-              {load.expenses.map((expense) => (
-                <div key={expense.id} className="flex items-center justify-between rounded-2xl border border-border p-3">
-                  <div>
-                    <p className="font-semibold">{expense.label}</p>
-                    <p className="muted">
-                      {expense.expenseType} - {formatMoney(expense.amountCents)}
-                    </p>
                   </div>
-                  <form action={removeLoadExpense}>
-                    <input type="hidden" name="expenseId" value={expense.id} />
-                    <input type="hidden" name="loadId" value={load.id} />
-                    <button type="submit" className="btn-secondary">
-                      Remove
-                    </button>
-                  </form>
+                </div>
+              ))
+            )}
+          </div>
+        </Tile>
+
+        <Tile id="carrier">
+          <p className="muted">
+            Current carrier: {load.dispatchAssignment?.carrier.name ?? "Not covered"}
+          </p>
+          <form
+            key={load.dispatchAssignment?.id ?? "unassigned"}
+            action={assignCarrier}
+            className="mt-4 grid gap-3"
+          >
+            <input type="hidden" name="loadId" value={load.id} />
+            <SearchCombobox
+              name="carrierId"
+              label="Carrier"
+              placeholder="Search carriers"
+              options={carrierOptions}
+              defaultValue={load.dispatchAssignment?.carrierId ?? ""}
+              required
+            />
+            <div className="grid gap-2">
+              <span className="label">Payment line items</span>
+              <CarrierPayLinesEditor
+                lineTypes={payLineTypes.map((type) => ({
+                  id: type.id,
+                  name: type.name,
+                  calculationMethod: type.calculationMethod
+                }))}
+                initialLines={load.carrierPayLines.map((line) => ({
+                  lineTypeId: line.lineTypeId,
+                  description: line.description,
+                  unitRateCents: line.unitRateCents,
+                  quantity: line.quantity,
+                  amountCents: line.amountCents
+                }))}
+                defaultMiles={load.routeTotalMiles}
+              />
+            </div>
+            <input name="driverName" className="input" placeholder="Driver name" defaultValue={load.dispatchAssignment?.driverName ?? ""} />
+            <input name="driverPhone" className="input" placeholder="Driver phone" defaultValue={load.dispatchAssignment?.driverPhone ?? ""} />
+            <div className="grid gap-3 md:grid-cols-2">
+              <input name="truckNumber" className="input" placeholder="Truck #" defaultValue={load.dispatchAssignment?.truckNumber ?? ""} />
+              <input name="trailerNumber" className="input" placeholder="Trailer #" defaultValue={load.dispatchAssignment?.trailerNumber ?? ""} />
+            </div>
+            <button type="submit" className="btn">
+              Save Assignment
+            </button>
+          </form>
+          {load.dispatchAssignment && canWrite(user) && !["INVOICED", "PAID"].includes(load.status) ? (
+            <form action={unassignCarrier} className="mt-3">
+              <input type="hidden" name="loadId" value={load.id} />
+              <button type="submit" className="btn-secondary w-full">
+                Unassign Carrier
+              </button>
+            </form>
+          ) : null}
+        </Tile>
+
+        {load.dispatchAssignment ? (
+          <Tile id="check-calls">
+            <div className="mt-4 grid gap-3">
+              {load.dispatchAssignment.checkCalls.map((call) => (
+                <div key={call.id} className="rounded-2xl border border-border p-3">
+                  <p className="font-semibold text-foreground">{call.status}</p>
+                  <p className="muted">{call.location}</p>
+                  <p className="text-xs text-muted-foreground">{formatDateTime(call.occurredAt)}</p>
+                  {call.notes ? <p className="mt-2 text-sm text-slate-700">{call.notes}</p> : null}
                 </div>
               ))}
             </div>
-
-            <form action={addLoadExpense} className="mt-4 grid gap-3 rounded-2xl bg-muted p-4">
+            <form action={addCheckCall} className="mt-4 grid gap-3 rounded-2xl bg-muted p-4">
+              <input type="hidden" name="assignmentId" value={load.dispatchAssignment.id} />
               <input type="hidden" name="loadId" value={load.id} />
-              <input name="label" className="input" placeholder="Expense label" required />
-              <select name="expenseType" className="select" defaultValue="Other">
-                {expenseTypes.map((type) => (
-                  <option key={type} value={type}>
-                    {type}
-                  </option>
-                ))}
-              </select>
-              <input name="amount" className="input" placeholder="Amount" required />
-              <button type="submit" className="btn">
-                Add Expense
+              <input name="location" className="input" placeholder="Location" required />
+              <input name="status" className="input" placeholder="Status update" required />
+              <textarea name="notes" className="textarea" placeholder="Notes" rows={3} />
+              <input name="nextCheckAt" className="input" type="datetime-local" />
+              <button className="btn" type="submit">
+                Add Check Call
               </button>
             </form>
-          </section>
+          </Tile>
+        ) : null}
 
-          <section className="card">
-            <h2 className="section-title">Accounting</h2>
-            <div className="mt-4 grid gap-3">
-              {load.invoices.map((invoice) => {
-                const exportView =
-                  activeExportMethod != null
-                    ? toExportStatusView(activeExportMethod, invoiceExports.get(invoice.id) ?? null)
-                    : null;
-                return (
-                  <div key={invoice.id} className="rounded-2xl bg-muted p-3">
-                    <p className="font-semibold">{invoice.invoiceNo}</p>
-                    <p className="muted">
-                      {formatMoney(invoice.totalCents)} - {humanize(invoice.status)}
-                    </p>
-                    {exportView ? <p className="mt-1 text-sm text-slate-700">{exportView.label}</p> : null}
-                    {canPushOnline ? (
-                      <form action={pushInvoiceToQuickbooksAction} className="mt-2">
-                        <input type="hidden" name="invoiceId" value={invoice.id} />
-                        <button type="submit" className="btn-secondary">
-                          Push to QuickBooks
-                        </button>
-                      </form>
-                    ) : null}
-                  </div>
-                );
-              })}
-              {load.carrierBills.map((bill) => {
-                const exportView =
-                  activeExportMethod != null
-                    ? toExportStatusView(activeExportMethod, billExports.get(bill.id) ?? null)
-                    : null;
-                return (
-                  <div key={bill.id} className="rounded-2xl bg-muted p-3">
-                    <p className="font-semibold">{bill.billNo}</p>
-                    <p className="muted">
-                      {bill.carrier.name} - {formatMoney(bill.totalCents)} - {humanize(bill.status)}
-                    </p>
-                    {exportView ? <p className="mt-1 text-sm text-slate-700">{exportView.label}</p> : null}
-                    {canPushOnline ? (
-                      <form action={pushCarrierBillToQuickbooksAction} className="mt-2">
-                        <input type="hidden" name="billId" value={bill.id} />
-                        <button type="submit" className="btn-secondary">
-                          Push to QuickBooks
-                        </button>
-                      </form>
-                    ) : null}
-                  </div>
-                );
-              })}
-            </div>
-          </section>
+        <Tile id="commission">
+          <p className="muted">
+            Branch: {load.branch?.name ?? "Unassigned"} — payable once the customer has paid.
+          </p>
 
-          <section className="card">
-            <h2 className="section-title">Activity Log</h2>
-            {canWrite(user) ? (
-              <form action={addLoadActivityNote} className="mt-4 grid gap-3 rounded-2xl bg-muted p-4">
-                <input type="hidden" name="loadId" value={load.id} />
-                <textarea
-                  name="body"
-                  className="textarea"
-                  rows={3}
-                  placeholder="Add a note to the activity log…"
-                  required
-                />
-                <button type="submit" className="btn-secondary">
-                  Save Activity Note
-                </button>
-              </form>
-            ) : null}
-            <div className="mt-4 grid gap-3">
-              {load.activities.length === 0 ? (
-                <p className="text-sm text-muted-foreground">No activity yet.</p>
-              ) : (
-                load.activities.map((activity) => (
-                  <div key={activity.id} className="rounded-2xl border border-border p-3">
-                    <p className="font-semibold text-foreground">{activity.action}</p>
-                    <p className="muted whitespace-pre-wrap">{activity.details ?? "No details"}</p>
-                    <p className="text-xs text-muted-foreground">
-                      {activity.user?.name ? `${activity.user.name} · ` : ""}
-                      {formatDateTime(activity.createdAt)}
-                    </p>
-                  </div>
-                ))
-              )}
+          <form action={updateLoadCommissionable} className="mt-4 flex items-center gap-2">
+            <input type="hidden" name="loadId" value={load.id} />
+            <input type="hidden" name="isCommissionable" value={load.isCommissionable ? "false" : "true"} />
+            <button type="submit" className="btn-secondary">
+              Mark {load.isCommissionable ? "Non-Commissionable" : "Commissionable"}
+            </button>
+            <span className="text-sm text-muted-foreground">
+              Currently {load.isCommissionable ? "commissionable" : "non-commissionable"}
+            </span>
+          </form>
+
+          {canManageUsers(user) ? (
+            <form action={assignLoadCommissionProfile} className="mt-4 grid gap-3">
+              <input type="hidden" name="loadId" value={load.id} />
+              <label className="grid gap-2">
+                <span className="label">Commission Profile Override</span>
+                <select name="profileId" className="select" defaultValue={load.commissionProfileId ?? ""}>
+                  <option value="">Use branch/company default</option>
+                  {commissionProfiles.map((profile) => (
+                    <option key={profile.id} value={profile.id}>
+                      {profile.name}
+                    </option>
+                  ))}
+                </select>
+              </label>
+              <button type="submit" className="btn-secondary">
+                Save Profile
+              </button>
+            </form>
+          ) : null}
+
+          {load.commission ? (
+            <div className="mt-4 grid gap-3 rounded-2xl bg-muted p-4 text-sm">
+              <div className="flex flex-wrap items-center justify-between gap-2">
+                <p className="font-semibold text-foreground">Calculation Breakdown</p>
+                <StatusBadge value={load.commission.status} />
+              </div>
+              <div className="grid gap-2 md:grid-cols-2">
+                <p>Revenue: {formatMoney(load.commission.revenueCents)}</p>
+                <p>Gross expenses: {formatMoney(load.commission.grossExpenseCents)}</p>
+                <p>Gross profit: {formatMoney(load.commission.grossProfitCents)}</p>
+                <p>Profile: {load.commission.profileName}</p>
+                <p>Branch commission: {formatMoney(load.commission.branchShareCents)}</p>
+                <p>Company share: {formatMoney(load.commission.companyShareCents)}</p>
+                <p>Method: {commissionMethodLabel(load.commission.calculationMethod)}</p>
+                <p>Carrier cost: {formatMoney(load.carrierCostCents)}</p>
+                <p>
+                  Other expenses:{" "}
+                  {formatMoney(load.commission.grossExpenseCents - load.carrierCostCents)}
+                </p>
+              </div>
+              {load.commission.status === "PAYABLE" && canSettleCommission(user) ? (
+                <form action={settleLoadCommission}>
+                  <input type="hidden" name="loadId" value={load.id} />
+                  <button type="submit" className="btn">
+                    Mark Commission Settled
+                  </button>
+                </form>
+              ) : null}
             </div>
-          </section>
-        </aside>
-      </div>
+          ) : null}
+
+          <div className="mt-4 grid gap-3">
+            <h3 className="font-semibold text-foreground">Load Expenses</h3>
+            {load.expenses.map((expense) => (
+              <div key={expense.id} className="flex items-center justify-between rounded-2xl border border-border p-3">
+                <div>
+                  <p className="font-semibold">{expense.label}</p>
+                  <p className="muted">
+                    {expense.expenseType} - {formatMoney(expense.amountCents)}
+                  </p>
+                </div>
+                <form action={removeLoadExpense}>
+                  <input type="hidden" name="expenseId" value={expense.id} />
+                  <input type="hidden" name="loadId" value={load.id} />
+                  <button type="submit" className="btn-secondary">
+                    Remove
+                  </button>
+                </form>
+              </div>
+            ))}
+          </div>
+
+          <form action={addLoadExpense} className="mt-4 grid gap-3 rounded-2xl bg-muted p-4">
+            <input type="hidden" name="loadId" value={load.id} />
+            <input name="label" className="input" placeholder="Expense label" required />
+            <select name="expenseType" className="select" defaultValue="Other">
+              {expenseTypes.map((type) => (
+                <option key={type} value={type}>
+                  {type}
+                </option>
+              ))}
+            </select>
+            <input name="amount" className="input" placeholder="Amount" required />
+            <button type="submit" className="btn">
+              Add Expense
+            </button>
+          </form>
+        </Tile>
+
+        <Tile id="accounting">
+          <div className="mt-4 grid gap-3">
+            {load.invoices.map((invoice) => {
+              const exportView =
+                activeExportMethod != null
+                  ? toExportStatusView(activeExportMethod, invoiceExports.get(invoice.id) ?? null)
+                  : null;
+              return (
+                <div key={invoice.id} className="rounded-2xl bg-muted p-3">
+                  <p className="font-semibold">{invoice.invoiceNo}</p>
+                  <p className="muted">
+                    {formatMoney(invoice.totalCents)} - {humanize(invoice.status)}
+                  </p>
+                  {exportView ? <p className="mt-1 text-sm text-slate-700">{exportView.label}</p> : null}
+                  {canPushOnline ? (
+                    <form action={pushInvoiceToQuickbooksAction} className="mt-2">
+                      <input type="hidden" name="invoiceId" value={invoice.id} />
+                      <button type="submit" className="btn-secondary">
+                        Push to QuickBooks
+                      </button>
+                    </form>
+                  ) : null}
+                </div>
+              );
+            })}
+            {load.carrierBills.map((bill) => {
+              const exportView =
+                activeExportMethod != null
+                  ? toExportStatusView(activeExportMethod, billExports.get(bill.id) ?? null)
+                  : null;
+              return (
+                <div key={bill.id} className="rounded-2xl bg-muted p-3">
+                  <p className="font-semibold">{bill.billNo}</p>
+                  <p className="muted">
+                    {bill.carrier.name} - {formatMoney(bill.totalCents)} - {humanize(bill.status)}
+                  </p>
+                  {exportView ? <p className="mt-1 text-sm text-slate-700">{exportView.label}</p> : null}
+                  {canPushOnline ? (
+                    <form action={pushCarrierBillToQuickbooksAction} className="mt-2">
+                      <input type="hidden" name="billId" value={bill.id} />
+                      <button type="submit" className="btn-secondary">
+                        Push to QuickBooks
+                      </button>
+                    </form>
+                  ) : null}
+                </div>
+              );
+            })}
+          </div>
+        </Tile>
+
+        <Tile id="activity">
+          {canWrite(user) ? (
+            <form action={addLoadActivityNote} className="mt-4 grid gap-3 rounded-2xl bg-muted p-4">
+              <input type="hidden" name="loadId" value={load.id} />
+              <textarea
+                name="body"
+                className="textarea"
+                rows={3}
+                placeholder="Add a note to the activity log…"
+                required
+              />
+              <button type="submit" className="btn-secondary">
+                Save Activity Note
+              </button>
+            </form>
+          ) : null}
+          <div className="mt-4 grid gap-3">
+            {load.activities.length === 0 ? (
+              <p className="text-sm text-muted-foreground">No activity yet.</p>
+            ) : (
+              load.activities.map((activity) => (
+                <div key={activity.id} className="rounded-2xl border border-border p-3">
+                  <p className="font-semibold text-foreground">{activity.action}</p>
+                  <p className="muted whitespace-pre-wrap">{activity.details ?? "No details"}</p>
+                  <p className="text-xs text-muted-foreground">
+                    {activity.user?.name ? `${activity.user.name} · ` : ""}
+                    {formatDateTime(activity.createdAt)}
+                  </p>
+                </div>
+              ))
+            )}
+          </div>
+        </Tile>
+      </TileBoard>
     </>
   );
 }

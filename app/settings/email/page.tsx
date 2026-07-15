@@ -1,11 +1,14 @@
 import Link from "next/link";
 import { PageHeader } from "@/components/page-header";
+import { TileBoard, Tile } from "@/components/tile-board";
 import { requireUser } from "@/lib/auth";
 import { disconnectMailbox, syncMyMailbox } from "@/lib/mail-actions";
 import { listUserMailboxes } from "@/lib/mail/user-mailbox";
 import { isGoogleOAuthConfigured } from "@/lib/oauth/google";
 import { isMicrosoftOAuthConfigured } from "@/lib/oauth/microsoft";
 import { formatDateTime, humanize } from "@/lib/format";
+import { SETTINGS_EMAIL_TILES } from "@/lib/tile-defaults";
+import { loadPageLayouts } from "@/lib/ui-preferences-load";
 
 export default async function EmailSettingsPage({
   searchParams
@@ -19,7 +22,10 @@ export default async function EmailSettingsPage({
 }) {
   const user = await requireUser();
   const params = await searchParams;
-  const mailboxes = await listUserMailboxes(user.id);
+  const [mailboxes, layouts] = await Promise.all([
+    listUserMailboxes(user.id),
+    loadPageLayouts("settings-email")
+  ]);
   const googleConfigured = isGoogleOAuthConfigured();
   const microsoftConfigured = isMicrosoftOAuthConfigured();
 
@@ -43,10 +49,9 @@ export default async function EmailSettingsPage({
         </div>
       ) : null}
 
-      <div className="grid gap-4 md:grid-cols-2">
-        <section className="card">
-          <h2 className="section-title">Gmail</h2>
-          <p className="muted mt-2">Send and sync using your Google Workspace or Gmail account.</p>
+      <TileBoard pageId="settings-email" tiles={SETTINGS_EMAIL_TILES} initialLayouts={layouts}>
+        <Tile id="gmail">
+          <p className="muted">Send and sync using your Google Workspace or Gmail account.</p>
           {googleConfigured ? (
             <div className="mt-4 flex flex-wrap gap-2">
               <Link href="/api/mail/oauth/google/start" className="btn">
@@ -56,11 +61,10 @@ export default async function EmailSettingsPage({
           ) : (
             <p className="mt-4 text-sm text-amber-700">Google OAuth is not configured on this server.</p>
           )}
-        </section>
+        </Tile>
 
-        <section className="card">
-          <h2 className="section-title">Microsoft 365</h2>
-          <p className="muted mt-2">Send and sync using your Outlook / Microsoft 365 mailbox.</p>
+        <Tile id="microsoft">
+          <p className="muted">Send and sync using your Outlook / Microsoft 365 mailbox.</p>
           {microsoftConfigured ? (
             <div className="mt-4 flex flex-wrap gap-2">
               <Link href="/api/mail/oauth/microsoft/start" className="btn">
@@ -72,51 +76,51 @@ export default async function EmailSettingsPage({
               Microsoft OAuth is not configured on this server.
             </p>
           )}
-        </section>
-      </div>
+        </Tile>
 
-      <section className="card mt-6">
-        <div className="flex flex-wrap items-center justify-between gap-3">
-          <h2 className="section-title">Connected mailboxes</h2>
-          <form action={syncMyMailbox}>
-            <button type="submit" className="btn-secondary">
-              Sync replies now
-            </button>
-          </form>
-        </div>
+        <Tile id="mailboxes">
+          <div className="flex flex-wrap items-center justify-between gap-3">
+            <p className="muted">Mailboxes connected to your user account.</p>
+            <form action={syncMyMailbox}>
+              <button type="submit" className="btn-secondary">
+                Sync replies now
+              </button>
+            </form>
+          </div>
 
-        {mailboxes.length === 0 ? (
-          <p className="mt-4 text-sm text-muted-foreground">No mailbox connected yet.</p>
-        ) : (
-          <ul className="mt-4 grid gap-3">
-            {mailboxes.map((mailbox) => (
-              <li
-                key={mailbox.id}
-                className="flex flex-wrap items-center justify-between gap-3 rounded-xl border border-border px-4 py-3"
-              >
-                <div>
-                  <p className="font-semibold text-foreground">
-                    {humanize(mailbox.provider)} · {mailbox.emailAddress}
-                  </p>
-                  <p className="text-sm text-muted-foreground">
-                    Status: {mailbox.status}
-                    {mailbox.lastSyncAt ? ` · Last sync ${formatDateTime(mailbox.lastSyncAt)}` : ""}
-                  </p>
-                  {mailbox.lastError ? (
-                    <p className="text-sm text-rose-700">{mailbox.lastError}</p>
-                  ) : null}
-                </div>
-                <form action={disconnectMailbox}>
-                  <input type="hidden" name="provider" value={mailbox.provider} />
-                  <button type="submit" className="btn-secondary">
-                    Disconnect
-                  </button>
-                </form>
-              </li>
-            ))}
-          </ul>
-        )}
-      </section>
+          {mailboxes.length === 0 ? (
+            <p className="mt-4 text-sm text-muted-foreground">No mailbox connected yet.</p>
+          ) : (
+            <ul className="mt-4 grid gap-3">
+              {mailboxes.map((mailbox) => (
+                <li
+                  key={mailbox.id}
+                  className="flex flex-wrap items-center justify-between gap-3 rounded-xl border border-border px-4 py-3"
+                >
+                  <div>
+                    <p className="font-semibold text-foreground">
+                      {humanize(mailbox.provider)} · {mailbox.emailAddress}
+                    </p>
+                    <p className="text-sm text-muted-foreground">
+                      Status: {mailbox.status}
+                      {mailbox.lastSyncAt ? ` · Last sync ${formatDateTime(mailbox.lastSyncAt)}` : ""}
+                    </p>
+                    {mailbox.lastError ? (
+                      <p className="text-sm text-rose-700">{mailbox.lastError}</p>
+                    ) : null}
+                  </div>
+                  <form action={disconnectMailbox}>
+                    <input type="hidden" name="provider" value={mailbox.provider} />
+                    <button type="submit" className="btn-secondary">
+                      Disconnect
+                    </button>
+                  </form>
+                </li>
+              ))}
+            </ul>
+          )}
+        </Tile>
+      </TileBoard>
     </>
   );
 }

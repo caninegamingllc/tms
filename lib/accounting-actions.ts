@@ -580,47 +580,51 @@ export async function bulkPushBillsToQuickbooks(formData: FormData) {
 
 export async function recomputeOverdueStatuses(companyId: string) {
   const now = new Date();
-  const invoices = await prisma.invoice.findMany({
-    where: {
-      companyId,
-      balanceCents: { gt: 0 },
-      status: { notIn: ["VOID", "PAID"] }
-    }
-  });
 
-  for (const invoice of invoices) {
-    const status = statusFromBalance({
-      balanceCents: invoice.balanceCents,
-      totalCents: invoice.totalCents,
-      dueAt: invoice.dueAt,
-      currentStatus: invoice.status,
-      asOf: now
-    });
-    if (status !== invoice.status) {
-      await prisma.invoice.update({ where: { id: invoice.id }, data: { status } });
-    }
-  }
+  // Bulk mark past-due open balances as OVERDUE (covers the common browse-path case).
+  // Leave PARTIAL alone — partial payment status takes precedence over overdue.
+  await Promise.all([
+    prisma.invoice.updateMany({
+      where: {
+        companyId,
+        balanceCents: { gt: 0 },
+        dueAt: { lt: now },
+        status: { in: ["DRAFT", "SENT", "APPROVED"] }
+      },
+      data: { status: "OVERDUE" }
+    }),
+    prisma.carrierBill.updateMany({
+      where: {
+        companyId,
+        balanceCents: { gt: 0 },
+        dueAt: { lt: now },
+        status: { in: ["DRAFT", "SENT", "APPROVED"] }
+      },
+      data: { status: "OVERDUE" }
+    })
+  ]);
 
-  const bills = await prisma.carrierBill.findMany({
-    where: {
-      companyId,
-      balanceCents: { gt: 0 },
-      status: { notIn: ["VOID", "PAID"] }
-    }
-  });
-
-  for (const bill of bills) {
-    const status = statusFromBalance({
-      balanceCents: bill.balanceCents,
-      totalCents: bill.totalCents,
-      dueAt: bill.dueAt,
-      currentStatus: bill.status,
-      asOf: now
-    });
-    if (status !== bill.status) {
-      await prisma.carrierBill.update({ where: { id: bill.id }, data: { status } });
-    }
-  }
+  // Clear OVERDUE back to SENT when due date is still in the future (e.g. terms edited).
+  await Promise.all([
+    prisma.invoice.updateMany({
+      where: {
+        companyId,
+        balanceCents: { gt: 0 },
+        status: "OVERDUE",
+        OR: [{ dueAt: null }, { dueAt: { gte: now } }]
+      },
+      data: { status: "SENT" }
+    }),
+    prisma.carrierBill.updateMany({
+      where: {
+        companyId,
+        balanceCents: { gt: 0 },
+        status: "OVERDUE",
+        OR: [{ dueAt: null }, { dueAt: { gte: now } }]
+      },
+      data: { status: "SENT" }
+    })
+  ]);
 }
 
 export { resolveCarrierApPayee, dueDateFromTerms };

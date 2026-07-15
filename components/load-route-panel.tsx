@@ -8,7 +8,7 @@ const LoadRouteMap = dynamic(
   () => import("@/components/load-route-map").then((module) => module.LoadRouteMap),
   {
     ssr: false,
-    loading: () => <div className="h-80 animate-pulse rounded-2xl bg-muted" />
+    loading: () => <div className="h-64 animate-pulse rounded-2xl bg-muted" />
   }
 );
 
@@ -100,15 +100,12 @@ export function LoadRoutePanel({ loadId }: LoadRoutePanelProps) {
   const canShowMap = Boolean(route?.polyline && route.path.length > 1 && route.stops.length > 0);
 
   return (
-    <div className="mt-6 border-t border-border pt-6">
-      <div className="flex flex-wrap items-center justify-between gap-3">
-        <div>
-          <h3 className="font-semibold text-foreground">Route</h3>
-          <p className="muted">Driving distance and state mileage breakdown.</p>
-        </div>
+    <>
+      <div className="flex flex-wrap items-start justify-between gap-3">
+        <p className="muted">Driving distance and state mileage.</p>
         <div className="flex items-center gap-3">
           {route?.totalMiles ? (
-            <span className="text-2xl font-bold text-foreground">{route.totalMiles.toLocaleString()} mi</span>
+            <span className="text-xl font-bold text-foreground">{route.totalMiles.toLocaleString()} mi</span>
           ) : null}
           <button
             type="button"
@@ -116,12 +113,12 @@ export function LoadRoutePanel({ loadId }: LoadRoutePanelProps) {
             onClick={handleRefresh}
             disabled={loading || refreshing}
           >
-            {refreshing ? "Refreshing..." : "Refresh route"}
+            {refreshing ? "Refreshing..." : "Refresh"}
           </button>
         </div>
       </div>
 
-      {loading ? <div className="mt-4 h-80 animate-pulse rounded-2xl bg-muted" /> : null}
+      {loading ? <div className="mt-4 h-64 animate-pulse rounded-2xl bg-muted" /> : null}
 
       {!loading && error ? (
         <div className="mt-4 rounded-2xl border border-border bg-muted p-4 text-sm text-slate-700">
@@ -132,14 +129,14 @@ export function LoadRoutePanel({ loadId }: LoadRoutePanelProps) {
       {!loading && !error && route ? (
         <div className="mt-4 grid gap-4">
           {route.warnings.length > 0 ? (
-            <div className="rounded-2xl border border-warning/30 bg-warning/10 p-4 text-sm text-slate-700">
+            <div className="rounded-2xl border border-warning/30 bg-warning/10 p-3 text-sm text-slate-700">
               {route.warnings.map((warning) => (
                 <p key={warning}>{warning}</p>
               ))}
             </div>
           ) : null}
 
-          {canShowMap ? <LoadRouteMap stops={route.stops} path={route.path} /> : null}
+          {canShowMap ? <LoadRouteMap stops={route.stops} path={route.path} compact /> : null}
 
           {!canShowMap ? (
             <div className="rounded-2xl border border-border bg-muted p-4 text-sm text-slate-700">
@@ -149,12 +146,12 @@ export function LoadRoutePanel({ loadId }: LoadRoutePanelProps) {
 
           {stateEntries.length > 0 ? (
             <div>
-              <h4 className="font-semibold text-foreground">State mileage</h4>
-              <div className="mt-3 grid gap-2 sm:grid-cols-2 lg:grid-cols-3">
+              <h3 className="text-sm font-semibold text-foreground">State mileage</h3>
+              <div className="mt-2 grid gap-2 grid-cols-2">
                 {stateEntries.map(([state, miles]) => (
-                  <div key={state} className="flex items-center justify-between rounded-xl bg-muted px-4 py-3">
-                    <span className="font-semibold text-foreground">{state}</span>
-                    <span className="text-sm text-muted-foreground">{miles.toLocaleString()} mi</span>
+                  <div key={state} className="flex items-center justify-between rounded-xl bg-muted px-3 py-2">
+                    <span className="text-sm font-semibold text-foreground">{state}</span>
+                    <span className="text-xs text-muted-foreground">{miles.toLocaleString()} mi</span>
                   </div>
                 ))}
               </div>
@@ -162,6 +159,6 @@ export function LoadRoutePanel({ loadId }: LoadRoutePanelProps) {
           ) : null}
         </div>
       ) : null}
-    </div>
+    </>
   );
 }

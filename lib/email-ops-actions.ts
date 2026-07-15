@@ -59,6 +59,7 @@ async function loadForEmail(loadId: string, user: SessionUser) {
     include: {
       customer: { include: { contacts: true } },
       stops: true,
+      commodityLines: { orderBy: { sequence: "asc" } },
       charges: true,
       carrierPayLines: {
         orderBy: { sortOrder: "asc" },

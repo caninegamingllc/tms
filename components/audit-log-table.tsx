@@ -15,6 +15,7 @@ export type AuditLogRow = {
 export function AuditLogTable({ logs }: { logs: AuditLogRow[] }) {
   return (
     <SortableTable
+      tableId="audit-log"
       data={logs}
       keyExtractor={(log) => log.id}
       defaultSort={{ columnId: "time", direction: "desc" }}

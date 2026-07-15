@@ -1,8 +1,10 @@
 import Link from "next/link";
+import { after } from "next/server";
 import { CommissionFilters } from "@/components/commission-filters";
 import { CommissionSettleTable } from "@/components/commission-settle-table";
 import { MetricCard } from "@/components/metric-card";
 import { PageHeader } from "@/components/page-header";
+import { TileBoard, Tile } from "@/components/tile-board";
 import { syncMissingCommissions, syncStalePayableCommissions } from "@/lib/commission";
 import { getBranchScope } from "@/lib/branch-filter-server";
 import { buildCommissionWhere, parseCommissionSearchParams } from "@/lib/commission-search";
@@ -10,6 +12,8 @@ import { requireTmsAccess } from "@/lib/permissions";
 import { canManageUsers, canSettleCommission } from "@/lib/scope";
 import { prisma } from "@/lib/db";
 import { commissionMethodLabel, formatDate, formatMoney, humanize } from "@/lib/format";
+import { COMMISSIONS_TILES } from "@/lib/tile-defaults";
+import { loadPageLayouts } from "@/lib/ui-preferences-load";
 
 export default async function CommissionsPage({
   searchParams
@@ -20,13 +24,17 @@ export default async function CommissionsPage({
   const params = await searchParams;
   const filters = parseCommissionSearchParams(params);
 
-  await syncMissingCommissions(user.companyId);
-  await syncStalePayableCommissions(user.companyId);
+  after(() => {
+    void syncMissingCommissions(user.companyId).then(() =>
+      syncStalePayableCommissions(user.companyId)
+    );
+  });
 
   const loadScope = await getBranchScope(user);
   const where = buildCommissionWhere(loadScope, filters);
+  const manageProfiles = canManageUsers(user);
 
-  const [commissions, profileCount] = await Promise.all([
+  const [commissions, profileCount, layouts] = await Promise.all([
     prisma.loadCommission.findMany({
       where,
       orderBy: [{ load: { pickupDate: "desc" } }, { load: { loadNumber: "desc" } }],
@@ -40,9 +48,10 @@ export default async function CommissionsPage({
         }
       }
     }),
-    canManageUsers(user)
+    manageProfiles
       ? prisma.commissionProfile.count({ where: { companyId: user.companyId } })
-      : Promise.resolve(0)
+      : Promise.resolve(0),
+    loadPageLayouts("commissions")
   ]);
 
   const totalPayable = commissions
@@ -83,13 +92,17 @@ export default async function CommissionsPage({
     };
   });
 
+  const tiles = manageProfiles
+    ? COMMISSIONS_TILES
+    : COMMISSIONS_TILES.filter((tile) => tile.id !== "profiles-cta");
+
   return (
     <>
       <PageHeader
         title="Commissions"
         description="Track branch commission calculations, payable amounts, and settlement status by load."
         action={
-          canManageUsers(user) ? (
+          manageProfiles ? (
             <Link href="/commissions/profiles" className="btn-secondary">
               Commission Profiles
             </Link>
@@ -97,32 +110,51 @@ export default async function CommissionsPage({
         }
       />
 
-      <div className="grid gap-4 md:grid-cols-3">
-        <MetricCard label="Payable to Branches" value={formatMoney(totalPayable)} detail="Customer-paid, awaiting settlement" />
-        <MetricCard label="Settled" value={formatMoney(totalSettled)} detail="Branch commissions paid out" />
-        <MetricCard label="Pending Loads" value={String(pendingCount)} detail="Awaiting customer payment" />
-      </div>
-
-      {canManageUsers(user) ? (
-        <section className="card mt-6 p-5">
-          <div className="flex flex-wrap items-start justify-between gap-4">
-            <div>
-              <h2 className="section-title">Commission Profiles</h2>
-              <p className="muted">
-                {profileCount} profile{profileCount === 1 ? "" : "s"} configured. Create rules for branch and company splits, then assign defaults to branches or individual loads.
-              </p>
+      <TileBoard pageId="commissions" tiles={tiles} initialLayouts={layouts}>
+        <Tile id="metrics">
+          <div className="overflow-hidden rounded-lg border border-border bg-card">
+            <div className="grid md:grid-cols-3 md:[&>*:nth-child(3n)]:border-r-0">
+              <MetricCard
+                label="Payable to Branches"
+                value={formatMoney(totalPayable)}
+                detail="Customer-paid, awaiting settlement"
+              />
+              <MetricCard
+                label="Settled"
+                value={formatMoney(totalSettled)}
+                detail="Branch commissions paid out"
+              />
+              <MetricCard
+                label="Pending Loads"
+                value={String(pendingCount)}
+                detail="Awaiting customer payment"
+              />
             </div>
-            <Link href="/commissions/profiles" className="btn">
-              Manage Profiles
-            </Link>
           </div>
-        </section>
-      ) : null}
+        </Tile>
 
-      <div className="mt-6 grid gap-6">
-        <CommissionFilters filters={filters} />
-        <CommissionSettleTable rows={rows} canSettle={canSettleCommission(user)} />
-      </div>
+        {manageProfiles ? (
+          <Tile id="profiles-cta">
+            <div className="flex flex-wrap items-start justify-between gap-4">
+              <p className="muted">
+                {profileCount} profile{profileCount === 1 ? "" : "s"} configured. Create rules for branch
+                and company splits, then assign defaults to branches or individual loads.
+              </p>
+              <Link href="/commissions/profiles" className="btn">
+                Manage Profiles
+              </Link>
+            </div>
+          </Tile>
+        ) : null}
+
+        <Tile id="filters">
+          <CommissionFilters filters={filters} />
+        </Tile>
+
+        <Tile id="settlement">
+          <CommissionSettleTable rows={rows} canSettle={canSettleCommission(user)} />
+        </Tile>
+      </TileBoard>
     </>
   );
 }

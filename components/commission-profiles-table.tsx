@@ -15,6 +15,7 @@ export type CommissionProfileRow = {
 export function CommissionProfilesTable({ profiles }: { profiles: CommissionProfileRow[] }) {
   return (
     <SortableTable
+      tableId="commission-profiles"
       data={profiles}
       keyExtractor={(profile) => profile.id}
       defaultSort={{ columnId: "name", direction: "asc" }}

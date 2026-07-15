@@ -156,10 +156,10 @@ function AgingTable<T extends AgingArRow | AgingApRow>({
   }
 
   return (
-    <section className="card overflow-hidden p-0">
-      <div className="flex flex-wrap items-start justify-between gap-3 border-b border-border p-5">
+    <div className="grid gap-4 overflow-hidden rounded-lg border border-border">
+      <div className="flex flex-wrap items-start justify-between gap-3 border-b border-border p-4">
         <div>
-          <h2 className="section-title">{title}</h2>
+          <p className="text-[15px] font-semibold text-foreground">{title}</p>
           <p className="muted">Aging by days past due. Amounts appear in one bucket per open balance.</p>
         </div>
         <div className="flex flex-wrap gap-2">
@@ -172,7 +172,7 @@ function AgingTable<T extends AgingArRow | AgingApRow>({
         </div>
       </div>
 
-      <div className="border-b border-border px-5 py-3">
+      <div className="border-b border-border px-4 pb-3">
         <input
           className="input max-w-xl"
           placeholder="Search company name, document #, or dollar amount"
@@ -254,7 +254,7 @@ function AgingTable<T extends AgingArRow | AgingApRow>({
           </tbody>
         </table>
       </div>
-      <div className="border-t border-border px-5 py-3">
+      <div className="border-t border-border px-4 py-3">
         <TablePagination
           page={pagination.page}
           pageSize={pagination.pageSize}
@@ -266,7 +266,7 @@ function AgingTable<T extends AgingArRow | AgingApRow>({
           onPageSizeChange={pagination.setPageSize}
         />
       </div>
-    </section>
+    </div>
   );
 }
 

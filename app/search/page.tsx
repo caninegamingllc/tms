@@ -2,8 +2,15 @@ import { Suspense } from "react";
 import { LoadSearchFilters } from "@/components/load-search-filters";
 import { LoadSearchResults } from "@/components/load-search-results";
 import { PageHeader } from "@/components/page-header";
-import { RevenueReportPanel, SearchViewToggle } from "@/components/revenue-report-panel";
+import {
+  CustomerVolumeTable,
+  LaneSummaryTable,
+  LoadProfitabilityTable,
+  RevenueMetricsHeader,
+  SearchViewToggle
+} from "@/components/revenue-report-panel";
 import { SearchPrompt } from "@/components/search-prompt";
+import { TileBoard, Tile } from "@/components/tile-board";
 import { getBranchScope } from "@/lib/branch-filter-server";
 import { requireTmsAccess } from "@/lib/permissions";
 import { isSearchSubmitted } from "@/lib/list-search";
@@ -15,6 +22,8 @@ import {
   searchLoads,
   serializeSearchLoads
 } from "@/lib/load-search";
+import { SEARCH_PAGE_TILES } from "@/lib/tile-defaults";
+import { loadPageLayouts } from "@/lib/ui-preferences-load";
 
 type SearchPageProps = {
   searchParams: Promise<Record<string, string | string[] | undefined>>;
@@ -28,9 +37,10 @@ export default async function SearchPage({ searchParams }: SearchPageProps) {
   const showResults = isSearchSubmitted(resolvedSearchParams);
 
   const scope = await getBranchScope(user);
-  const [loads, options] = await Promise.all([
+  const [loads, options, layouts] = await Promise.all([
     showResults ? searchLoads(scope, filters) : Promise.resolve([]),
-    getLoadSearchOptions(scope)
+    getLoadSearchOptions(scope),
+    loadPageLayouts("search")
   ]);
 
   const customerName = filters.customerId
@@ -47,41 +57,59 @@ export default async function SearchPage({ searchParams }: SearchPageProps) {
         description="Search loads with flexible filters, review results, and export load or revenue reports."
       />
 
-      <LoadSearchFilters
-        filters={{ ...filters, view }}
-        customers={options.customers}
-        commodities={options.commodities}
-      />
-
-      {showResults ? (
-        <>
-          <div className="mt-6">
-            <Suspense fallback={<div className="muted">Loading view...</div>}>
-              <SearchViewToggle view={view} />
-            </Suspense>
+      <TileBoard pageId="search" tiles={SEARCH_PAGE_TILES} initialLayouts={layouts}>
+        <Tile id="filters">
+          <div className="grid gap-4">
+            <LoadSearchFilters
+              filters={{ ...filters, view }}
+              customers={options.customers}
+              commodities={options.commodities}
+            />
+            {showResults ? (
+              <Suspense fallback={<div className="muted">Loading view...</div>}>
+                <SearchViewToggle view={view} />
+              </Suspense>
+            ) : null}
           </div>
+        </Tile>
 
-          <div className="mt-6">
-            {view === "revenue" ? (
-              <RevenueReportPanel
-                summary={revenueSummary}
-                companyName={user.companyName}
-                filterSummary={filterSummary}
-              />
-            ) : (
-              <LoadSearchResults
-                loads={serializedLoads}
-                companyName={user.companyName}
-                filterSummary={filterSummary}
-              />
-            )}
-          </div>
-        </>
-      ) : (
-        <div className="mt-6">
-          <SearchPrompt entity="loads" />
-        </div>
-      )}
+        {!showResults ? (
+          <Tile id="load-results">
+            <SearchPrompt entity="loads" />
+          </Tile>
+        ) : null}
+
+        {showResults && view === "loads" ? (
+          <Tile id="load-results">
+            <LoadSearchResults
+              loads={serializedLoads}
+              companyName={user.companyName}
+              filterSummary={filterSummary}
+            />
+          </Tile>
+        ) : null}
+
+        {showResults && view === "revenue" ? (
+          <>
+            <Tile id="load-profitability">
+              <div className="grid gap-4">
+                <RevenueMetricsHeader
+                  summary={revenueSummary}
+                  companyName={user.companyName}
+                  filterSummary={filterSummary}
+                />
+                <LoadProfitabilityTable summary={revenueSummary} />
+              </div>
+            </Tile>
+            <Tile id="lane-summary">
+              <LaneSummaryTable summary={revenueSummary} />
+            </Tile>
+            <Tile id="customer-volume">
+              <CustomerVolumeTable summary={revenueSummary} />
+            </Tile>
+          </>
+        ) : null}
+      </TileBoard>
     </>
   );
 }

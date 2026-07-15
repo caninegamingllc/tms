@@ -3,6 +3,7 @@ import { CarrierSearchFilters } from "@/components/carrier-search-filters";
 import { CarriersTable } from "@/components/carriers-table";
 import { PageHeader } from "@/components/page-header";
 import { SearchPrompt } from "@/components/search-prompt";
+import { TileBoard, Tile } from "@/components/tile-board";
 import { createCarrier } from "@/lib/actions";
 import {
   parseCarrierSearchParams,
@@ -12,6 +13,13 @@ import { getBranchScope } from "@/lib/branch-filter-server";
 import { isSearchSubmitted } from "@/lib/list-search";
 import { requireTmsAccess } from "@/lib/permissions";
 import { prisma } from "@/lib/db";
+import { LIST_SEARCH_ADD_TILES } from "@/lib/tile-defaults";
+import { loadPageLayouts } from "@/lib/ui-preferences-load";
+
+const tiles = LIST_SEARCH_ADD_TILES.map((t) => ({
+  ...t,
+  title: t.id === "search" ? "Search Carriers" : t.id === "results" ? "Search Results" : "Add Carrier"
+}));
 
 export default async function CarriersPage({
   searchParams
@@ -25,13 +33,14 @@ export default async function CarriersPage({
   const showResults = isSearchSubmitted(params);
 
   const scope = await getBranchScope(user);
-  const [carriers, factoringCompanies] = await Promise.all([
+  const [carriers, factoringCompanies, layouts] = await Promise.all([
     showResults ? searchCarriers(scope, filters) : Promise.resolve([]),
     prisma.factoringCompany.findMany({
       where: { companyId: user.companyId, status: "Active" },
       orderBy: { name: "asc" },
       select: { id: true, name: true, nameOnCheck: true }
-    })
+    }),
+    loadPageLayouts("carriers")
   ]);
 
   const rows = carriers.map((carrier) => {
@@ -72,32 +81,31 @@ export default async function CarriersPage({
         </div>
       ) : null}
 
-      <div className="grid gap-6 xl:grid-cols-[1.35fr_0.8fr]">
-        <div className="grid gap-6">
+      <TileBoard pageId="carriers" tiles={tiles} initialLayouts={layouts}>
+        <Tile id="search">
           <CarrierSearchFilters filters={filters} />
+        </Tile>
 
+        <Tile id="results">
           {showResults ? (
-            <section className="card overflow-hidden p-0">
-              <div className="border-b border-border p-5">
-                <h2 className="section-title">Search Results</h2>
-                <p className="muted">
-                  {carriers.length} carrier{carriers.length === 1 ? "" : "s"} found. Click column headers to sort.
-                </p>
-              </div>
+            <>
+              <p className="muted mb-3">
+                {carriers.length} carrier{carriers.length === 1 ? "" : "s"} found. Click column headers to
+                sort.
+              </p>
               <div className="overflow-x-auto">
                 <CarriersTable carriers={rows} />
               </div>
-            </section>
+            </>
           ) : (
             <SearchPrompt entity="carriers" />
           )}
-        </div>
+        </Tile>
 
-        <section className="card">
-          <h2 className="section-title">Add Carrier</h2>
+        <Tile id="add">
           <CarrierLookupForm action={createCarrier} factoringCompanies={factoringCompanies} />
-        </section>
-      </div>
+        </Tile>
+      </TileBoard>
     </>
   );
 }

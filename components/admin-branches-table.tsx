@@ -18,6 +18,7 @@ export type AdminBranchRow = {
 export function AdminBranchesTable({ rows }: { rows: AdminBranchRow[] }) {
   return (
     <SortableTable
+      tableId="admin-branches"
       data={rows}
       keyExtractor={(row) => row.id}
       defaultSort={{ columnId: "name", direction: "asc" }}

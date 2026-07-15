@@ -144,12 +144,6 @@ export default async function LoginPage({
             </button>
           </form>
 
-          <div className="mt-5 rounded-md border border-border bg-muted/50 p-3 text-[13px] text-muted-foreground">
-            <p className="font-semibold text-foreground">Development login</p>
-            <p>Email: owner@example.com</p>
-            <p>Password: ChangeMe123!</p>
-          </div>
-
           <p className="mt-5 text-[13px] text-muted-foreground">
             New brokerage?{" "}
             <Link href="/register" className="font-semibold text-primary">

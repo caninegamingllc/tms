@@ -1,4 +1,5 @@
 import Link from "next/link";
+import { after } from "next/server";
 import { LoadSearchFilters } from "@/components/load-search-filters";
 import { LoadsTable } from "@/components/loads-table";
 import { PageHeader } from "@/components/page-header";
@@ -23,7 +24,9 @@ export default async function LoadsPage({
   const filters = parseLoadSearchParams(params);
   const showResults = isSearchSubmitted(params);
 
-  await syncMissingCommissions(user.companyId);
+  after(() => {
+    void syncMissingCommissions(user.companyId);
+  });
 
   const scope = await getBranchScope(user);
   const [loads, options] = await Promise.all([
@@ -71,12 +74,17 @@ export default async function LoadsPage({
         }
       />
 
-      <LoadSearchFilters
-        filters={filters}
-        customers={options.customers}
-        commodities={options.commodities}
-        basePath="/loads"
-      />
+      <section className="card p-5">
+        <div className="mb-4">
+          <h2 className="section-title">Search Filters</h2>
+        </div>
+        <LoadSearchFilters
+          filters={filters}
+          customers={options.customers}
+          commodities={options.commodities}
+          basePath="/loads"
+        />
+      </section>
 
       {showResults ? (
         <section className="card mt-6 overflow-hidden p-0">
@@ -91,9 +99,9 @@ export default async function LoadsPage({
           </div>
         </section>
       ) : (
-        <div className="mt-6">
+        <section className="card mt-6 p-8">
           <SearchPrompt entity="loads" />
-        </div>
+        </section>
       )}
     </>
   );

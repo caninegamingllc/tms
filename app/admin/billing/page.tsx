@@ -1,5 +1,6 @@
 import Link from "next/link";
 import { PageHeader } from "@/components/page-header";
+import { TileBoard, Tile } from "@/components/tile-board";
 import {
   createBillingPortalSession,
   createSeatCheckoutSession,
@@ -8,6 +9,8 @@ import {
 import { requireAdmin } from "@/lib/auth";
 import { getSeatSummary } from "@/lib/seats";
 import { isStripeConfigured } from "@/lib/stripe";
+import { ADMIN_BILLING_TILES } from "@/lib/tile-defaults";
+import { loadPageLayouts } from "@/lib/ui-preferences-load";
 
 export default async function BillingPage({
   searchParams
@@ -23,7 +26,10 @@ export default async function BillingPage({
   const user = await requireAdmin();
   const params = await searchParams;
   await refreshSeatSubscriptionFromStripe(user.companyId, { force: params.success === "1" });
-  const seatSummary = await getSeatSummary(user.companyId);
+  const [seatSummary, layouts] = await Promise.all([
+    getSeatSummary(user.companyId),
+    loadPageLayouts("admin-billing")
+  ]);
   const stripeReady = isStripeConfigured();
 
   return (
@@ -65,10 +71,9 @@ export default async function BillingPage({
         </div>
       ) : null}
 
-      <div className="grid gap-6 lg:grid-cols-2">
-        <section className="card">
-          <h2 className="section-title">Seat Summary</h2>
-          <div className="mt-4 grid grid-cols-3 gap-3 text-center">
+      <TileBoard pageId="admin-billing" tiles={ADMIN_BILLING_TILES} initialLayouts={layouts}>
+        <Tile id="seat-summary">
+          <div className="grid grid-cols-3 gap-3 text-center">
             <div className="rounded-2xl bg-muted p-4">
               <p className="text-2xl font-bold text-foreground">{seatSummary.purchased}</p>
               <p className="text-xs text-muted-foreground">Purchased</p>
@@ -83,16 +88,18 @@ export default async function BillingPage({
             </div>
           </div>
           <p className="mt-4 text-sm text-muted-foreground">
-            Subscription status: <span className="font-semibold text-foreground">{seatSummary.subscriptionStatus}</span>
+            Subscription status:{" "}
+            <span className="font-semibold text-foreground">{seatSummary.subscriptionStatus}</span>
           </p>
           <p className="mt-2 text-sm text-muted-foreground">
             Your seat status:{" "}
-            <span className="font-semibold text-foreground">{user.hasSeat ? "Assigned" : "Not assigned"}</span>
+            <span className="font-semibold text-foreground">
+              {user.hasSeat ? "Assigned" : "Not assigned"}
+            </span>
           </p>
-        </section>
+        </Tile>
 
-        <section className="card">
-          <h2 className="section-title">Purchase Seats</h2>
+        <Tile id="purchase">
           <p className="muted">
             $25 per seat per month. Enter the total seats your organization should have (not an add-on
             count). Seats belong to this organization only.
@@ -136,19 +143,18 @@ export default async function BillingPage({
               </button>
             </form>
           ) : null}
-        </section>
-      </div>
+        </Tile>
 
-      <section className="card mt-6">
-        <h2 className="section-title">Assign Seats</h2>
-        <p className="muted">
-          After purchasing seats, assign them to team members in the{" "}
-          <Link href="/admin" className="font-semibold text-primary underline">
-            Admin console
-          </Link>
-          .
-        </p>
-      </section>
+        <Tile id="assign">
+          <p className="muted">
+            After purchasing seats, assign them to team members in the{" "}
+            <Link href="/admin" className="font-semibold text-primary underline">
+              Admin console
+            </Link>
+            .
+          </p>
+        </Tile>
+      </TileBoard>
     </>
   );
 }

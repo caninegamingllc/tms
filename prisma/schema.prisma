@@ -115,6 +115,7 @@ model User {
   passwordResetAt        DateTime?
   passwordResetTokenHash   String?             @unique
   passwordResetExpiresAt   DateTime?
+  uiPreferences          Json?
   memberships            CompanyMembership[]
   notes                  LoadNote[]
   activities             LoadActivity[]
@@ -513,6 +514,8 @@ model Load {
   branch            Branch?             @relation(fields: [branchId], references: [id])
   referenceNumber   String?
   equipmentType     String              @default("Dry Van")
+  /// Required setpoint when equipment is Reefer (°F).
+  reeferTempF       Float?
   commodity         String?
   weight            Int?
   pickupCity        String
@@ -529,6 +532,7 @@ model Load {
   commissionProfileId  String?
   commissionProfile    CommissionProfile?  @relation(fields: [commissionProfileId], references: [id])
   stops                LoadStop[]
+  commodityLines       LoadCommodityLine[]
   charges              LoadCharge[]
   expenses             LoadExpense[]
   carrierPayLines      CarrierPayLine[]
@@ -549,6 +553,22 @@ model Load {
 
   @@unique([companyId, loadNumber])
   @@index([companyId])
+}
+
+model LoadCommodityLine {
+  id          String @id @default(cuid())
+  loadId      String
+  load        Load   @relation(fields: [loadId], references: [id], onDelete: Cascade)
+  sequence    Int
+  quantity    Float  @default(1)
+  description String
+  weightLbs   Int
+  pieces      String?
+  lengthIn    Float?
+  widthIn     Float?
+  heightIn    Float?
+
+  @@index([loadId])
 }
 
 model LoadStop {
