@@ -29,6 +29,7 @@ import {
 } from "@/lib/email-ops-actions";
 import { EmailComposeButton } from "@/components/email-compose-button";
 import { getUserMailbox } from "@/lib/mail/user-mailbox";
+import { CloneLoadButton } from "@/components/clone-load-button";
 import { DeleteLoadButton } from "@/components/delete-load-button";
 import {
   addLoadExpense,
@@ -239,7 +240,10 @@ export default async function LoadDetailPage({
         description={`${load.customer.name} freight from ${load.pickupCity}, ${load.pickupState} to ${load.deliveryCity}, ${load.deliveryState}.`}
         action={
           canWrite(user) ? (
-            <DeleteLoadButton loadId={load.id} loadNumber={load.loadNumber} />
+            <>
+              <CloneLoadButton loadId={load.id} loadNumber={load.loadNumber} />
+              <DeleteLoadButton loadId={load.id} loadNumber={load.loadNumber} />
+            </>
           ) : undefined
         }
       />

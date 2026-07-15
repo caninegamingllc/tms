@@ -8,7 +8,7 @@ import type { SessionUser } from "@/lib/types";
 import { canAccessRecord } from "@/lib/branch-filter-server";
 import { resolveBranchId } from "@/lib/scope";
 import { requireWriteUser } from "@/lib/permissions";
-import { documentTitle } from "@/lib/document-templates";
+import { documentTitle, isPrivateLoadNote } from "@/lib/document-templates";
 import {
   getCompanyBranding,
   plainTextForType
@@ -782,7 +782,7 @@ export async function createLoad(formData: FormData) {
 
   const manualLoadNumber = optionalString(formData, "loadNumber");
   const revenueCents = parseMoneyToCents(formData.get("revenue"));
-  const carrierCostCents = parseMoneyToCents(formData.get("carrierCost"));
+  let carrierCostCents = parseMoneyToCents(formData.get("carrierCost"));
   const equipmentType = requiredString(formData, "equipmentType");
   const reeferTempF = equipmentType === "Reefer" ? optionalFloat(formData, "reeferTempF") : null;
   const freightLines = parseFreightLinesFromForm(formData);
@@ -791,6 +791,97 @@ export async function createLoad(formData: FormData) {
   const stops = await parseLoadStopsFromForm(formData, user.companyId);
   const origin = firstPickup(stops);
   const destination = lastDelivery(stops);
+
+  const cloneFromLoadId = optionalString(formData, "cloneFromLoadId");
+  const keepNotes = String(formData.get("keepNotes") ?? "").trim() === "1";
+  const cloneCarrierId = optionalString(formData, "cloneCarrierId");
+
+  let sourceLoad: { id: string; loadNumber: string } | null = null;
+  if (cloneFromLoadId) {
+    sourceLoad = await requireCompanyLoad(cloneFromLoadId, user);
+  }
+
+  type ClonePayLine = {
+    lineTypeId: string;
+    description?: string | null;
+    unitRateCents: number;
+    quantity: number;
+    amountCents: number;
+    sortOrder?: number;
+  };
+
+  let normalizedClonePayLines: ClonePayLine[] = [];
+  if (cloneCarrierId) {
+    await requireCompanyCarrier(cloneCarrierId, user.companyId);
+    await ensureCompanyCatalogs(user.companyId);
+
+    const payLinesRaw = String(formData.get("clonePayLinesJson") ?? "").trim();
+    if (payLinesRaw) {
+      let parsedLines: ClonePayLine[];
+      try {
+        parsedLines = JSON.parse(payLinesRaw);
+      } catch {
+        throw new Error("Invalid clone carrier pay line items.");
+      }
+
+      if (!Array.isArray(parsedLines)) {
+        throw new Error("Invalid clone carrier pay line items.");
+      }
+
+      if (parsedLines.length > 0) {
+        const lineTypeIds = [...new Set(parsedLines.map((line) => line.lineTypeId).filter(Boolean))];
+        const lineTypes = await prisma.carrierPayLineType.findMany({
+          where: { companyId: user.companyId, id: { in: lineTypeIds } }
+        });
+        const typeById = new Map(lineTypes.map((type) => [type.id, type]));
+
+        normalizedClonePayLines = parsedLines.map((line, index) => {
+          const lineType = typeById.get(line.lineTypeId);
+          if (!lineType) {
+            throw new Error("Invalid clone pay line type.");
+          }
+
+          const unitRateCents = Math.max(0, Math.round(Number(line.unitRateCents) || 0));
+          const quantityRaw = Number(line.quantity);
+          const quantity =
+            lineType.calculationMethod === "FLAT"
+              ? 1
+              : Number.isFinite(quantityRaw) && quantityRaw > 0
+                ? quantityRaw
+                : 0;
+          if (lineType.calculationMethod !== "FLAT" && quantity <= 0) {
+            throw new Error(`${lineType.name} requires a quantity.`);
+          }
+
+          const amountCents =
+            lineType.calculationMethod === "PER_MILE" || lineType.calculationMethod === "HOURLY"
+              ? Math.round(unitRateCents * quantity)
+              : unitRateCents;
+
+          return {
+            lineTypeId: lineType.id,
+            description: line.description?.trim() || null,
+            unitRateCents,
+            quantity,
+            amountCents,
+            sortOrder: Number.isFinite(line.sortOrder) ? Number(line.sortOrder) : index
+          };
+        });
+
+        const payTotal = normalizedClonePayLines.reduce((sum, line) => sum + line.amountCents, 0);
+        if (payTotal > 0) {
+          carrierCostCents = payTotal;
+        }
+      }
+    }
+  }
+
+  const requestedStatus = requiredString(formData, "status");
+  const initialStatus = cloneCarrierId ? "COVERED" : requestedStatus;
+  const activityDetails = sourceLoad
+    ? `Cloned from load ${sourceLoad.loadNumber}.`
+    : "Created from the TMS load entry form.";
+  const activityAction = sourceLoad ? "Load cloned" : "Load created";
 
   const load = await prisma.$transaction(async (tx) => {
     const company = await tx.company.findUniqueOrThrow({ where: { id: user.companyId } });
@@ -805,7 +896,7 @@ export async function createLoad(formData: FormData) {
         branchId,
         loadNumber,
         title: laneTitle(stops),
-        status: requiredString(formData, "status"),
+        status: initialStatus,
         customerId,
         referenceNumber: optionalString(formData, "referenceNumber"),
         equipmentType,
@@ -837,8 +928,8 @@ export async function createLoad(formData: FormData) {
         activities: {
           create: {
             userId: user.id,
-            action: "Load created",
-            details: "Created from the TMS load entry form."
+            action: activityAction,
+            details: activityDetails
           }
         }
       }
@@ -851,12 +942,86 @@ export async function createLoad(formData: FormData) {
       });
     }
 
+    if (cloneCarrierId) {
+      const assignment = await tx.dispatchAssignment.create({
+        data: {
+          loadId: createdLoad.id,
+          carrierId: cloneCarrierId,
+          driverName: optionalString(formData, "cloneDriverName"),
+          driverPhone: optionalString(formData, "cloneDriverPhone"),
+          truckNumber: optionalString(formData, "cloneTruckNumber"),
+          trailerNumber: optionalString(formData, "cloneTrailerNumber"),
+          rateCents: carrierCostCents
+        }
+      });
+
+      if (normalizedClonePayLines.length > 0) {
+        await tx.carrierPayLine.createMany({
+          data: normalizedClonePayLines.map((line) => ({
+            loadId: createdLoad.id,
+            assignmentId: assignment.id,
+            lineTypeId: line.lineTypeId,
+            description: line.description,
+            unitRateCents: line.unitRateCents,
+            quantity: line.quantity,
+            amountCents: line.amountCents,
+            sortOrder: line.sortOrder ?? 0
+          }))
+        });
+      }
+
+      await tx.loadActivity.create({
+        data: {
+          loadId: createdLoad.id,
+          userId: user.id,
+          action: "Carrier assigned",
+          details: `Carrier copied from cloned load with ${normalizedClonePayLines.length} pay line(s).`
+        }
+      });
+    }
+
+    if (keepNotes && sourceLoad) {
+      const sourceNotes = await tx.loadNote.findMany({
+        where: { loadId: sourceLoad.id },
+        orderBy: { createdAt: "asc" }
+      });
+      const publicNotes = sourceNotes.filter((note) => !isPrivateLoadNote(note));
+      if (publicNotes.length > 0) {
+        const authorIds = [
+          ...new Set(
+            publicNotes
+              .map((note) => note.userId)
+              .filter((id): id is string => Boolean(id))
+          )
+        ];
+        const validAuthors =
+          authorIds.length > 0
+            ? await tx.user.findMany({
+                where: { id: { in: authorIds }, companyId: user.companyId },
+                select: { id: true }
+              })
+            : [];
+        const validAuthorIds = new Set(validAuthors.map((author) => author.id));
+
+        await tx.loadNote.createMany({
+          data: publicNotes.map((note) => ({
+            loadId: createdLoad.id,
+            userId:
+              note.userId && validAuthorIds.has(note.userId) ? note.userId : user.id,
+            body: note.body,
+            isPrivate: false
+          }))
+        });
+      }
+    }
+
     return createdLoad;
   });
 
   await recalculateLoadCommission(load.id);
 
   revalidatePath("/loads");
+  revalidatePath("/dispatch");
   revalidatePath("/commissions");
   redirect(`/loads/${load.id}?saved=1`);
 }
