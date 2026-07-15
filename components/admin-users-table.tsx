@@ -44,80 +44,87 @@ export function AdminUsersTable({
         />
       </div>
 
-      <SortableTable
-        tableId="admin-users"
-        data={filtered}
-        keyExtractor={(row) => row.membershipId}
-        defaultSort={{ columnId: "user", direction: "asc" }}
-        columns={[
-          {
-            id: "user",
-            label: "User",
-            sortValue: (row) => row.userName,
-            render: (row) => (
-              <>
-                <p className="font-semibold text-foreground">{row.userName}</p>
-                <p className="muted">{row.userEmail}</p>
-              </>
-            )
-          },
-          {
-            id: "role",
-            label: "Role",
-            sortValue: (row) => row.role,
-            render: (row) => <span className="text-sm">{row.role}</span>
-          },
-          {
-            id: "branches",
-            label: "Branches",
-            sortValue: (row) => row.branchNames.join(", "),
-            render: (row) => (
-              <span className="text-sm text-muted-foreground">
-                {row.branchNames.length > 0 ? row.branchNames.join(", ") : "None"}
-              </span>
-            )
-          },
-          {
-            id: "status",
-            label: "Status",
-            sortValue: (row) => row.status,
-            render: (row) => (
-              <div className="grid gap-1">
-                <StatusBadge value={row.status} />
-                <span className="text-xs text-muted-foreground">
-                  {row.seatAssigned ? "Seat assigned" : "No seat"}
+      {/* overflow-x-auto: Safari otherwise clips the actions column inside overflow-hidden cards */}
+      <div className="overflow-x-auto">
+        <SortableTable
+          tableId="admin-users"
+          data={filtered}
+          keyExtractor={(row) => row.membershipId}
+          defaultSort={{ columnId: "user", direction: "asc" }}
+          columns={[
+            {
+              id: "user",
+              label: "User",
+              sortValue: (row) => row.userName,
+              render: (row) => (
+                <>
+                  <p className="font-semibold text-foreground">{row.userName}</p>
+                  <p className="muted">{row.userEmail}</p>
+                </>
+              )
+            },
+            {
+              id: "role",
+              label: "Role",
+              sortValue: (row) => row.role,
+              render: (row) => <span className="text-sm">{row.role}</span>
+            },
+            {
+              id: "branches",
+              label: "Branches",
+              sortValue: (row) => row.branchNames.join(", "),
+              render: (row) => (
+                <span className="text-sm text-muted-foreground">
+                  {row.branchNames.length > 0 ? row.branchNames.join(", ") : "None"}
                 </span>
-              </div>
-            )
-          },
-          {
-            id: "lastLogin",
-            label: "Last Login",
-            sortValue: (row) => row.lastLoginAt ?? "",
-            render: (row) => (
-              <span className="text-sm text-muted-foreground">
-                {row.lastLoginAt ? formatDateTime(row.lastLoginAt) : "Never"}
-              </span>
-            )
-          },
-          {
-            id: "actions",
-            label: "",
-            sortable: false,
-            render: (row) => (
-              <button
-                type="button"
-                className={
-                  selectedMembershipId === row.membershipId ? "btn w-full" : "btn-secondary w-full"
-                }
-                onClick={() => onSelect(row.membershipId)}
-              >
-                {selectedMembershipId === row.membershipId ? "Editing" : "Edit"}
-              </button>
-            )
-          }
-        ]}
-      />
+              )
+            },
+            {
+              id: "status",
+              label: "Status",
+              sortValue: (row) => row.status,
+              render: (row) => (
+                <div className="grid gap-1">
+                  <StatusBadge value={row.status} />
+                  <span className="text-xs text-muted-foreground">
+                    {row.seatAssigned ? "Seat assigned" : "No seat"}
+                  </span>
+                </div>
+              )
+            },
+            {
+              id: "lastLogin",
+              label: "Last Login",
+              sortValue: (row) => row.lastLoginAt ?? "",
+              render: (row) => (
+                <span className="text-sm text-muted-foreground">
+                  {row.lastLoginAt ? formatDateTime(row.lastLoginAt) : "Never"}
+                </span>
+              )
+            },
+            {
+              id: "actions",
+              // Non-empty label keeps Safari from collapsing the column to ~0 width.
+              label: "Actions",
+              sortable: false,
+              reorderable: false,
+              className: "whitespace-nowrap",
+              headerClassName: "w-[1%] whitespace-nowrap",
+              render: (row) => (
+                <button
+                  type="button"
+                  className={
+                    selectedMembershipId === row.membershipId ? "btn" : "btn-secondary"
+                  }
+                  onClick={() => onSelect(row.membershipId)}
+                >
+                  {selectedMembershipId === row.membershipId ? "Editing" : "Edit"}
+                </button>
+              )
+            }
+          ]}
+        />
+      </div>
     </div>
   );
 }

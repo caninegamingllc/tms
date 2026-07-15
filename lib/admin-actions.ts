@@ -747,16 +747,19 @@ export async function deleteUser(formData: FormData) {
 
 export async function updateLoadNumberSettings(formData: FormData) {
   const actor = await requireAdmin();
-  const prefix = requiredString(formData, "loadNumberPrefix").toUpperCase().replace(/[^A-Z0-9-]/g, "");
+  const prefix = String(formData.get("loadNumberPrefix") ?? "")
+    .trim()
+    .toUpperCase()
+    .replace(/[^A-Z0-9-]/g, "");
   const nextLoadSequence = Number(formData.get("nextLoadSequence"));
-
-  if (!prefix) {
-    throw new Error("Load number prefix is required.");
-  }
 
   if (!Number.isInteger(nextLoadSequence) || nextLoadSequence < 1) {
     throw new Error("Next load number must be a positive whole number.");
   }
+
+  const nextAutoLoadNumber = prefix
+    ? `${prefix}-${String(nextLoadSequence).padStart(4, "0")}`
+    : String(nextLoadSequence).padStart(4, "0");
 
   await prisma.company.update({
     where: { id: actor.companyId },
@@ -772,7 +775,7 @@ export async function updateLoadNumberSettings(formData: FormData) {
     "UPDATE_LOAD_NUMBER_SETTINGS",
     "Company",
     actor.companyId,
-    `Set next auto load number to ${prefix}-${nextLoadSequence}.`
+    `Set next auto load number to ${nextAutoLoadNumber}.`
   );
   revalidatePath("/admin");
   revalidatePath("/loads/new");

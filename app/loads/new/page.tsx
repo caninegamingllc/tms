@@ -57,7 +57,10 @@ export default async function NewLoadPage() {
     postalCode: facility.postalCode
   }));
   const commoditySuggestions = commodities.map((item) => item.name);
-  const nextAutoLoadNumber = `${company.loadNumberPrefix}-${String(company.nextLoadSequence).padStart(4, "0")}`;
+  const nextSequence = String(company.nextLoadSequence).padStart(4, "0");
+  const nextAutoLoadNumber = company.loadNumberPrefix
+    ? `${company.loadNumberPrefix}-${nextSequence}`
+    : nextSequence;
 
   return (
     <>

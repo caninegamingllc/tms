@@ -794,9 +794,10 @@ export async function createLoad(formData: FormData) {
 
   const load = await prisma.$transaction(async (tx) => {
     const company = await tx.company.findUniqueOrThrow({ where: { id: user.companyId } });
+    const sequence = String(company.nextLoadSequence).padStart(4, "0");
     const loadNumber =
       manualLoadNumber ??
-      `${company.loadNumberPrefix}-${String(company.nextLoadSequence).padStart(4, "0")}`;
+      (company.loadNumberPrefix ? `${company.loadNumberPrefix}-${sequence}` : sequence);
 
     const createdLoad = await tx.load.create({
       data: {

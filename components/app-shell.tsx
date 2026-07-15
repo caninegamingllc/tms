@@ -39,7 +39,7 @@ import { BranchSwitcher } from "@/components/branch-switcher";
 import type { BranchSwitcherData } from "@/lib/branch-filter";
 
 const SESSION_HEARTBEAT_MS = 30_000;
-const FLYOUT_CLOSE_DELAY_MS = 120;
+const FLYOUT_CLOSE_DELAY_MS = 200;
 
 type NavItem = {
   href: string;
@@ -125,8 +125,8 @@ function NavFlyout({
   top,
   left,
   labelledBy,
-  onMouseEnter,
-  onMouseLeave,
+  onPointerEnter,
+  onPointerLeave,
   onNavigate
 }: {
   group: NavGroup;
@@ -134,20 +134,23 @@ function NavFlyout({
   top: number;
   left: number;
   labelledBy: string;
-  onMouseEnter: () => void;
-  onMouseLeave: () => void;
+  onPointerEnter: () => void;
+  onPointerLeave: () => void;
   onNavigate?: () => void;
 }) {
   return (
     <div
       role="menu"
       aria-labelledby={labelledBy}
-      onMouseEnter={onMouseEnter}
-      onMouseLeave={onMouseLeave}
-      className="fixed z-[60] min-w-[220px] rounded-md border border-border bg-card text-foreground shadow-[0_8px_24px_-12px_rgba(15,23,42,0.18)]"
+      onPointerEnter={onPointerEnter}
+      onPointerLeave={onPointerLeave}
+      // Explicit colors: Safari can inherit rail light text into the panel otherwise.
+      className="fixed z-[80] min-w-[220px] rounded-md border border-slate-200 bg-white text-slate-900 shadow-[0_8px_24px_-12px_rgba(15,23,42,0.18)]"
       style={{ top, left }}
     >
-      <div className="border-b border-border px-3 py-2 text-[10px] font-semibold uppercase tracking-[0.14em] text-muted-foreground">
+      {/* Bridge the rail→panel gap so Safari does not drop hover before enter. */}
+      <div aria-hidden className="absolute top-0 bottom-0 -left-2 w-2" />
+      <div className="border-b border-slate-200 px-3 py-2 text-[10px] font-semibold uppercase tracking-[0.14em] text-slate-500">
         {group.label}
       </div>
       <div className="p-1">
@@ -161,12 +164,12 @@ function NavFlyout({
               role="menuitem"
               onClick={onNavigate}
               className={clsx(
-                "flex items-center gap-2 rounded px-2 py-1.5 text-[13px] text-foreground transition",
-                active ? "bg-muted font-medium" : "hover:bg-muted"
+                "flex items-center gap-2 rounded px-2 py-1.5 text-[13px] text-slate-900 transition",
+                active ? "bg-slate-100 font-medium" : "hover:bg-slate-50"
               )}
             >
-              <Icon className="h-4 w-4 shrink-0 text-muted-foreground" />
-              <span className="text-foreground">{item.label}</span>
+              <Icon className="h-4 w-4 shrink-0 text-slate-500" />
+              <span className="text-slate-900">{item.label}</span>
             </Link>
           );
         })}
@@ -181,7 +184,8 @@ function RailNavGroup({
   active,
   open,
   onOpen,
-  onClose
+  onClose,
+  onHoverClose
 }: {
   group: NavGroup;
   pathname: string;
@@ -189,6 +193,7 @@ function RailNavGroup({
   open: boolean;
   onOpen: () => void;
   onClose: () => void;
+  onHoverClose: () => void;
 }) {
   const Icon = group.icon;
   const buttonId = useId();
@@ -206,9 +211,10 @@ function RailNavGroup({
       return;
     }
     const rect = button.getBoundingClientRect();
+    // Flush to the rail edge — a gap makes Safari drop hover before the panel receives it.
     setCoords({
       top: rect.top,
-      left: rect.right + 6
+      left: rect.right
     });
   }, []);
 
@@ -227,8 +233,43 @@ function RailNavGroup({
     };
   }, [open, updateCoords]);
 
+  useEffect(() => {
+    if (!open) {
+      return;
+    }
+
+    function onPointerDown(event: PointerEvent) {
+      const target = event.target as Node | null;
+      if (!target) {
+        return;
+      }
+      if (buttonRef.current?.contains(target)) {
+        return;
+      }
+      const menu = document.getElementById(`rail-flyout-${group.id}`);
+      if (menu?.contains(target)) {
+        return;
+      }
+      onClose();
+    }
+
+    function onKeyDown(event: KeyboardEvent) {
+      if (event.key === "Escape") {
+        onClose();
+      }
+    }
+
+    // Capture so Safari still sees the dismiss when focus moves oddly.
+    document.addEventListener("pointerdown", onPointerDown, true);
+    document.addEventListener("keydown", onKeyDown);
+    return () => {
+      document.removeEventListener("pointerdown", onPointerDown, true);
+      document.removeEventListener("keydown", onKeyDown);
+    };
+  }, [open, onClose, group.id]);
+
   return (
-    <div className="relative" onMouseEnter={onOpen} onFocus={onOpen}>
+    <div className="relative" onPointerEnter={onOpen} onFocus={onOpen}>
       <button
         ref={buttonRef}
         id={buttonId}
@@ -252,16 +293,18 @@ function RailNavGroup({
       </button>
       {mounted && open && coords
         ? createPortal(
-            <NavFlyout
-              group={group}
-              pathname={pathname}
-              top={coords.top}
-              left={coords.left}
-              labelledBy={buttonId}
-              onMouseEnter={onOpen}
-              onMouseLeave={onClose}
-              onNavigate={onClose}
-            />,
+            <div id={`rail-flyout-${group.id}`}>
+              <NavFlyout
+                group={group}
+                pathname={pathname}
+                top={coords.top}
+                left={coords.left}
+                labelledBy={buttonId}
+                onPointerEnter={onOpen}
+                onPointerLeave={onHoverClose}
+                onNavigate={onClose}
+              />
+            </div>,
             document.body
           )
         : null}
@@ -398,6 +441,14 @@ export function AppShell({
     setOpenGroup(groupId);
   }, []);
 
+  const closeRailGroup = useCallback(() => {
+    if (closeTimer.current) {
+      clearTimeout(closeTimer.current);
+      closeTimer.current = null;
+    }
+    setOpenGroup(null);
+  }, []);
+
   const scheduleCloseRailGroup = useCallback(() => {
     if (closeTimer.current) {
       clearTimeout(closeTimer.current);
@@ -510,7 +561,7 @@ export function AppShell({
 
         <div
           className="mt-2 flex flex-1 flex-col gap-1 py-2"
-          onMouseLeave={scheduleCloseRailGroup}
+          onPointerLeave={scheduleCloseRailGroup}
         >
           {visibleGroups.map((group) => (
             <RailNavGroup
@@ -520,7 +571,8 @@ export function AppShell({
               active={activeGroup?.id === group.id}
               open={openGroup === group.id}
               onOpen={() => openRailGroup(group.id)}
-              onClose={scheduleCloseRailGroup}
+              onClose={closeRailGroup}
+              onHoverClose={scheduleCloseRailGroup}
             />
           ))}
         </div>
