@@ -1,6 +1,5 @@
 "use server";
 
-import { createHash } from "crypto";
 import { revalidatePath } from "next/cache";
 import { redirect } from "next/navigation";
 import { appBaseUrl } from "@/lib/app-url";
@@ -11,10 +10,6 @@ import { requireWriteUser } from "@/lib/permissions";
 import { createPortalRawToken, hashPortalToken } from "@/lib/portal-auth";
 
 const INVITE_DAYS = 7;
-
-function hashToken(token: string) {
-  return createHash("sha256").update(token).digest("hex");
-}
 
 function optionalString(formData: FormData, key: string) {
   const value = String(formData.get(key) ?? "").trim();
@@ -74,7 +69,7 @@ export async function inviteCustomerPortalUser(formData: FormData) {
           status: "INVITED",
           disabledAt: null,
           passwordHash: null,
-          inviteTokenHash: hashToken(rawToken),
+          inviteTokenHash: hashPortalToken(rawToken),
           inviteExpiresAt
         }
       })
@@ -85,7 +80,7 @@ export async function inviteCustomerPortalUser(formData: FormData) {
           name,
           email,
           status: "INVITED",
-          inviteTokenHash: hashToken(rawToken),
+          inviteTokenHash: hashPortalToken(rawToken),
           inviteExpiresAt
         }
       });

@@ -1,8 +1,10 @@
-import { redirect } from "next/navigation";
+import Link from "next/link";
 import { createHash } from "crypto";
 import { portalAcceptInvite } from "@/lib/portal-auth-actions";
 import { getPortalViewer } from "@/lib/portal-auth";
 import { prisma } from "@/lib/db";
+import { PortalAcceptInviteForm } from "@/components/portal-accept-invite-form";
+import { redirect } from "next/navigation";
 
 function hashToken(token: string) {
   return createHash("sha256").update(token).digest("hex");
@@ -19,23 +21,18 @@ export default async function PortalAcceptInvitePage({
   }
 
   const { token, error } = await searchParams;
-  const invite =
-    token != null && token.length > 0
-      ? await prisma.customerPortalUser.findFirst({
-          where: {
-            inviteTokenHash: hashToken(token),
-            status: "INVITED",
-            disabledAt: null
-          },
-          include: {
-            customer: { select: { name: true } },
-            company: { select: { name: true } }
-          }
-        })
-      : null;
+  let invite: Awaited<ReturnType<typeof loadInvite>> = null;
+  let lookupError: string | null = null;
+
+  try {
+    invite = token ? await loadInvite(token) : null;
+  } catch {
+    lookupError = "We could not look up this invite right now. Please try again in a moment.";
+  }
 
   const expired =
     invite != null && (!invite.inviteExpiresAt || invite.inviteExpiresAt < new Date());
+  const usable = Boolean(invite && !expired && token);
 
   return (
     <main className="flex min-h-screen items-center justify-center bg-background px-4 py-10">
@@ -44,13 +41,15 @@ export default async function PortalAcceptInvitePage({
           Customer portal
         </p>
         <h1 className="font-display mt-2 text-3xl font-semibold tracking-tight">Accept invite</h1>
-        {invite && !expired ? (
+
+        {usable && invite ? (
           <p className="mt-2 text-sm text-muted-foreground">
             Set a password to access {invite.customer.name} shipments from {invite.company.name}.
           </p>
         ) : (
           <p className="mt-2 text-sm text-muted-foreground">
-            This invite link is missing, invalid, or expired.
+            {lookupError ??
+              "This invite link is missing, invalid, or expired. If a newer invite was sent, only the latest link works. Ask your broker to send a fresh portal invite."}
           </p>
         )}
 
@@ -60,31 +59,36 @@ export default async function PortalAcceptInvitePage({
           </div>
         ) : null}
 
-        {invite && !expired && token ? (
-          <form action={portalAcceptInvite} className="mt-6 grid gap-3">
-            <input type="hidden" name="token" value={token} />
-            <label className="grid gap-2">
-              <span className="label">Name</span>
-              <input name="name" className="input" defaultValue={invite.name} required />
-            </label>
-            <label className="grid gap-2">
-              <span className="label">Email</span>
-              <input className="input" value={invite.email} disabled readOnly />
-            </label>
-            <label className="grid gap-2">
-              <span className="label">Password</span>
-              <input name="password" type="password" className="input" required minLength={8} />
-            </label>
-            <label className="grid gap-2">
-              <span className="label">Confirm password</span>
-              <input name="confirmPassword" type="password" className="input" required minLength={8} />
-            </label>
-            <button type="submit" className="btn mt-2">
-              Activate account
-            </button>
-          </form>
-        ) : null}
+        {usable && invite && token ? (
+          <PortalAcceptInviteForm
+            token={token}
+            name={invite.name}
+            email={invite.email}
+            acceptAction={portalAcceptInvite}
+          />
+        ) : (
+          <p className="mt-6 text-center text-sm text-muted-foreground">
+            Already activated?{" "}
+            <Link href="/portal/login" className="font-semibold text-primary">
+              Sign in
+            </Link>
+          </p>
+        )}
       </div>
     </main>
   );
+}
+
+async function loadInvite(token: string) {
+  return prisma.customerPortalUser.findFirst({
+    where: {
+      inviteTokenHash: hashToken(token),
+      status: "INVITED",
+      disabledAt: null
+    },
+    include: {
+      customer: { select: { name: true } },
+      company: { select: { name: true } }
+    }
+  });
 }
