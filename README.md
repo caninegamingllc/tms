@@ -5,17 +5,21 @@ A Freight Broker Transportation Management System inspired by the broad workflow
 ## What It Includes
 
 - Dashboard for active loads, revenue, margin, open AR, open AP, and check calls.
-- Load management with customer tender details, stops, status workflow, pricing, documents, notes, and activity history.
-- Customer CRM with contacts, credit limits, payment terms, invoice exposure, and load counts.
+- Load management with customer tender details, stops, status workflow, pricing, clone load, documents, notes, and activity history.
+- Customer CRM with contacts, credit limits, payment terms, late fees, invoice exposure, load counts, and customer portal access.
 - Carrier CRM with MC/DOT fields, insurance expiration, compliance status, equipment, and load history.
 - Dispatch board with carrier assignments, driver/truck/trailer details, check calls, and uncovered loads.
-- Document library and generated paperwork for carrier rate confirmations, BOLs, customer invoices, POD, carrier packet, insurance, W-9, and other documents.
-- Accounting for customer invoices, carrier bills, open receivables, open payables, and gross margin.
+- Customer portal (`/portal`) for load map/board tracking, customer-safe load details, and invoice review with payment URL.
+- Document library and generated paperwork for carrier rate confirmations, BOLs, customer invoices, POD, carrier packet, insurance, W-9, and other documents (S3-compatible or local storage).
+- Accounting for customer invoices, carrier bills, open receivables, open payables, late fees on overdue invoice email, and gross margin.
 - Reports for profitability, lanes, customer volume, and carrier performance.
 - Admin console with login, users, roles, branches, password resets, account lock/disable controls, and audit logs.
 - Google and Microsoft 365 sign-in for login, company registration, and passwordless invite accept.
 - Per-user Gmail / Outlook mailbox connect to email invoices, customer load confirmations, carrier rate confirmations, and POD requests, with reply sync on loads.
-- Integrations placeholders for DAT, Truckstop, QuickBooks, tracking, factoring, and email.
+- Background job worker for PDF generation and mailbox sync; optional Redis for shared rate limits/cache.
+- Integrations placeholders for DAT, Truckstop, tracking, and factoring (QuickBooks Online + IIF are implemented).
+
+For a single thorough project review, see [`docs/PROJECT_REVIEW.md`](docs/PROJECT_REVIEW.md). Supporting companions: [`docs/SYSTEM_DESCRIPTION.md`](docs/SYSTEM_DESCRIPTION.md), [`docs/PROJECT_OVERVIEW.md`](docs/PROJECT_OVERVIEW.md).
 
 ## First-Time Setup
 
@@ -67,10 +71,11 @@ The dispatcher is forced to change password on first login so you can test that 
 ## Useful Commands
 
 ```bash
-npm run dev        # start local development server
+npm run dev        # prisma generate + migrate deploy + next dev
 npm run build      # verify the production build
-npm run setup      # generate Prisma, push schema, and seed demo data
-npm run db:push    # apply Prisma schema to SQLite
+npm run worker     # background jobs (PDF generate, mailbox sync)
+npm run setup      # generate Prisma, migrate, and seed demo data
+npm run db:migrate # apply Prisma migrations to Postgres
 npm run db:seed    # add demo customers, carriers, loads, and accounting data
 npm run db:reset   # reset the local database and seed it again
 ```
@@ -92,13 +97,13 @@ After seeding, open the dashboard and inspect `GLB-1001` and `GLB-1002`.
 
 ## Next Real Integrations
 
-The integration pages are placeholders by design. Recommended next steps are:
+Some integration tiles are still placeholders by design. Recommended next steps are:
 
-- Replace path-based documents with S3, Azure Blob, or Supabase Storage.
-- Add rate limiting and multi-factor authentication before using real brokerage data in production.
-- Connect QuickBooks for invoice and bill sync (partially implemented).
+- Configure S3-compatible storage (`S3_*`) and Redis (`REDIS_URL`) in every production environment if not already set.
+- Add multi-factor authentication before handling highly sensitive brokerage data at scale.
 - Connect DAT or Truckstop for load posting and carrier search.
 - Connect tracking/document-capture providers for automated check calls and POD capture.
+- Optional: Stripe Connect (or similar) for in-portal AR card capture — portal Pay CTAs currently use remittance URLs.
 
 ## OAuth Setup (Google / Microsoft)
 
