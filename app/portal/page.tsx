@@ -1,6 +1,6 @@
 import { CustomerPortalShell } from "@/components/customer-portal-shell";
 import { CustomerDispatchBoard } from "@/components/customer-dispatch-board";
-import { CustomerLoadMap } from "@/components/customer-load-map";
+import { CustomerLoadMapLazy } from "@/components/customer-load-map-lazy";
 import { countCustomerRowsByStage } from "@/lib/customer-board";
 import { resolveCustomerLoadMapMarkers } from "@/lib/customer-load-map";
 import { formatMoney } from "@/lib/format";
@@ -71,7 +71,7 @@ export default async function PortalOverviewPage() {
               delivered. Invoiced and paid loads drop off the map.
             </p>
           </div>
-          <CustomerLoadMap markers={markers} />
+          <CustomerLoadMapLazy markers={markers} />
         </section>
 
         <section className="grid gap-3">
