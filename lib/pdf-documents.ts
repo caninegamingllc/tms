@@ -259,7 +259,7 @@ export async function generateDocumentPdf(doc: StructuredDocument): Promise<Buff
     pdf.setFontSize(8);
     for (const term of doc.terms) {
       y = ensureSpace(pdf, y, 10);
-      const wrapped = pdf.splitTextToSize(` ${term}`, contentWidth);
+      const wrapped = pdf.splitTextToSize(`- ${term}`, contentWidth);
       pdf.text(wrapped, 14, y);
       y += wrapped.length * 4 + 2;
     }
