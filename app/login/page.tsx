@@ -150,6 +150,15 @@ export default async function LoginPage({
               Create a company workspace
             </Link>
           </p>
+          <p className="mt-4 text-center text-[12px] text-muted-foreground">
+            <Link href="/privacy" className="font-semibold text-primary">
+              Privacy Policy
+            </Link>
+            <span className="mx-2 text-border">|</span>
+            <Link href="/terms" className="font-semibold text-primary">
+              Terms of Service
+            </Link>
+          </p>
           <p className="mt-5 text-center text-[10.5px] font-semibold uppercase tracking-[0.14em] text-muted-foreground">
             Version {appVersion}
           </p>

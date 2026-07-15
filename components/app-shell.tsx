@@ -414,6 +414,8 @@ export function AppShell({
     pathname === "/accept-invite" ||
     pathname === "/forgot-password" ||
     pathname === "/reset-password" ||
+    pathname === "/privacy" ||
+    pathname === "/terms" ||
     pathname === "/select-organization";
 
   const visibleGroups = useMemo(() => {

@@ -1,7 +1,6 @@
 import Link from "next/link";
-import { registerCompany } from "@/lib/auth";
 import { AuthBrandPanel, AuthMobileBrand } from "@/components/auth-brand-panel";
-import { RegisterOAuthButtons } from "@/components/register-oauth-buttons";
+import { RegisterAccountForm } from "@/components/register-account-form";
 import { isGoogleOAuthConfigured } from "@/lib/oauth/google";
 import { isMicrosoftOAuthConfigured } from "@/lib/oauth/microsoft";
 
@@ -35,57 +34,24 @@ export default async function RegisterPage({
             </div>
           ) : null}
 
-          <RegisterOAuthButtons
+          <RegisterAccountForm
             googleConfigured={isGoogleOAuthConfigured()}
             microsoftConfigured={isMicrosoftOAuthConfigured()}
           />
-
-          <form action={registerCompany} className="mt-6 grid gap-4">
-            <label className="grid gap-2">
-              <span className="label">Company Name</span>
-              <input name="companyName" className="input" autoComplete="organization" required />
-            </label>
-            <label className="grid gap-2">
-              <span className="label">Your Name</span>
-              <input name="name" className="input" autoComplete="name" required />
-            </label>
-            <label className="grid gap-2">
-              <span className="label">Email</span>
-              <input name="email" className="input" type="email" autoComplete="email" required />
-            </label>
-            <div className="grid gap-4 md:grid-cols-2">
-              <label className="grid gap-2">
-                <span className="label">Password</span>
-                <input
-                  name="password"
-                  className="input"
-                  type="password"
-                  autoComplete="new-password"
-                  minLength={8}
-                  required
-                />
-              </label>
-              <label className="grid gap-2">
-                <span className="label">Confirm Password</span>
-                <input
-                  name="confirmPassword"
-                  className="input"
-                  type="password"
-                  autoComplete="new-password"
-                  minLength={8}
-                  required
-                />
-              </label>
-            </div>
-            <button className="btn" type="submit">
-              Create Workspace
-            </button>
-          </form>
 
           <p className="mt-5 text-sm text-muted-foreground">
             Already have an account?{" "}
             <Link href="/login" className="font-semibold text-primary">
               Sign in
+            </Link>
+          </p>
+          <p className="mt-4 text-center text-[12px] text-muted-foreground">
+            <Link href="/privacy" className="font-semibold text-primary">
+              Privacy Policy
+            </Link>
+            <span className="mx-2 text-border">|</span>
+            <Link href="/terms" className="font-semibold text-primary">
+              Terms of Service
             </Link>
           </p>
         </div>

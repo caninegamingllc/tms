@@ -12,6 +12,7 @@ export type IdentityOAuthState = {
   companyName?: string;
   inviteToken?: string;
   returnTo?: string;
+  acceptedLegal?: boolean;
 };
 
 export type MailOAuthState = {
@@ -28,12 +29,23 @@ export const IDENTITY_OAUTH_STATE_COOKIE = "tms_oauth_state";
 export const MAIL_OAUTH_STATE_COOKIE = "tms_mail_oauth_state";
 
 function stateSecret() {
-  return (
+  const secret =
     process.env.OAUTH_STATE_SECRET ||
     process.env.TOKEN_ENCRYPTION_KEY ||
     process.env.INTUIT_TOKEN_ENCRYPTION_KEY ||
-    "dev-oauth-state-secret"
-  );
+    "";
+
+  if (secret) {
+    return secret;
+  }
+
+  if (process.env.NODE_ENV === "production") {
+    throw new Error(
+      "OAUTH_STATE_SECRET (or TOKEN_ENCRYPTION_KEY) must be configured in production."
+    );
+  }
+
+  return "dev-oauth-state-secret";
 }
 
 export function getAppBaseUrl() {

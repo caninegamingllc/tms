@@ -116,6 +116,8 @@ model User {
   passwordResetTokenHash   String?             @unique
   passwordResetExpiresAt   DateTime?
   uiPreferences          Json?
+  legalAcceptedAt        DateTime?
+  legalDocumentVersion   String?
   memberships            CompanyMembership[]
   notes                  LoadNote[]
   activities             LoadActivity[]

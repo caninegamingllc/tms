@@ -39,12 +39,22 @@ export async function GET(
   const companyName = url.searchParams.get("companyName")?.trim() || undefined;
   const inviteToken = url.searchParams.get("inviteToken")?.trim() || undefined;
   const returnTo = url.searchParams.get("returnTo")?.trim() || undefined;
+  const acceptedLegal = url.searchParams.get("acceptedLegal") === "1";
 
   if (mode === "register" && !companyName) {
     return errorRedirect(request, "/register", "Company name is required");
   }
+  if (mode === "register" && !acceptedLegal) {
+    return errorRedirect(request, "/register", "You must agree to the Terms of Service and Privacy Policy");
+  }
   if (mode === "accept-invite" && !inviteToken) {
     return errorRedirect(request, "/login", "Invalid invite link");
+  }
+  if (mode === "accept-invite" && !acceptedLegal) {
+    const path = inviteToken
+      ? `/accept-invite?token=${encodeURIComponent(inviteToken)}`
+      : "/login";
+    return errorRedirect(request, path, "You must agree to the Terms of Service and Privacy Policy");
   }
 
   const state = encodeOAuthState({
@@ -53,7 +63,8 @@ export async function GET(
     nonce: randomBytes(16).toString("hex"),
     companyName,
     inviteToken,
-    returnTo
+    returnTo,
+    acceptedLegal: mode === "register" || mode === "accept-invite" ? acceptedLegal : undefined
   });
 
   const cookieStore = await cookies();

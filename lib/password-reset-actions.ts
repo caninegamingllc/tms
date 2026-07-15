@@ -3,6 +3,7 @@
 import { randomBytes, createHash } from "crypto";
 import { redirect } from "next/navigation";
 import { appBaseUrl } from "@/lib/app-url";
+import { assertPasswordResetRequestNotRateLimited } from "@/lib/auth-rate-limit";
 import { hashPassword } from "@/lib/auth";
 import { sendPasswordResetEmail } from "@/lib/mail";
 import { prisma } from "@/lib/db";
@@ -15,6 +16,9 @@ function hashToken(token: string) {
 
 export async function requestPasswordReset(formData: FormData) {
   const email = String(formData.get("email") ?? "").trim().toLowerCase();
+
+  await assertPasswordResetRequestNotRateLimited(email);
+
   const user = email ? await prisma.user.findUnique({ where: { email } }) : null;
   let devToken: string | undefined;
 
@@ -62,7 +66,7 @@ export async function requestPasswordReset(formData: FormData) {
       devToken = token;
       console.info(`[password-reset] Development reset link for ${user.email}: ${resetUrl}`);
     } else if (!delivered) {
-      console.info(`[password-reset] ${user.email}: ${resetUrl}`);
+      console.info(`[password-reset] email undelivered for ${user.email}`);
     }
 
     await prisma.auditLog.create({

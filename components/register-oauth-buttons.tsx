@@ -7,15 +7,20 @@ type Props = {
   initialCompanyName?: string;
   googleConfigured: boolean;
   microsoftConfigured: boolean;
+  acceptedLegal: boolean;
 };
 
 export function RegisterOAuthButtons({
   initialCompanyName = "",
   googleConfigured,
-  microsoftConfigured
+  microsoftConfigured,
+  acceptedLegal
 }: Props) {
   const [companyName, setCompanyName] = useState(initialCompanyName);
-  const canStart = useMemo(() => companyName.trim().length > 0, [companyName]);
+  const canStart = useMemo(
+    () => companyName.trim().length > 0 && acceptedLegal,
+    [companyName, acceptedLegal]
+  );
 
   if (!googleConfigured && !microsoftConfigured) {
     return null;
@@ -24,7 +29,8 @@ export function RegisterOAuthButtons({
   function href(provider: "google" | "microsoft") {
     const params = new URLSearchParams({
       mode: "register",
-      companyName: companyName.trim()
+      companyName: companyName.trim(),
+      acceptedLegal: "1"
     });
     return `/api/auth/oauth/${provider}/start?${params.toString()}`;
   }
@@ -54,7 +60,11 @@ export function RegisterOAuthButtons({
           </MicrosoftSignInButton>
         ) : null}
       </div>
-      {!canStart ? (
+      {!acceptedLegal ? (
+        <p className="text-xs text-muted-foreground">
+          Agree to the Terms and Privacy Policy to enable OAuth signup.
+        </p>
+      ) : !companyName.trim() ? (
         <p className="text-xs text-muted-foreground">Enter a company name to enable OAuth signup.</p>
       ) : null}
     </div>

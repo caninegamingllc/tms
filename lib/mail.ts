@@ -179,7 +179,11 @@ export async function sendPasswordResetEmail(to: string, resetUrl: string): Prom
   const result = await deliverEmail(to, subject, html, text);
 
   if (!result.delivered) {
-    console.info(`[password-reset] ${to}: ${resetUrl}`);
+    if (process.env.NODE_ENV !== "production") {
+      console.info(`[password-reset] ${to}: ${resetUrl}`);
+    } else {
+      console.info(`[password-reset] email undelivered for ${to}`);
+    }
   }
 
   return result;
@@ -190,7 +194,11 @@ export async function sendInviteEmail(to: string, options: InviteEmailOptions): 
   const result = await deliverEmail(to, subject, html, text);
 
   if (!result.delivered) {
-    console.info(`[invite] ${to}: ${options.inviteUrl}`);
+    if (process.env.NODE_ENV !== "production") {
+      console.info(`[invite] ${to}: ${options.inviteUrl}`);
+    } else {
+      console.info(`[invite] email undelivered for ${to}`);
+    }
   }
 
   return result;

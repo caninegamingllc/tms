@@ -2,8 +2,14 @@ import { randomBytes, scryptSync, timingSafeEqual, createHash } from "crypto";
 import { cookies } from "next/headers";
 import { redirect } from "next/navigation";
 import { cache } from "react";
+import {
+  assertInviteAcceptNotRateLimited,
+  assertLoginNotRateLimited,
+  assertRegisterNotRateLimited
+} from "@/lib/auth-rate-limit";
 import { prisma } from "@/lib/db";
 import { seedCompanyCatalogs } from "@/lib/catalogs";
+import { didAcceptLegal, legalAcceptanceData } from "@/lib/legal";
 import { tryAutoAssignSeat } from "@/lib/seats";
 import { ensureMembershipBranchesSynced } from "@/lib/membership-branches";
 import type { OrganizationSummary, SessionUser } from "@/lib/types";
@@ -250,6 +256,8 @@ export async function login(formData: FormData) {
   const email = String(formData.get("email") ?? "").trim().toLowerCase();
   const password = String(formData.get("password") ?? "");
 
+  await assertLoginNotRateLimited(email);
+
   const user = await prisma.user.findUnique({ where: { email } });
   const valid = await verifyPassword(password, user?.passwordHash);
 
@@ -326,8 +334,18 @@ export async function acceptInvite(formData: FormData) {
   const password = String(formData.get("password") ?? "");
   const confirmPassword = String(formData.get("confirmPassword") ?? "");
 
+  await assertInviteAcceptNotRateLimited(token);
+
   if (!token) {
     redirect("/login?error=Invalid%20invite%20link");
+  }
+
+  if (!didAcceptLegal(formData)) {
+    redirect(
+      `/accept-invite?token=${encodeURIComponent(token)}&error=${encodeURIComponent(
+        "You must agree to the Terms of Service and Privacy Policy"
+      )}`
+    );
   }
 
   const membership = await prisma.companyMembership.findUnique({
@@ -350,6 +368,7 @@ export async function acceptInvite(formData: FormData) {
 
   const user = membership.user;
   const isNewUser = !user.passwordHash;
+  const acceptance = legalAcceptanceData();
 
   if (isNewUser) {
     if (password.length < 8 || password !== confirmPassword) {
@@ -363,13 +382,14 @@ export async function acceptInvite(formData: FormData) {
       data: {
         passwordHash: await hashPassword(password),
         mustChangePassword: false,
-        lastLoginAt: new Date()
+        lastLoginAt: new Date(),
+        ...acceptance
       }
     });
   } else {
     await prisma.user.update({
       where: { id: user.id },
-      data: { lastLoginAt: new Date() }
+      data: { lastLoginAt: new Date(), ...acceptance }
     });
   }
 
@@ -436,8 +456,17 @@ export async function createCompanyWorkspace(input: {
   name: string;
   email: string;
   passwordHash?: string | null;
+  legalAcceptedAt?: Date | null;
+  legalDocumentVersion?: string | null;
 }) {
   const slug = await uniqueCompanySlug(input.companyName);
+  const acceptance =
+    input.legalAcceptedAt && input.legalDocumentVersion
+      ? {
+          legalAcceptedAt: input.legalAcceptedAt,
+          legalDocumentVersion: input.legalDocumentVersion
+        }
+      : legalAcceptanceData();
 
   return prisma.$transaction(async (tx) => {
     const company = await tx.company.create({
@@ -460,7 +489,8 @@ export async function createCompanyWorkspace(input: {
         name: input.name,
         email: input.email,
         passwordHash: input.passwordHash ?? null,
-        mustChangePassword: false
+        mustChangePassword: false,
+        ...acceptance
       }
     });
 
@@ -532,11 +562,17 @@ export async function createCompanyWorkspace(input: {
 export async function registerCompany(formData: FormData) {
   "use server";
 
+  await assertRegisterNotRateLimited();
+
   const companyName = String(formData.get("companyName") ?? "").trim();
   const name = String(formData.get("name") ?? "").trim();
   const email = String(formData.get("email") ?? "").trim().toLowerCase();
   const password = String(formData.get("password") ?? "");
   const confirmPassword = String(formData.get("confirmPassword") ?? "");
+
+  if (!didAcceptLegal(formData)) {
+    redirect("/register?error=You%20must%20agree%20to%20the%20Terms%20of%20Service%20and%20Privacy%20Policy");
+  }
 
   if (!companyName || !name || !email) {
     redirect("/register?error=Company%2C%20name%2C%20and%20email%20are%20required");
@@ -555,7 +591,8 @@ export async function registerCompany(formData: FormData) {
     companyName,
     name,
     email,
-    passwordHash: await hashPassword(password)
+    passwordHash: await hashPassword(password),
+    ...legalAcceptanceData()
   });
 
   await createSession(result.owner.id, result.membership.id);

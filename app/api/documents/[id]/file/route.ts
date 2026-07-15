@@ -31,7 +31,8 @@ export async function GET(
       headers: {
         "Content-Type": mimeType,
         "Content-Disposition": disposition,
-        "Cache-Control": "private, max-age=3600"
+        "Cache-Control": "private, max-age=3600",
+        "X-Content-Type-Options": "nosniff"
       }
     });
   } catch {

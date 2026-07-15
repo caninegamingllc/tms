@@ -7,6 +7,7 @@ import {
   getInviteByToken,
   sessionCookieName
 } from "@/lib/auth";
+import { legalAcceptanceData } from "@/lib/legal";
 import { tryAutoAssignSeat } from "@/lib/seats";
 import type { OAuthProfile } from "@/lib/oauth/google";
 import {
@@ -162,7 +163,18 @@ async function handleLogin(profile: OAuthProfile) {
   return finishLoginSession(user.id);
 }
 
-async function handleRegister(profile: OAuthProfile, companyName?: string) {
+async function handleRegister(
+  profile: OAuthProfile,
+  companyName?: string,
+  acceptedLegal?: boolean
+) {
+  if (!acceptedLegal) {
+    return {
+      redirectTo:
+        "/register?error=You%20must%20agree%20to%20the%20Terms%20of%20Service%20and%20Privacy%20Policy"
+    };
+  }
+
   if (!companyName?.trim()) {
     return { redirectTo: "/register?error=Company%20name%20is%20required" };
   }
@@ -191,7 +203,8 @@ async function handleRegister(profile: OAuthProfile, companyName?: string) {
     companyName: companyName.trim(),
     name: profile.name,
     email: profile.email,
-    passwordHash: null
+    passwordHash: null,
+    ...legalAcceptanceData()
   });
 
   await linkOAuthAccount(result.owner.id, profile);
@@ -199,9 +212,21 @@ async function handleRegister(profile: OAuthProfile, companyName?: string) {
   return { redirectTo: "/admin/billing?welcome=1" };
 }
 
-async function handleAcceptInvite(profile: OAuthProfile, inviteToken?: string) {
+async function handleAcceptInvite(
+  profile: OAuthProfile,
+  inviteToken?: string,
+  acceptedLegal?: boolean
+) {
   if (!inviteToken) {
     return { redirectTo: "/login?error=Invalid%20invite%20link" };
+  }
+
+  if (!acceptedLegal) {
+    return {
+      redirectTo: `/accept-invite?token=${encodeURIComponent(inviteToken)}&error=${encodeURIComponent(
+        "You must agree to the Terms of Service and Privacy Policy"
+      )}`
+    };
   }
 
   const membership = await getInviteByToken(inviteToken);
@@ -244,7 +269,8 @@ async function handleAcceptInvite(profile: OAuthProfile, inviteToken?: string) {
     data: {
       name: membership.user.name || profile.name,
       mustChangePassword: false,
-      lastLoginAt: new Date()
+      lastLoginAt: new Date(),
+      ...legalAcceptanceData()
     }
   });
 
@@ -303,9 +329,9 @@ export async function completeIdentityOAuth(
     case "login":
       return handleLogin(profile);
     case "register":
-      return handleRegister(profile, state.companyName);
+      return handleRegister(profile, state.companyName, state.acceptedLegal);
     case "accept-invite":
-      return handleAcceptInvite(profile, state.inviteToken);
+      return handleAcceptInvite(profile, state.inviteToken, state.acceptedLegal);
     case "link":
       return handleLink(profile, state.returnTo);
     default:
