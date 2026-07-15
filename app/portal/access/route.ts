@@ -1,5 +1,4 @@
 import { NextRequest, NextResponse } from "next/server";
-import { requestPublicOrigin, resolvePublicAppUrl } from "@/lib/app-url";
 import {
   createPortalLinkSessionToken,
   portalSessionCookieName,
@@ -7,19 +6,19 @@ import {
   resolvePortalAccessLink
 } from "@/lib/portal-auth";
 
-function portalRedirect(request: NextRequest, pathWithQuery: string) {
+/** Relative Location so nginx-proxied localhost request URLs do not leak to clients. */
+function portalRedirect(pathWithQuery: string) {
   const path = pathWithQuery.startsWith("/") ? pathWithQuery : `/${pathWithQuery}`;
-  const base = resolvePublicAppUrl(requestPublicOrigin(request));
-  return NextResponse.redirect(new URL(path, `${base}/`));
+  return new NextResponse(null, {
+    status: 307,
+    headers: { Location: path }
+  });
 }
 
-async function redeemAndRedirect(request: NextRequest, rawToken: string | null) {
+async function redeemAndRedirect(rawToken: string | null) {
   const resolved = await resolvePortalAccessLink(rawToken ?? "");
   if (!resolved.ok) {
-    return portalRedirect(
-      request,
-      `/portal/login?error=${encodeURIComponent(resolved.error)}`
-    );
+    return portalRedirect(`/portal/login?error=${encodeURIComponent(resolved.error)}`);
   }
 
   const session = await createPortalLinkSessionToken(
@@ -28,7 +27,7 @@ async function redeemAndRedirect(request: NextRequest, rawToken: string | null) 
     resolved.link.expiresAt
   );
 
-  const response = portalRedirect(request, "/portal");
+  const response = portalRedirect("/portal");
   response.cookies.set(
     portalSessionCookieName,
     session.token,
@@ -40,5 +39,5 @@ async function redeemAndRedirect(request: NextRequest, rawToken: string | null) 
 /** Query-param magic links: /portal/access?token=… */
 export async function GET(request: NextRequest) {
   const token = request.nextUrl.searchParams.get("token");
-  return redeemAndRedirect(request, token);
+  return redeemAndRedirect(token);
 }
