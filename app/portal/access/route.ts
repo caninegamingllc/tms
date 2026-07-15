@@ -1,4 +1,5 @@
 import { NextRequest, NextResponse } from "next/server";
+import { requestPublicOrigin, resolvePublicAppUrl } from "@/lib/app-url";
 import {
   createPortalLinkSessionToken,
   portalSessionCookieName,
@@ -6,16 +7,19 @@ import {
   resolvePortalAccessLink
 } from "@/lib/portal-auth";
 
-function loginRedirect(request: NextRequest, error: string) {
-  const url = new URL("/portal/login", request.url);
-  url.searchParams.set("error", error);
-  return NextResponse.redirect(url);
+function portalRedirect(request: NextRequest, pathWithQuery: string) {
+  const path = pathWithQuery.startsWith("/") ? pathWithQuery : `/${pathWithQuery}`;
+  const base = resolvePublicAppUrl(requestPublicOrigin(request));
+  return NextResponse.redirect(new URL(path, `${base}/`));
 }
 
 async function redeemAndRedirect(request: NextRequest, rawToken: string | null) {
   const resolved = await resolvePortalAccessLink(rawToken ?? "");
   if (!resolved.ok) {
-    return loginRedirect(request, resolved.error);
+    return portalRedirect(
+      request,
+      `/portal/login?error=${encodeURIComponent(resolved.error)}`
+    );
   }
 
   const session = await createPortalLinkSessionToken(
@@ -24,7 +28,7 @@ async function redeemAndRedirect(request: NextRequest, rawToken: string | null) 
     resolved.link.expiresAt
   );
 
-  const response = NextResponse.redirect(new URL("/portal", request.url));
+  const response = portalRedirect(request, "/portal");
   response.cookies.set(
     portalSessionCookieName,
     session.token,
