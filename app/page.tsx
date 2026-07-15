@@ -2,9 +2,11 @@ import Link from "next/link";
 import { AlertCircle, Banknote, ClipboardList, Truck } from "lucide-react";
 import { FuelIndexCard } from "@/components/fuel-index-card";
 import { LoadSnapshotTable } from "@/components/load-snapshot-table";
+import { MarketingLanding } from "@/components/marketing-landing";
 import { MetricCard } from "@/components/metric-card";
 import { PageHeader } from "@/components/page-header";
 import { TileBoard, Tile } from "@/components/tile-board";
+import { getCurrentUser } from "@/lib/auth";
 import { getDieselPrices } from "@/lib/eia-diesel";
 import { formatDateTime, formatMoney } from "@/lib/format";
 import { planHasFeature } from "@/lib/plans";
@@ -13,14 +15,20 @@ import { getDashboardData } from "@/lib/queries";
 import { DASHBOARD_TILES } from "@/lib/tile-defaults";
 import { loadPageLayouts } from "@/lib/ui-preferences-load";
 
-export default async function DashboardPage({
+export default async function HomePage({
   searchParams
 }: {
   searchParams: Promise<{ welcome?: string; error?: string }>;
 }) {
+  const sessionUser = await getCurrentUser();
+  if (!sessionUser) {
+    return <MarketingLanding />;
+  }
+
   const user = await requireTmsAccess();
   const params = await searchParams;
   const showFuel = planHasFeature(user.plan, "dashboard_fuel_index");
+
   const [data, dieselPrices, layouts] = await Promise.all([
     getDashboardData(),
     showFuel ? getDieselPrices() : Promise.resolve(null),

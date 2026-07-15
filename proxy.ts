@@ -2,6 +2,7 @@ import { NextResponse, type NextRequest } from "next/server";
 
 const sessionCookieName = "tms_session";
 const publicPaths = [
+  "/",
   "/login",
   "/register",
   "/change-password",
@@ -19,7 +20,9 @@ const publicPaths = [
 
 export function proxy(request: NextRequest) {
   const { pathname } = request.nextUrl;
-  const isPublic = publicPaths.some((path) => pathname === path || pathname.startsWith(`${path}/`));
+  const isPublic = publicPaths.some((path) =>
+    path === "/" ? pathname === "/" : pathname === path || pathname.startsWith(`${path}/`)
+  );
   const hasSession = Boolean(request.cookies.get(sessionCookieName)?.value);
 
   if (!hasSession && !isPublic) {

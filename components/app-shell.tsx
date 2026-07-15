@@ -429,6 +429,7 @@ export function AppShell({
 
   const publicPage =
     pathname.startsWith("/portal") ||
+    (pathname === "/" && !currentUser) ||
     pathname === "/login" ||
     pathname === "/register" ||
     pathname === "/change-password" ||
