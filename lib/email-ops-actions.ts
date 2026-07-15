@@ -25,6 +25,7 @@ import { type MailAttachment, sendViaUserMailbox } from "@/lib/mail/user-mailbox
 import { generateDocumentPdf, pdfFilenameForDocument } from "@/lib/pdf-documents";
 import { dueDateFromTerms } from "@/lib/accounting-aging";
 import { enqueueJob } from "@/lib/jobs";
+import { applyLateFeesForInvoiceSend } from "@/lib/late-fees-apply";
 
 export type EmailPurpose =
   | "CARRIER_RATE_CONFIRMATION"
@@ -419,6 +420,61 @@ export async function prepareEmailDraft(loadId: string, purpose: EmailPurpose): 
   };
 }
 
+async function regenerateInvoiceDocument(
+  load: Awaited<ReturnType<typeof loadForEmail>>,
+  user: SessionUser,
+  existing:
+    | {
+        id: string;
+        documentNumber: string | null;
+        type: string;
+      }
+    | null
+    | undefined
+) {
+  const company = await getCompanyBranding(user.companyId);
+  const documentNumber =
+    existing?.documentNumber ??
+    load.invoices[0]?.invoiceNo ??
+    (await nextInvoiceNumber(user.companyId));
+  const structured = structuredDocumentForType("INVOICE", load, documentNumber, company);
+  const pdf = await persistGeneratedPdf(user.companyId, structured);
+
+  if (existing?.id) {
+    return prisma.loadDocument.update({
+      where: { id: existing.id },
+      data: {
+        documentNumber,
+        generatedContent: plainTextForType("INVOICE", load, documentNumber, company),
+        generatedAt: new Date(),
+        filePath: pdf.storedPath,
+        mimeType: pdf.mimeType,
+        originalFileName: pdf.originalFileName,
+        fileSizeBytes: pdf.fileSizeBytes,
+        notes: "Regenerated invoice after late fee applied."
+      }
+    });
+  }
+
+  return prisma.loadDocument.create({
+    data: {
+      companyId: user.companyId,
+      loadId: load.id,
+      customerId: load.customerId,
+      type: "INVOICE",
+      name: documentTitle("INVOICE", load.loadNumber),
+      documentNumber,
+      generatedContent: plainTextForType("INVOICE", load, documentNumber, company),
+      generatedAt: new Date(),
+      filePath: pdf.storedPath,
+      mimeType: pdf.mimeType,
+      originalFileName: pdf.originalFileName,
+      fileSizeBytes: pdf.fileSizeBytes,
+      notes: "Generated invoice for email after late fee applied."
+    }
+  });
+}
+
 export async function sendPreparedEmail(formData: FormData) {
   const user = await requireWriteUser();
   const loadId = String(formData.get("loadId") ?? "").trim();
@@ -431,8 +487,19 @@ export async function sendPreparedEmail(formData: FormData) {
     throw new Error("Email fields are required.");
   }
 
-  const load = await loadForEmail(loadId, user);
-  const { document, invoiceId } = await ensurePrimaryDocument(purpose, load, user);
+  let load = await loadForEmail(loadId, user);
+  const ensured = await ensurePrimaryDocument(purpose, load, user);
+  let document = ensured.document;
+  const invoiceId = ensured.invoiceId;
+
+  if (purpose === "INVOICE" && invoiceId) {
+    const { feesApplied } = await applyLateFeesForInvoiceSend({ loadId, invoiceId });
+    if (feesApplied > 0) {
+      load = await loadForEmail(loadId, user);
+      document = await regenerateInvoiceDocument(load, user, document);
+    }
+  }
+
   const attachments: MailAttachment[] = [];
 
   if (document) {

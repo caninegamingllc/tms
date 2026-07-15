@@ -15,6 +15,7 @@ import { canPickBranch, canWrite, isAdminRole } from "@/lib/scope";
 import { toDocumentTableRows } from "@/lib/document-rows";
 import { prisma } from "@/lib/db";
 import { formatDateTime, formatMoney } from "@/lib/format";
+import { formatLateFeePercent } from "@/lib/late-fees";
 import { CUSTOMER_DETAIL_TILES } from "@/lib/tile-defaults";
 import { loadPageLayouts } from "@/lib/ui-preferences-load";
 
@@ -141,14 +142,29 @@ export default async function CustomerDetailPage({
                   </select>
                 </label>
               ) : null}
-              <div className="grid gap-3 md:grid-cols-2">
+              <div className="grid gap-3 md:grid-cols-3">
                 <input
                   name="creditLimit"
                   className="input"
                   defaultValue={String(customer.creditLimit / 100)}
                   placeholder="Credit limit"
                 />
-                <input name="paymentTerms" className="input" defaultValue={customer.paymentTerms} />
+                <input
+                  name="paymentTerms"
+                  className="input"
+                  defaultValue={customer.paymentTerms}
+                  placeholder="Payment terms"
+                />
+                <input
+                  name="lateFeePercent"
+                  className="input"
+                  type="number"
+                  min="0"
+                  max="100"
+                  step="0.01"
+                  defaultValue={String(customer.lateFeePercent)}
+                  placeholder="Late fee %"
+                />
               </div>
               <div className="rounded-2xl bg-muted p-4">
                 <p className="mb-3 text-sm font-semibold text-foreground">Primary Contact</p>
@@ -216,6 +232,10 @@ export default async function CustomerDetailPage({
               <div>
                 <p className="label">Credit Limit</p>
                 <p className="font-semibold text-foreground">{formatMoney(customer.creditLimit)}</p>
+              </div>
+              <div>
+                <p className="label">Late Fee %</p>
+                <p className="font-semibold text-foreground">{formatLateFeePercent(customer.lateFeePercent)}</p>
               </div>
               <div>
                 <p className="label">Loads / Open AR</p>

@@ -235,9 +235,19 @@ export function CustomerForm({ action, branches = [], showBranchPicker = false }
           </select>
         </label>
       ) : null}
-      <div className="grid gap-3 md:grid-cols-2">
+      <div className="grid gap-3 md:grid-cols-3">
         <input name="creditLimit" className="input" placeholder="Credit limit" />
-        <input name="paymentTerms" className="input" defaultValue="Net 30" />
+        <input name="paymentTerms" className="input" defaultValue="Net 30" placeholder="Payment terms" />
+        <input
+          name="lateFeePercent"
+          className="input"
+          type="number"
+          min="0"
+          max="100"
+          step="0.01"
+          defaultValue="0"
+          placeholder="Late fee %"
+        />
       </div>
       <label className="grid gap-2">
         <span className="label">Rate confirmation terms &amp; conditions</span>

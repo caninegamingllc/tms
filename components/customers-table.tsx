@@ -3,6 +3,7 @@
 import Link from "next/link";
 import { SortableTable } from "@/components/sortable-table";
 import { formatMoney } from "@/lib/format";
+import { formatLateFeePercent } from "@/lib/late-fees";
 
 export type CustomerTableRow = {
   id: string;
@@ -14,6 +15,7 @@ export type CustomerTableRow = {
   contactEmail: string;
   paymentTerms: string;
   creditLimit: number;
+  lateFeePercent: number;
   loadCount: number;
   openArCents: number;
 };
@@ -77,6 +79,12 @@ export function CustomersTable({
           label: "Credit",
           sortValue: (customer) => customer.creditLimit,
           render: (customer) => formatMoney(customer.creditLimit)
+        },
+        {
+          id: "lateFee",
+          label: "Late Fee",
+          sortValue: (customer) => customer.lateFeePercent,
+          render: (customer) => formatLateFeePercent(customer.lateFeePercent)
         },
         {
           id: "loads",

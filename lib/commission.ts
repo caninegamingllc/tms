@@ -1,5 +1,6 @@
 import { prisma } from "@/lib/db";
 import type { CommissionCalculationMethod, CommissionStatus } from "@/lib/constants";
+import { isLateFeeCharge } from "@/lib/late-fees";
 
 export type CommissionResult = {
   grossProfitCents: number;
@@ -17,6 +18,18 @@ export type CommissionRuleParams = {
 
 export function sumLoadExpensesCents(expenses: { amountCents: number }[]) {
   return expenses.reduce((sum, expense) => sum + expense.amountCents, 0);
+}
+
+/** Commissionable revenue excludes late-fee finance charges. */
+export function commissionableRevenueCents(
+  revenueCents: number,
+  charges: { chargeType: string; amountCents: number }[] = []
+) {
+  const lateFeeCents = charges.reduce(
+    (sum, charge) => (isLateFeeCharge(charge) ? sum + charge.amountCents : sum),
+    0
+  );
+  return Math.max(0, revenueCents - lateFeeCents);
 }
 
 export function grossExpenseCents(carrierCostCents: number, expenses: { amountCents: number }[]) {
@@ -192,6 +205,7 @@ export async function recalculateLoadCommission(loadId: string) {
     where: { id: loadId },
     include: {
       expenses: true,
+      charges: true,
       commission: true,
       invoices: { where: { paidAt: { not: null } }, take: 1 },
       branch: {
@@ -210,8 +224,9 @@ export async function recalculateLoadCommission(loadId: string) {
   }
 
   const expenseTotal = grossExpenseCents(load.carrierCostCents, load.expenses);
+  const revenueCents = commissionableRevenueCents(load.revenueCents, load.charges);
   const result = calculateCommission({
-    revenueCents: load.revenueCents,
+    revenueCents,
     grossExpenseCents: expenseTotal,
     isCommissionable: load.isCommissionable,
     branchSharePercent: profile.rule.branchSharePercent,
@@ -242,7 +257,7 @@ export async function recalculateLoadCommission(loadId: string) {
       profileId: profile.id,
       profileName: profile.name,
       isCommissionable: load.isCommissionable,
-      revenueCents: load.revenueCents,
+      revenueCents,
       grossExpenseCents: expenseTotal,
       grossProfitCents: result.grossProfitCents,
       branchShareCents: result.branchShareCents,
@@ -256,7 +271,7 @@ export async function recalculateLoadCommission(loadId: string) {
       profileId: profile.id,
       profileName: profile.name,
       isCommissionable: load.isCommissionable,
-      revenueCents: load.revenueCents,
+      revenueCents,
       grossExpenseCents: expenseTotal,
       grossProfitCents: result.grossProfitCents,
       branchShareCents: result.branchShareCents,
