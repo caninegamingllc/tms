@@ -78,6 +78,17 @@ export async function createPortalLinkSession(
   customerId: string,
   linkExpiresAt: Date | null
 ) {
+  const created = await createPortalLinkSessionToken(portalLinkId, customerId, linkExpiresAt);
+  await setPortalSessionCookie(created.token, created.expiresAt);
+  return created;
+}
+
+/** Creates the DB session and returns the raw cookie token (for Route Handlers). */
+export async function createPortalLinkSessionToken(
+  portalLinkId: string,
+  customerId: string,
+  linkExpiresAt: Date | null
+) {
   const token = createPortalRawToken();
   const expiresAt = new Date();
   expiresAt.setHours(expiresAt.getHours() + portalLinkSessionHours);
@@ -94,18 +105,51 @@ export async function createPortalLinkSession(
     }
   });
 
-  await setPortalSessionCookie(token, expiresAt);
+  return { token, expiresAt };
 }
 
-export async function destroyPortalSession() {
-  const cookieStore = await cookies();
-  const token = cookieStore.get(portalSessionCookieName)?.value;
-  if (token) {
-    await prisma.customerPortalSession.deleteMany({
-      where: { tokenHash: hashToken(token) }
-    });
+export function portalSessionCookieOptions(expiresAt: Date) {
+  return {
+    httpOnly: true,
+    sameSite: "lax" as const,
+    secure: shouldUseSecureCookies(),
+    path: "/",
+    expires: expiresAt
+  };
+}
+
+export async function resolvePortalAccessLink(rawToken: string) {
+  const token = rawToken.trim();
+  if (!token) {
+    return { ok: false as const, error: "This access link is missing." };
   }
-  cookieStore.delete(portalSessionCookieName);
+
+  const link = await prisma.customerPortalLink.findFirst({
+    where: {
+      tokenHash: hashToken(token),
+      revokedAt: null,
+      company: { status: "ACTIVE" }
+    }
+  });
+
+  if (!link) {
+    return { ok: false as const, error: "This access link is invalid." };
+  }
+  if (link.expiresAt && link.expiresAt < new Date()) {
+    return { ok: false as const, error: "This access link has expired." };
+  }
+
+  return { ok: true as const, link };
+}
+
+export async function redeemPortalAccessToken(rawToken: string) {
+  const resolved = await resolvePortalAccessLink(rawToken);
+  if (!resolved.ok) {
+    redirect(`/portal/login?error=${encodeURIComponent(resolved.error)}`);
+  }
+
+  await createPortalLinkSession(resolved.link.id, resolved.link.customerId, resolved.link.expiresAt);
+  redirect("/portal");
 }
 
 export const getPortalViewer = cache(async (): Promise<PortalViewer | null> => {
@@ -186,22 +230,13 @@ export async function requirePortalViewer(): Promise<PortalViewer> {
   return viewer;
 }
 
-export async function redeemPortalAccessToken(rawToken: string) {
-  const link = await prisma.customerPortalLink.findFirst({
-    where: {
-      tokenHash: hashToken(rawToken),
-      revokedAt: null,
-      company: { status: "ACTIVE" }
-    }
-  });
-
-  if (!link) {
-    redirect(`/portal/login?error=${encodeURIComponent("This access link is invalid.")}`);
+export async function destroyPortalSession() {
+  const cookieStore = await cookies();
+  const token = cookieStore.get(portalSessionCookieName)?.value;
+  if (token) {
+    await prisma.customerPortalSession.deleteMany({
+      where: { tokenHash: hashToken(token) }
+    });
   }
-  if (link.expiresAt && link.expiresAt < new Date()) {
-    redirect(`/portal/login?error=${encodeURIComponent("This access link has expired.")}`);
-  }
-
-  await createPortalLinkSession(link.id, link.customerId, link.expiresAt);
-  redirect("/portal");
+  cookieStore.delete(portalSessionCookieName);
 }

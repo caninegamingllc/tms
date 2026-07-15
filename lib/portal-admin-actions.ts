@@ -158,7 +158,7 @@ export async function createCustomerPortalLink(formData: FormData) {
     }
   });
 
-  const accessUrl = `${appBaseUrl()}/portal/access/${encodeURIComponent(rawToken)}`;
+  const accessUrl = `${appBaseUrl()}/portal/access?token=${encodeURIComponent(rawToken)}`;
 
   await prisma.customerActivity.create({
     data: {
