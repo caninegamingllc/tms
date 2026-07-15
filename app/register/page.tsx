@@ -1,4 +1,5 @@
 import Link from "next/link";
+import { registerCompany } from "@/lib/auth";
 import { AuthBrandPanel, AuthMobileBrand } from "@/components/auth-brand-panel";
 import { RegisterAccountForm } from "@/components/register-account-form";
 import { isGoogleOAuthConfigured } from "@/lib/oauth/google";
@@ -37,6 +38,7 @@ export default async function RegisterPage({
           <RegisterAccountForm
             googleConfigured={isGoogleOAuthConfigured()}
             microsoftConfigured={isMicrosoftOAuthConfigured()}
+            registerAction={registerCompany}
           />
 
           <p className="mt-5 text-sm text-muted-foreground">

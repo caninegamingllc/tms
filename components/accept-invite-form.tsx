@@ -3,7 +3,6 @@
 import { useState } from "react";
 import { OAuthButtons } from "@/components/oauth-buttons";
 import { LegalAcceptanceCheckbox } from "@/components/legal-acceptance-checkbox";
-import { acceptInvite } from "@/lib/auth";
 
 type Props = {
   token: string;
@@ -12,6 +11,7 @@ type Props = {
   hasPassword: boolean;
   googleConfigured: boolean;
   microsoftConfigured: boolean;
+  acceptAction: (formData: FormData) => void | Promise<void>;
 };
 
 export function AcceptInviteForm({
@@ -20,7 +20,8 @@ export function AcceptInviteForm({
   isExistingUser,
   hasPassword,
   googleConfigured,
-  microsoftConfigured
+  microsoftConfigured,
+  acceptAction
 }: Props) {
   const [acceptedLegal, setAcceptedLegal] = useState(false);
   const oauthAvailable = googleConfigured || microsoftConfigured;
@@ -52,7 +53,7 @@ export function AcceptInviteForm({
         </div>
       ) : null}
 
-      <form action={acceptInvite} className="mt-6 grid gap-3">
+      <form action={acceptAction} className="mt-6 grid gap-3">
         <input type="hidden" name="token" value={token} />
         {acceptedLegal ? <input type="hidden" name="acceptedLegal" value="on" /> : null}
         {isExistingUser && hasPassword ? (

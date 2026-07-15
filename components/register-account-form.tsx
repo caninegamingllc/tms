@@ -1,16 +1,20 @@
 "use client";
 
 import { useState } from "react";
-import { registerCompany } from "@/lib/auth";
 import { LegalAcceptanceCheckbox } from "@/components/legal-acceptance-checkbox";
 import { RegisterOAuthButtons } from "@/components/register-oauth-buttons";
 
 type Props = {
   googleConfigured: boolean;
   microsoftConfigured: boolean;
+  registerAction: (formData: FormData) => void | Promise<void>;
 };
 
-export function RegisterAccountForm({ googleConfigured, microsoftConfigured }: Props) {
+export function RegisterAccountForm({
+  googleConfigured,
+  microsoftConfigured,
+  registerAction
+}: Props) {
   const [acceptedLegal, setAcceptedLegal] = useState(false);
 
   return (
@@ -25,7 +29,7 @@ export function RegisterAccountForm({ googleConfigured, microsoftConfigured }: P
         acceptedLegal={acceptedLegal}
       />
 
-      <form action={registerCompany} className="mt-6 grid gap-4">
+      <form action={registerAction} className="mt-6 grid gap-4">
         {acceptedLegal ? <input type="hidden" name="acceptedLegal" value="on" /> : null}
         <label className="grid gap-2">
           <span className="label">Company Name</span>

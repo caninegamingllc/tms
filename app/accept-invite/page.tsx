@@ -1,6 +1,6 @@
 import { PageHeader } from "@/components/page-header";
 import { AcceptInviteForm } from "@/components/accept-invite-form";
-import { getInviteByToken } from "@/lib/auth";
+import { acceptInvite, getInviteByToken } from "@/lib/auth";
 import { isGoogleOAuthConfigured } from "@/lib/oauth/google";
 import { isMicrosoftOAuthConfigured } from "@/lib/oauth/microsoft";
 import { prisma } from "@/lib/db";
@@ -58,6 +58,7 @@ export default async function AcceptInvitePage({
             hasPassword={Boolean(invite?.user.passwordHash)}
             googleConfigured={googleConfigured}
             microsoftConfigured={microsoftConfigured}
+            acceptAction={acceptInvite}
           />
         </div>
       </div>
