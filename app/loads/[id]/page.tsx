@@ -300,45 +300,224 @@ export default async function LoadDetailPage({
 
       <TileBoard pageId="load-detail" tiles={LOAD_DETAIL_TILES} initialLayouts={layouts ?? null}>
         <Tile id="summary">
-          <LoadDetailsEditor
-            loadId={load.id}
-            writable={canWrite(user)}
-            customerId={load.customerId}
-            customerOptions={customerOptions}
-            branchId={load.branchId}
-            branches={branches}
-            canPickBranch={canPickBranch(user)}
-            referenceNumber={load.referenceNumber}
-            equipmentType={load.equipmentType}
-            reeferTempF={load.reeferTempF}
-            revenueCents={load.revenueCents}
-            carrierCostCents={load.carrierCostCents}
-            commodity={load.commodity}
-            weight={load.weight}
-            freightLines={freightLines}
-            descriptionSuggestions={commodities.map((item) => item.name)}
-            chargeTypes={chargeTypesForEditor.map((type) => ({
-              id: type.id,
-              name: type.name,
-              calculationMethod: type.calculationMethod
-            }))}
-            charges={load.charges.map((charge) => ({
-              id: charge.id,
-              label: charge.label,
-              chargeType: charge.chargeType,
-              description: charge.description,
-              unitRateCents: charge.unitRateCents,
-              quantity: charge.quantity,
-              amountCents: charge.amountCents,
-              lineTypeId: charge.lineTypeId
-            }))}
-            defaultMiles={load.routeTotalMiles}
-            stops={load.stops}
-            facilities={facilityOptions}
-            statusBadge={<StatusBadge value={load.status} />}
-            marginLabel={formatMoney(load.revenueCents - load.carrierCostCents)}
-            marginPercentLabel={marginPercent(load.revenueCents, load.carrierCostCents)}
-          />
+          <div className="grid gap-8">
+            <LoadDetailsEditor
+              loadId={load.id}
+              writable={canWrite(user)}
+              customerId={load.customerId}
+              customerOptions={customerOptions}
+              branchId={load.branchId}
+              branches={branches}
+              canPickBranch={canPickBranch(user)}
+              referenceNumber={load.referenceNumber}
+              equipmentType={load.equipmentType}
+              reeferTempF={load.reeferTempF}
+              revenueCents={load.revenueCents}
+              carrierCostCents={load.carrierCostCents}
+              commodity={load.commodity}
+              weight={load.weight}
+              freightLines={freightLines}
+              descriptionSuggestions={commodities.map((item) => item.name)}
+              chargeTypes={chargeTypesForEditor.map((type) => ({
+                id: type.id,
+                name: type.name,
+                calculationMethod: type.calculationMethod
+              }))}
+              charges={load.charges.map((charge) => ({
+                id: charge.id,
+                label: charge.label,
+                chargeType: charge.chargeType,
+                description: charge.description,
+                unitRateCents: charge.unitRateCents,
+                quantity: charge.quantity,
+                amountCents: charge.amountCents,
+                lineTypeId: charge.lineTypeId
+              }))}
+              defaultMiles={load.routeTotalMiles}
+              stops={load.stops}
+              facilities={facilityOptions}
+              statusBadge={<StatusBadge value={load.status} />}
+              marginLabel={formatMoney(load.revenueCents - load.carrierCostCents)}
+              marginPercentLabel={marginPercent(load.revenueCents, load.carrierCostCents)}
+            />
+
+            <div className="grid gap-3 border-t border-border pt-6">
+              <div>
+                <h3 className="font-semibold text-foreground">Stops</h3>
+                <p className="muted text-sm">
+                  {canWrite(user)
+                    ? "Use Edit details to add, remove, or reorder pickups and deliveries."
+                    : "Pickup and delivery stops for this load."}
+                </p>
+              </div>
+              <div className="grid gap-3">
+                {load.stops.map((stop) => (
+                  <div key={stop.id} className="rounded-2xl border border-border p-4">
+                    <div className="flex items-start justify-between gap-4">
+                      <div>
+                        <p className="font-semibold text-foreground">
+                          {stop.sequence}. {humanize(stop.type)} - {stop.facilityName}
+                        </p>
+                        <p className="muted">
+                          {stop.city}, {stop.state}
+                        </p>
+                      </div>
+                      <span className="text-sm text-muted-foreground">
+                        {formatDateTime(stop.appointmentAt)}
+                      </span>
+                    </div>
+                    {stop.instructions ? (
+                      <p className="mt-3 rounded-xl bg-muted p-3 text-sm text-slate-700">
+                        {stop.instructions}
+                      </p>
+                    ) : null}
+                  </div>
+                ))}
+              </div>
+            </div>
+
+            <div className="grid gap-3 border-t border-border pt-6">
+              <div>
+                <h3 className="font-semibold text-foreground">Notes</h3>
+                <p className="muted text-sm">
+                  Public notes appear on rate confirmations, load confirmations, BOLs, invoices, and
+                  related documents. Private notes stay internal only.
+                </p>
+              </div>
+
+              <div className="grid gap-4 lg:grid-cols-2">
+                <div className="rounded-2xl border border-border p-4">
+                  <h4 className="font-semibold text-foreground">Public Notes</h4>
+                  <div className="mt-3 grid gap-3">
+                    {publicNotes.length === 0 ? (
+                      <p className="text-sm text-muted-foreground">No public notes yet.</p>
+                    ) : (
+                      publicNotes.map((note) => (
+                        <div key={note.id} className="rounded-xl bg-muted p-3 text-sm">
+                          <p className="text-slate-700 whitespace-pre-wrap">{note.body}</p>
+                          <p className="mt-2 text-xs text-muted-foreground">
+                            {note.user?.name ?? "System"} · {formatDateTime(note.createdAt)}
+                          </p>
+                        </div>
+                      ))
+                    )}
+                  </div>
+                  {canWrite(user) ? (
+                    <form action={addLoadNote} className="mt-4 grid gap-3">
+                      <input type="hidden" name="loadId" value={load.id} />
+                      <input type="hidden" name="visibility" value="public" />
+                      <textarea
+                        name="body"
+                        className="textarea"
+                        rows={3}
+                        placeholder="Add a public note…"
+                        required
+                      />
+                      <button type="submit" className="btn-secondary">
+                        Save Public Note
+                      </button>
+                    </form>
+                  ) : null}
+                </div>
+
+                <div className="rounded-2xl border border-border p-4">
+                  <h4 className="font-semibold text-foreground">Private Notes</h4>
+                  <p className="mt-1 text-xs text-muted-foreground">
+                    Never shown on documents, emails, or reports.
+                  </p>
+                  <div className="mt-3 grid gap-3">
+                    {privateNotes.length === 0 ? (
+                      <p className="text-sm text-muted-foreground">No private notes yet.</p>
+                    ) : (
+                      privateNotes.map((note) => (
+                        <div key={note.id} className="rounded-xl bg-muted p-3 text-sm">
+                          <p className="text-slate-700 whitespace-pre-wrap">{note.body}</p>
+                          <p className="mt-2 text-xs text-muted-foreground">
+                            {note.user?.name ?? "System"} · {formatDateTime(note.createdAt)}
+                          </p>
+                        </div>
+                      ))
+                    )}
+                  </div>
+                  {canWrite(user) ? (
+                    <form action={addLoadNote} className="mt-4 grid gap-3">
+                      <input type="hidden" name="loadId" value={load.id} />
+                      <input type="hidden" name="visibility" value="private" />
+                      <textarea
+                        name="body"
+                        className="textarea"
+                        rows={3}
+                        placeholder="Add a private note…"
+                        required
+                      />
+                      <button type="submit" className="btn-secondary">
+                        Save Private Note
+                      </button>
+                    </form>
+                  ) : null}
+                </div>
+              </div>
+            </div>
+
+            <div className="grid gap-3 border-t border-border pt-6">
+              <h3 className="font-semibold text-foreground">Accounting</h3>
+              <div className="grid gap-3">
+                {load.invoices.length === 0 && load.carrierBills.length === 0 ? (
+                  <p className="text-sm text-muted-foreground">No invoices or carrier bills yet.</p>
+                ) : null}
+                {load.invoices.map((invoice) => {
+                  const exportView =
+                    activeExportMethod != null
+                      ? toExportStatusView(activeExportMethod, invoiceExports.get(invoice.id) ?? null)
+                      : null;
+                  return (
+                    <div key={invoice.id} className="rounded-2xl bg-muted p-3">
+                      <p className="font-semibold">{invoice.invoiceNo}</p>
+                      <p className="muted">
+                        {formatMoney(invoice.totalCents)} - {humanize(invoice.status)}
+                      </p>
+                      {exportView ? (
+                        <p className="mt-1 text-sm text-slate-700">{exportView.label}</p>
+                      ) : null}
+                      {canPushOnline ? (
+                        <form action={pushInvoiceToQuickbooksAction} className="mt-2">
+                          <input type="hidden" name="invoiceId" value={invoice.id} />
+                          <button type="submit" className="btn-secondary">
+                            Push to QuickBooks
+                          </button>
+                        </form>
+                      ) : null}
+                    </div>
+                  );
+                })}
+                {load.carrierBills.map((bill) => {
+                  const exportView =
+                    activeExportMethod != null
+                      ? toExportStatusView(activeExportMethod, billExports.get(bill.id) ?? null)
+                      : null;
+                  return (
+                    <div key={bill.id} className="rounded-2xl bg-muted p-3">
+                      <p className="font-semibold">{bill.billNo}</p>
+                      <p className="muted">
+                        {bill.carrier.name} - {formatMoney(bill.totalCents)} - {humanize(bill.status)}
+                      </p>
+                      {exportView ? (
+                        <p className="mt-1 text-sm text-slate-700">{exportView.label}</p>
+                      ) : null}
+                      {canPushOnline ? (
+                        <form action={pushCarrierBillToQuickbooksAction} className="mt-2">
+                          <input type="hidden" name="billId" value={bill.id} />
+                          <button type="submit" className="btn-secondary">
+                            Push to QuickBooks
+                          </button>
+                        </form>
+                      ) : null}
+                    </div>
+                  );
+                })}
+              </div>
+            </div>
+          </div>
         </Tile>
 
         <Tile id="workflow">
@@ -355,36 +534,6 @@ export default async function LoadDetailPage({
               Update Status
             </button>
           </form>
-        </Tile>
-
-        <Tile id="stops">
-          <p className="muted text-sm">
-            {canWrite(user)
-              ? "Use Edit details on Load summary to add, remove, or reorder pickups and deliveries."
-              : "Pickup and delivery stops for this load."}
-          </p>
-          <div className="mt-4 grid gap-3">
-            {load.stops.map((stop) => (
-              <div key={stop.id} className="rounded-2xl border border-border p-4">
-                <div className="flex items-start justify-between gap-4">
-                  <div>
-                    <p className="font-semibold text-foreground">
-                      {stop.sequence}. {humanize(stop.type)} - {stop.facilityName}
-                    </p>
-                    <p className="muted">
-                      {stop.city}, {stop.state}
-                    </p>
-                  </div>
-                  <span className="text-sm text-muted-foreground">{formatDateTime(stop.appointmentAt)}</span>
-                </div>
-                {stop.instructions ? (
-                  <p className="mt-3 rounded-xl bg-muted p-3 text-sm text-slate-700">
-                    {stop.instructions}
-                  </p>
-                ) : null}
-              </div>
-            ))}
-          </div>
         </Tile>
 
         <Tile id="route-map">
@@ -427,86 +576,6 @@ export default async function LoadDetailPage({
                 "No custom rate confirmation terms."}
             </p>
           )}
-        </Tile>
-
-        <Tile id="notes">
-          <p className="muted">
-            Public notes appear on rate confirmations, load confirmations, BOLs, invoices, and
-            related documents. Private notes stay internal only.
-          </p>
-
-          <div className="mt-4 grid gap-4 lg:grid-cols-2">
-            <div className="rounded-2xl border border-border p-4">
-              <h3 className="font-semibold text-foreground">Public Notes</h3>
-              <div className="mt-3 grid gap-3">
-                {publicNotes.length === 0 ? (
-                  <p className="text-sm text-muted-foreground">No public notes yet.</p>
-                ) : (
-                  publicNotes.map((note) => (
-                    <div key={note.id} className="rounded-xl bg-muted p-3 text-sm">
-                      <p className="text-slate-700 whitespace-pre-wrap">{note.body}</p>
-                      <p className="mt-2 text-xs text-muted-foreground">
-                        {note.user?.name ?? "System"} · {formatDateTime(note.createdAt)}
-                      </p>
-                    </div>
-                  ))
-                )}
-              </div>
-              {canWrite(user) ? (
-                <form action={addLoadNote} className="mt-4 grid gap-3">
-                  <input type="hidden" name="loadId" value={load.id} />
-                  <input type="hidden" name="visibility" value="public" />
-                  <textarea
-                    name="body"
-                    className="textarea"
-                    rows={3}
-                    placeholder="Add a public note…"
-                    required
-                  />
-                  <button type="submit" className="btn-secondary">
-                    Save Public Note
-                  </button>
-                </form>
-              ) : null}
-            </div>
-
-            <div className="rounded-2xl border border-border p-4">
-              <h3 className="font-semibold text-foreground">Private Notes</h3>
-              <p className="mt-1 text-xs text-muted-foreground">
-                Never shown on documents, emails, or reports.
-              </p>
-              <div className="mt-3 grid gap-3">
-                {privateNotes.length === 0 ? (
-                  <p className="text-sm text-muted-foreground">No private notes yet.</p>
-                ) : (
-                  privateNotes.map((note) => (
-                    <div key={note.id} className="rounded-xl bg-muted p-3 text-sm">
-                      <p className="text-slate-700 whitespace-pre-wrap">{note.body}</p>
-                      <p className="mt-2 text-xs text-muted-foreground">
-                        {note.user?.name ?? "System"} · {formatDateTime(note.createdAt)}
-                      </p>
-                    </div>
-                  ))
-                )}
-              </div>
-              {canWrite(user) ? (
-                <form action={addLoadNote} className="mt-4 grid gap-3">
-                  <input type="hidden" name="loadId" value={load.id} />
-                  <input type="hidden" name="visibility" value="private" />
-                  <textarea
-                    name="body"
-                    className="textarea"
-                    rows={3}
-                    placeholder="Add a private note…"
-                    required
-                  />
-                  <button type="submit" className="btn-secondary">
-                    Save Private Note
-                  </button>
-                </form>
-              ) : null}
-            </div>
-          </div>
         </Tile>
 
         <Tile id="documents">
@@ -828,57 +897,6 @@ export default async function LoadDetailPage({
               Add Expense
             </button>
           </form>
-        </Tile>
-
-        <Tile id="accounting">
-          <div className="mt-4 grid gap-3">
-            {load.invoices.map((invoice) => {
-              const exportView =
-                activeExportMethod != null
-                  ? toExportStatusView(activeExportMethod, invoiceExports.get(invoice.id) ?? null)
-                  : null;
-              return (
-                <div key={invoice.id} className="rounded-2xl bg-muted p-3">
-                  <p className="font-semibold">{invoice.invoiceNo}</p>
-                  <p className="muted">
-                    {formatMoney(invoice.totalCents)} - {humanize(invoice.status)}
-                  </p>
-                  {exportView ? <p className="mt-1 text-sm text-slate-700">{exportView.label}</p> : null}
-                  {canPushOnline ? (
-                    <form action={pushInvoiceToQuickbooksAction} className="mt-2">
-                      <input type="hidden" name="invoiceId" value={invoice.id} />
-                      <button type="submit" className="btn-secondary">
-                        Push to QuickBooks
-                      </button>
-                    </form>
-                  ) : null}
-                </div>
-              );
-            })}
-            {load.carrierBills.map((bill) => {
-              const exportView =
-                activeExportMethod != null
-                  ? toExportStatusView(activeExportMethod, billExports.get(bill.id) ?? null)
-                  : null;
-              return (
-                <div key={bill.id} className="rounded-2xl bg-muted p-3">
-                  <p className="font-semibold">{bill.billNo}</p>
-                  <p className="muted">
-                    {bill.carrier.name} - {formatMoney(bill.totalCents)} - {humanize(bill.status)}
-                  </p>
-                  {exportView ? <p className="mt-1 text-sm text-slate-700">{exportView.label}</p> : null}
-                  {canPushOnline ? (
-                    <form action={pushCarrierBillToQuickbooksAction} className="mt-2">
-                      <input type="hidden" name="billId" value={bill.id} />
-                      <button type="submit" className="btn-secondary">
-                        Push to QuickBooks
-                      </button>
-                    </form>
-                  ) : null}
-                </div>
-              );
-            })}
-          </div>
         </Tile>
 
         <Tile id="activity">

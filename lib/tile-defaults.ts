@@ -32,19 +32,16 @@ export const DASHBOARD_TILES: TileDefinition[] = [
 ];
 
 export const LOAD_DETAIL_TILES: TileDefinition[] = [
-  { id: "summary", title: "Load summary", minW: 4, minH: 6, default: { x: 0, y: 0, w: 7, h: 14 } },
-  { id: "workflow", title: "Workflow", minW: 3, minH: 4, default: { x: 7, y: 0, w: 5, h: 8 } },
-  { id: "stops", title: "Stops", minW: 4, minH: 4, default: { x: 0, y: 14, w: 7, h: 10 } },
+  { id: "summary", title: "Load summary", minW: 4, minH: 8, default: { x: 0, y: 0, w: 7, h: 36 } },
+  { id: "workflow", title: "Load Status", minW: 3, minH: 4, default: { x: 7, y: 0, w: 5, h: 8 } },
   { id: "route-map", title: "Route Map", minW: 3, minH: 6, default: { x: 7, y: 8, w: 5, h: 16 } },
-  { id: "rate-terms", title: "Rate Confirmation Terms", minW: 4, minH: 4, default: { x: 0, y: 24, w: 7, h: 10 } },
+  { id: "rate-terms", title: "Rate Confirmation Terms", minW: 4, minH: 4, default: { x: 0, y: 36, w: 7, h: 10 } },
   { id: "carrier", title: "Carrier Assignment", minW: 3, minH: 6, default: { x: 7, y: 24, w: 5, h: 16 } },
-  { id: "notes", title: "Notes", minW: 4, minH: 6, default: { x: 0, y: 34, w: 7, h: 14 } },
   { id: "check-calls", title: "Check Calls", minW: 3, minH: 5, default: { x: 7, y: 40, w: 5, h: 12 } },
-  { id: "documents", title: "Documents", minW: 4, minH: 6, default: { x: 0, y: 48, w: 7, h: 14 } },
+  { id: "documents", title: "Documents", minW: 4, minH: 6, default: { x: 0, y: 46, w: 7, h: 14 } },
   { id: "commission", title: "Commission", minW: 3, minH: 6, default: { x: 7, y: 52, w: 5, h: 16 } },
-  { id: "email", title: "Email", minW: 4, minH: 5, default: { x: 0, y: 62, w: 7, h: 12 } },
-  { id: "accounting", title: "Accounting", minW: 3, minH: 5, default: { x: 7, y: 68, w: 5, h: 10 } },
-  { id: "activity", title: "Activity Log", minW: 4, minH: 5, default: { x: 0, y: 74, w: 12, h: 12 } }
+  { id: "email", title: "Email", minW: 4, minH: 5, default: { x: 0, y: 60, w: 7, h: 12 } },
+  { id: "activity", title: "Activity Log", minW: 4, minH: 5, default: { x: 0, y: 72, w: 12, h: 12 } }
 ];
 
 export const CARRIER_DETAIL_TILES: TileDefinition[] = [
