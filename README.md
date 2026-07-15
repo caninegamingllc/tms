@@ -19,7 +19,7 @@ A Freight Broker Transportation Management System inspired by the broad workflow
 - Background job worker for PDF generation and mailbox sync; optional Redis for shared rate limits/cache.
 - Integrations placeholders for DAT, Truckstop, tracking, and factoring (QuickBooks Online + IIF are implemented).
 
-For a full system description and operator reference, see [`docs/SYSTEM_DESCRIPTION.md`](docs/SYSTEM_DESCRIPTION.md) and [`docs/PROJECT_OVERVIEW.md`](docs/PROJECT_OVERVIEW.md).
+For a single thorough project review, see [`docs/PROJECT_REVIEW.md`](docs/PROJECT_REVIEW.md). Supporting companions: [`docs/SYSTEM_DESCRIPTION.md`](docs/SYSTEM_DESCRIPTION.md), [`docs/PROJECT_OVERVIEW.md`](docs/PROJECT_OVERVIEW.md).
 
 ## First-Time Setup
 

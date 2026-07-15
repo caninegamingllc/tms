@@ -2,6 +2,7 @@
 
 **Version:** 0.4.4  
 **Production URL:** https://tms.simple-source.com  
+**Complete collective review:** [`PROJECT_REVIEW.md`](./PROJECT_REVIEW.md)  
 **Narrative summary:** [`SYSTEM_DESCRIPTION.md`](./SYSTEM_DESCRIPTION.md)
 
 A multi-tenant freight brokerage TMS inspired by AscendTMS-style workflows. One Next.js app handles broker operations (CRM, dispatch, documents, accounting, commissions, email ops, admin billing) plus a separate **customer portal** for load tracking and invoice review.

@@ -2,7 +2,8 @@
 
 **Version:** 0.4.4  
 **Production:** https://tms.simple-source.com  
-**Audience:** Product, ops, engineers, and stakeholders who need a complete picture of what this system is and how it is organized.
+**Audience:** Product, ops, engineers, and stakeholders who need a complete picture of what this system is and how it is organized.  
+**Complete collective review:** [`PROJECT_REVIEW.md`](./PROJECT_REVIEW.md)
 
 ---
 
