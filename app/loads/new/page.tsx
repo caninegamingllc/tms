@@ -4,19 +4,48 @@ import { LoadStopsEditor } from "@/components/load-stops-editor";
 import { PageHeader } from "@/components/page-header";
 import { SearchCombobox } from "@/components/search-combobox";
 import { createLoad } from "@/lib/actions";
-import { getBranchScope } from "@/lib/branch-filter-server";
+import { canAccessRecord, getBranchScope } from "@/lib/branch-filter-server";
 import { ensureCompanyCatalogs } from "@/lib/catalogs";
 import { requireTmsAccess } from "@/lib/permissions";
 import { canPickBranch, isAdminRole } from "@/lib/scope";
 import { loadStatuses } from "@/lib/constants";
 import { prisma } from "@/lib/db";
 import { humanize } from "@/lib/format";
+import { notFound } from "next/navigation";
 
-export default async function NewLoadPage() {
+function flagEnabled(value: string | undefined) {
+  return value === "1" || value === "true";
+}
+
+function moneyInput(cents: number) {
+  if (!cents) {
+    return "";
+  }
+  return (cents / 100).toFixed(2).replace(/\.00$/, "");
+}
+
+export default async function NewLoadPage({
+  searchParams
+}: {
+  searchParams: Promise<{
+    cloneFrom?: string;
+    keepCarrier?: string;
+    keepRate?: string;
+    keepCommodity?: string;
+    keepNotes?: string;
+  }>;
+}) {
   const user = await requireTmsAccess();
   await ensureCompanyCatalogs(user.companyId);
   const scope = await getBranchScope(user);
-  const [company, customers, facilities, branches, commodities] = await Promise.all([
+  const params = await searchParams;
+  const cloneFromId = params.cloneFrom?.trim() || null;
+  const keepCarrier = flagEnabled(params.keepCarrier);
+  const keepRate = flagEnabled(params.keepRate);
+  const keepCommodity = flagEnabled(params.keepCommodity);
+  const keepNotes = flagEnabled(params.keepNotes);
+
+  const [company, customers, facilities, branches, commodities, cloneSource] = await Promise.all([
     prisma.company.findUniqueOrThrow({ where: { id: user.companyId } }),
     prisma.customer.findMany({
       where: scope,
@@ -39,8 +68,25 @@ export default async function NewLoadPage() {
     prisma.commodityOption.findMany({
       where: { companyId: user.companyId, active: true },
       orderBy: [{ sortOrder: "asc" }, { name: "asc" }]
-    })
+    }),
+    cloneFromId
+      ? prisma.load.findUnique({
+          where: { id: cloneFromId, companyId: user.companyId },
+          include: {
+            stops: { orderBy: { sequence: "asc" } },
+            commodityLines: { orderBy: { sequence: "asc" } },
+            carrierPayLines: { orderBy: { sortOrder: "asc" } },
+            dispatchAssignment: { include: { carrier: true } }
+          }
+        })
+      : Promise.resolve(null)
   ]);
+
+  if (cloneFromId) {
+    if (!cloneSource || !(await canAccessRecord(user, cloneSource.branchId))) {
+      notFound();
+    }
+  }
 
   const customerOptions = customers.map((customer) => ({
     id: customer.id,
@@ -62,20 +108,96 @@ export default async function NewLoadPage() {
     ? `${company.loadNumberPrefix}-${nextSequence}`
     : nextSequence;
 
+  const isClone = Boolean(cloneSource);
+  const clonedStops = cloneSource
+    ? cloneSource.stops.map((stop) => ({
+        type: stop.type,
+        facilityId: stop.facilityId,
+        facilityName: stop.facilityName,
+        address: stop.address,
+        city: stop.city,
+        state: stop.state,
+        postalCode: stop.postalCode,
+        appointmentAt: null,
+        instructions: stop.instructions
+      }))
+    : undefined;
+  const clonedFreightLines =
+    cloneSource && keepCommodity
+      ? cloneSource.commodityLines.map((line) => ({
+          quantity: line.quantity,
+          description: line.description,
+          weightLbs: line.weightLbs,
+          pieces: line.pieces,
+          lengthIn: line.lengthIn,
+          widthIn: line.widthIn,
+          heightIn: line.heightIn
+        }))
+      : undefined;
+  const clonedRevenue =
+    cloneSource && keepRate ? moneyInput(cloneSource.revenueCents) : "";
+  const clonedCarrierCost =
+    cloneSource && keepRate ? moneyInput(cloneSource.carrierCostCents) : "";
+  const assignment = cloneSource?.dispatchAssignment;
+  const shouldCloneCarrier = Boolean(keepCarrier && assignment);
+  const clonePayLinesJson = shouldCloneCarrier
+    ? JSON.stringify(
+        cloneSource!.carrierPayLines.map((line) => ({
+          lineTypeId: line.lineTypeId,
+          description: line.description,
+          unitRateCents: line.unitRateCents,
+          quantity: line.quantity,
+          amountCents: line.amountCents,
+          sortOrder: line.sortOrder
+        }))
+      )
+    : null;
+
   return (
     <>
       <PageHeader
-        title="Create Load"
-        description="Enter the customer, stops, equipment, freight lines, and first financial estimate."
+        title={isClone ? `Clone Load ${cloneSource!.loadNumber}` : "Create Load"}
+        description={
+          isClone
+            ? "Customer and stops are copied. Set fresh appointment dates, review the options you kept, then save."
+            : "Enter the customer, stops, equipment, freight lines, and first financial estimate."
+        }
       />
 
+      {shouldCloneCarrier && assignment?.carrier ? (
+        <div className="mb-4 rounded-lg border border-border bg-muted/60 p-3 text-sm text-foreground">
+          Carrier <span className="font-semibold">{assignment.carrier.name}</span> and pay lines will
+          be assigned when you save.
+        </div>
+      ) : null}
+
       <form action={createLoad} className="card grid gap-6">
+        {isClone ? (
+          <>
+            <input type="hidden" name="cloneFromLoadId" value={cloneSource!.id} />
+            {keepNotes ? <input type="hidden" name="keepNotes" value="1" /> : null}
+            {shouldCloneCarrier && assignment ? (
+              <>
+                <input type="hidden" name="cloneCarrierId" value={assignment.carrierId} />
+                <input type="hidden" name="cloneDriverName" value={assignment.driverName ?? ""} />
+                <input type="hidden" name="cloneDriverPhone" value={assignment.driverPhone ?? ""} />
+                <input type="hidden" name="cloneTruckNumber" value={assignment.truckNumber ?? ""} />
+                <input type="hidden" name="cloneTrailerNumber" value={assignment.trailerNumber ?? ""} />
+                {clonePayLinesJson ? (
+                  <input type="hidden" name="clonePayLinesJson" value={clonePayLinesJson} />
+                ) : null}
+              </>
+            ) : null}
+          </>
+        ) : null}
+
         <div className="grid gap-4 md:grid-cols-3">
           <SearchCombobox
             name="customerId"
             label="Customer"
             placeholder="Search customers"
             options={customerOptions}
+            defaultValue={cloneSource?.customerId}
             required
           />
           <label className="grid gap-2">
@@ -97,7 +219,7 @@ export default async function NewLoadPage() {
         {canPickBranch(user) ? (
           <label className="grid gap-2 md:max-w-sm">
             <span className="label">Branch</span>
-            <select name="branchId" className="select" defaultValue="">
+            <select name="branchId" className="select" defaultValue={cloneSource?.branchId ?? ""}>
               <option value="">Default to your branch</option>
               {branches.map((branch) => (
                 <option key={branch.id} value={branch.id}>
@@ -114,14 +236,28 @@ export default async function NewLoadPage() {
         </label>
 
         <div className="grid gap-4 md:grid-cols-3">
-          <EquipmentFields />
+          <EquipmentFields
+            defaultEquipmentType={cloneSource?.equipmentType ?? "Dry Van"}
+            defaultReeferTempF={cloneSource?.reeferTempF ?? null}
+          />
           <label className="grid gap-2">
             <span className="label">Customer Rate</span>
-            <input name="revenue" className="input" placeholder="2500" required />
+            <input
+              name="revenue"
+              className="input"
+              placeholder="2500"
+              defaultValue={clonedRevenue}
+              required
+            />
           </label>
           <label className="grid gap-2">
             <span className="label">Estimated Carrier Cost</span>
-            <input name="carrierCost" className="input" placeholder="1900" />
+            <input
+              name="carrierCost"
+              className="input"
+              placeholder="1900"
+              defaultValue={clonedCarrierCost}
+            />
           </label>
         </div>
 
@@ -132,10 +268,13 @@ export default async function NewLoadPage() {
               Add each commodity on the trailer. Quantity, description, and weight are required.
             </p>
           </div>
-          <FreightLinesEditor descriptionSuggestions={commoditySuggestions} />
+          <FreightLinesEditor
+            descriptionSuggestions={commoditySuggestions}
+            initialLines={clonedFreightLines}
+          />
         </div>
 
-        <LoadStopsEditor facilities={facilityOptions} />
+        <LoadStopsEditor facilities={facilityOptions} initialStops={clonedStops} />
 
         <label className="grid gap-2">
           <span className="label">Rate confirmation terms override</span>
@@ -143,6 +282,7 @@ export default async function NewLoadPage() {
             name="rateConfirmationTerms"
             className="textarea"
             rows={4}
+            defaultValue={cloneSource?.rateConfirmationTerms ?? ""}
             placeholder="Optional — leave blank to use the customer’s default rate confirmation terms"
           />
           <p className="text-xs text-muted-foreground">
