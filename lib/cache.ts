@@ -1,3 +1,4 @@
+import "server-only";
 import { redisGet, redisSet } from "@/lib/redis";
 
 type CacheEntry<T> = { expiresAt: number; value: T };

@@ -1,3 +1,4 @@
+import "server-only";
 import { redisIncrWindow } from "@/lib/redis";
 
 const memoryWindows = new Map<string, number[]>();

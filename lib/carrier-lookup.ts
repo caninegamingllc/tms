@@ -1,6 +1,5 @@
 import { prisma } from "@/lib/db";
 import { formatDotNumber, formatMcNumber, normalizeCarrierNumber } from "@/lib/carrier-numbers";
-import { cacheGetJson, cacheSetJson } from "@/lib/cache";
 
 export type CarrierLookupResult = {
   id: string;
@@ -231,9 +230,10 @@ async function fetchFmcsaCarriers(type: "mc" | "dot", query: string) {
   }
 
   const cacheKey = `fmcsa:${type}:${lookupNumber}`;
-  const cached = await cacheGetJson<CarrierLookupResult[]>(cacheKey);
-  if (cached) {
-    return cached;
+  const now = Date.now();
+  const cached = fmcsaCache.get(cacheKey);
+  if (cached && cached.expiresAt > now) {
+    return cached.results;
   }
 
   const webKey = getFmcsaWebKey();
@@ -258,8 +258,7 @@ async function fetchFmcsaCarriers(type: "mc" | "dot", query: string) {
     .filter((result): result is CarrierLookupResult => Boolean(result))
     .slice(0, SEARCH_LIMIT);
 
-  fmcsaCache.set(cacheKey, { results, expiresAt: Date.now() + CACHE_TTL_MS });
-  await cacheSetJson(cacheKey, results, CACHE_TTL_MS);
+  fmcsaCache.set(cacheKey, { results, expiresAt: now + CACHE_TTL_MS });
   return results;
 }
 

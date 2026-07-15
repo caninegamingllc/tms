@@ -163,8 +163,6 @@ function mergeBusinessWithAddress(
   };
 }
 
-import { cacheGetJson, cacheSetJson } from "@/lib/cache";
-
 const SEARCH_LIMIT = 8;
 const CACHE_TTL_MS = 5 * 60 * 1000;
 const autocompleteCache = new Map<string, { expiresAt: number; results: BusinessSearchResult[] }>();
@@ -172,8 +170,6 @@ const textSearchCache = new Map<string, { expiresAt: number; results: BusinessSe
 const detailsCache = new Map<string, { expiresAt: number; result: BusinessSearchResult }>();
 
 async function getCachedResults(key: string) {
-  const remote = await cacheGetJson<BusinessSearchResult[]>(key);
-  if (remote) return remote;
   const local = textSearchCache.get(key) ?? autocompleteCache.get(key);
   if (local && local.expiresAt > Date.now()) return local.results;
   return null;
@@ -183,12 +179,9 @@ async function setCachedResults(key: string, results: BusinessSearchResult[], st
   const entry = { results, expiresAt: Date.now() + CACHE_TTL_MS };
   if (store === "text") textSearchCache.set(key, entry);
   else autocompleteCache.set(key, entry);
-  await cacheSetJson(key, results, CACHE_TTL_MS);
 }
 
 async function getCachedDetail(key: string) {
-  const remote = await cacheGetJson<BusinessSearchResult>(key);
-  if (remote) return remote;
   const local = detailsCache.get(key);
   if (local && local.expiresAt > Date.now()) return local.result;
   return null;
@@ -196,7 +189,6 @@ async function getCachedDetail(key: string) {
 
 async function setCachedDetail(key: string, result: BusinessSearchResult) {
   detailsCache.set(key, { result, expiresAt: Date.now() + CACHE_TTL_MS });
-  await cacheSetJson(key, result, CACHE_TTL_MS);
 }
 
 export function shouldUseTextSearch(query: string, field: "name" | "address") {
