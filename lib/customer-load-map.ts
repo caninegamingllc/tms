@@ -36,7 +36,8 @@ type CheckCallLike = {
   longitude: number | null;
 };
 
-const DELIVERED_STATUSES = new Set(["DELIVERED", "INVOICED", "PAID"]);
+const MAP_HIDDEN_STATUSES = new Set(["CANCELED", "INVOICED", "PAID"]);
+const DELIVERY_PIN_STATUSES = new Set(["DELIVERED"]);
 
 function cityStateLabel(city: string, state: string) {
   return `${city}, ${state}`;
@@ -182,7 +183,7 @@ export async function resolveCustomerLoadMapMarkers(input: {
     where: {
       companyId: input.companyId,
       customerId: input.customerId,
-      status: { not: "CANCELED" }
+      status: { notIn: [...MAP_HIDDEN_STATUSES] }
     },
     select: {
       id: true,
@@ -244,7 +245,7 @@ export async function resolveCustomerLoadMapMarkers(input: {
     let positionSource: CustomerLoadMapMarker["positionSource"] = "pickup";
     let lastReportedLocation: string | null = null;
 
-    if (DELIVERED_STATUSES.has(load.status)) {
+    if (DELIVERY_PIN_STATUSES.has(load.status)) {
       coords = await resolveStopOrCity(deliveryStop, load.deliveryCity, load.deliveryState);
       positionSource = "delivery";
     } else {

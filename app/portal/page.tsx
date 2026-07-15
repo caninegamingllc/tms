@@ -68,7 +68,7 @@ export default async function PortalOverviewPage() {
             <h2 className="section-title">Load map</h2>
             <p className="muted">
               Icons start at pickup, move with check-call locations, and snap to delivery when marked
-              delivered.
+              delivered. Invoiced and paid loads drop off the map.
             </p>
           </div>
           <CustomerLoadMap markers={markers} />

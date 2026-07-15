@@ -139,7 +139,8 @@ export function CustomerLoadMap({ markers }: CustomerLoadMapProps) {
   if (markers.length === 0) {
     return (
       <div className="flex h-[360px] items-center justify-center rounded-2xl border border-dashed border-border bg-muted px-6 text-center text-sm text-muted-foreground">
-        No plottable loads yet. Pins appear at pickup, move with check calls, and snap to delivery when marked delivered.
+        No plottable loads yet. Pins appear at pickup, move with check calls, and snap to delivery when
+        marked delivered. Invoiced and paid loads are hidden from the map.
       </div>
     );
   }
