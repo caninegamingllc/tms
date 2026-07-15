@@ -1,6 +1,3 @@
-import { randomBytes } from "crypto";
-import { mkdir, writeFile } from "fs/promises";
-import path from "path";
 import { prisma } from "@/lib/db";
 import {
   buildBillOfLading,
@@ -15,7 +12,7 @@ import {
   type LoadForDocument,
   type StructuredDocument
 } from "@/lib/document-templates";
-import { getUploadDir } from "@/lib/document-storage";
+import { saveBufferFile } from "@/lib/document-storage";
 import { generateDocumentPdf, pdfFilenameForDocument } from "@/lib/pdf-documents";
 
 export async function getCompanyBranding(companyId: string): Promise<CompanyBranding> {
@@ -72,24 +69,17 @@ export function plainTextForType(
   }
 }
 
-export async function persistGeneratedPdf(
-  companyId: string,
-  structured: StructuredDocument
-) {
+export async function persistGeneratedPdf(companyId: string, structured: StructuredDocument) {
   const pdfBuffer = await generateDocumentPdf(structured);
-  const uploadDir = path.resolve(getUploadDir());
-  const companyDir = path.join(uploadDir, companyId);
-  await mkdir(companyDir, { recursive: true });
-
-  const filename = `${randomBytes(8).toString("hex")}-${pdfFilenameForDocument(structured)}`;
-  const storedPath = path.posix.join(companyId, filename);
-  await writeFile(path.join(companyDir, filename), pdfBuffer);
+  const stored = await saveBufferFile(
+    companyId,
+    pdfFilenameForDocument(structured),
+    pdfBuffer,
+    "application/pdf"
+  );
 
   return {
-    storedPath,
-    mimeType: "application/pdf" as const,
-    originalFileName: pdfFilenameForDocument(structured),
-    fileSizeBytes: pdfBuffer.length,
+    ...stored,
     pdfBuffer
   };
 }

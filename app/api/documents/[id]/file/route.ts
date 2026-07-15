@@ -1,6 +1,5 @@
-import { readFile } from "fs/promises";
 import { NextRequest, NextResponse } from "next/server";
-import { getAbsolutePath } from "@/lib/document-storage";
+import { readStoredFile } from "@/lib/document-storage";
 import { prisma } from "@/lib/db";
 import { requireTmsAccess } from "@/lib/permissions";
 
@@ -21,15 +20,14 @@ export async function GET(
   }
 
   try {
-    const absolutePath = getAbsolutePath(document.filePath);
-    const fileBuffer = await readFile(absolutePath);
+    const fileBuffer = await readStoredFile(document.filePath);
     const mimeType = document.mimeType || "application/octet-stream";
     const fileName = document.originalFileName || document.name;
     const disposition = download
       ? `attachment; filename="${fileName.replace(/"/g, "")}"`
       : `inline; filename="${fileName.replace(/"/g, "")}"`;
 
-    return new NextResponse(fileBuffer, {
+    return new NextResponse(new Uint8Array(fileBuffer), {
       headers: {
         "Content-Type": mimeType,
         "Content-Disposition": disposition,

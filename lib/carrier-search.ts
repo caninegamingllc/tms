@@ -2,6 +2,13 @@ import { z } from "zod";
 import type { Prisma } from "@prisma/client";
 import type { BranchScope } from "@/lib/scope";
 import { prisma } from "@/lib/db";
+import {
+  DEFAULT_PAGE_SIZE,
+  paginationSkipTake,
+  toPaginatedResult,
+  type PageSize,
+  type PaginatedResult
+} from "@/lib/pagination";
 
 export const carrierFiltersSchema = z.object({
   q: z.string().optional(),
@@ -44,17 +51,17 @@ export function buildCarrierSearchWhere(
 
   const equipmentType = normalizeOptional(filters.equipmentType);
   if (equipmentType) {
-    where.equipmentTypes = { contains: equipmentType };
+    where.equipmentTypes = { contains: equipmentType, mode: "insensitive" };
   }
 
   const q = normalizeOptional(filters.q);
   if (q) {
     where.OR = [
-      { name: { contains: q } },
-      { mcNumber: { contains: q } },
-      { dotNumber: { contains: q } },
-      { email: { contains: q } },
-      { phone: { contains: q } }
+      { name: { contains: q, mode: "insensitive" } },
+      { mcNumber: { contains: q, mode: "insensitive" } },
+      { dotNumber: { contains: q, mode: "insensitive" } },
+      { email: { contains: q, mode: "insensitive" } },
+      { phone: { contains: q, mode: "insensitive" } }
     ];
   }
 
@@ -73,15 +80,52 @@ export function buildCarrierQueryString(filters: CarrierFilters) {
   return params.toString();
 }
 
-export async function searchCarriers(scope: BranchScope, filters: CarrierFilters) {
-  return prisma.carrier.findMany({
-    where: buildCarrierSearchWhere(scope, filters),
-    orderBy: { name: "asc" },
-    include: {
-      contacts: true,
-      complianceDocuments: true,
-      insuranceCoverages: true,
-      assignments: { include: { load: true } }
-    }
+export async function searchCarriers(
+  scope: BranchScope,
+  filters: CarrierFilters,
+  pagination?: { page: number; pageSize: PageSize }
+): Promise<
+  PaginatedResult<
+    Prisma.CarrierGetPayload<{
+      include: {
+        contacts: true;
+        insuranceCoverages: true;
+        _count: { select: { assignments: true; complianceDocuments: true } };
+      };
+    }> & { totalSpendCents: number }
+  >
+> {
+  const page = pagination?.page ?? 1;
+  const pageSize = pagination?.pageSize ?? DEFAULT_PAGE_SIZE;
+  const where = buildCarrierSearchWhere(scope, filters);
+  const { skip, take } = paginationSkipTake(page, pageSize);
+
+  const [rows, total] = await Promise.all([
+    prisma.carrier.findMany({
+      where,
+      orderBy: { name: "asc" },
+      include: {
+        contacts: true,
+        insuranceCoverages: true,
+        _count: { select: { assignments: true, complianceDocuments: true } }
+      },
+      skip,
+      take
+    }),
+    prisma.carrier.count({ where })
+  ]);
+
+  const spend = await prisma.dispatchAssignment.groupBy({
+    by: ["carrierId"],
+    where: { carrierId: { in: rows.map((row) => row.id) } },
+    _sum: { rateCents: true }
   });
+  const spendMap = new Map(spend.map((row) => [row.carrierId, row._sum.rateCents ?? 0]));
+
+  const items = rows.map((row) => ({
+    ...row,
+    totalSpendCents: spendMap.get(row.id) ?? 0
+  }));
+
+  return toPaginatedResult(items, total, page, pageSize);
 }

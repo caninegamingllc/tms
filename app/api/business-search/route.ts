@@ -8,26 +8,10 @@ import {
   searchPlacesByText,
   shouldUseTextSearch
 } from "@/lib/business-search";
+import { isRateLimited } from "@/lib/rate-limit";
 
 const RATE_LIMIT_WINDOW_MS = 60_000;
 const RATE_LIMIT_MAX_REQUESTS = 60;
-const requestWindows = new Map<string, number[]>();
-
-function isRateLimited(userId: string) {
-  const now = Date.now();
-  const recent = (requestWindows.get(userId) ?? []).filter(
-    (timestamp) => now - timestamp < RATE_LIMIT_WINDOW_MS
-  );
-
-  if (recent.length >= RATE_LIMIT_MAX_REQUESTS) {
-    requestWindows.set(userId, recent);
-    return true;
-  }
-
-  recent.push(now);
-  requestWindows.set(userId, recent);
-  return false;
-}
 
 export async function GET(request: NextRequest) {
   const user = await getCurrentUser();
@@ -58,7 +42,7 @@ export async function GET(request: NextRequest) {
       return NextResponse.json({ results: [] });
     }
 
-    if (isRateLimited(user.id)) {
+    if (await isRateLimited(`business-search:${user.id}`, RATE_LIMIT_MAX_REQUESTS, RATE_LIMIT_WINDOW_MS)) {
       return NextResponse.json({ results: [] });
     }
 

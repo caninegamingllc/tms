@@ -1,7 +1,9 @@
+import { Suspense } from "react";
 import { FacilityForm } from "@/components/facility-form";
 import { LocationSearchFilters } from "@/components/location-search-filters";
 import { PageHeader } from "@/components/page-header";
 import { SearchPrompt } from "@/components/search-prompt";
+import { ServerPagination } from "@/components/server-pagination";
 import { TileBoard, Tile } from "@/components/tile-board";
 import { createFacility, updateFacility } from "@/lib/actions";
 import {
@@ -10,6 +12,7 @@ import {
 } from "@/lib/location-search";
 import { getBranchScope } from "@/lib/branch-filter-server";
 import { isSearchSubmitted } from "@/lib/list-search";
+import { parsePaginationParams } from "@/lib/pagination";
 import { requireTmsAccess } from "@/lib/permissions";
 import { prisma } from "@/lib/db";
 import { formatDate, humanize } from "@/lib/format";
@@ -30,14 +33,18 @@ export default async function LocationsPage({
   const params = await searchParams;
   const { saved, ...filterParams } = params;
   const filters = parseLocationSearchParams(filterParams);
+  const pagination = parsePaginationParams(params);
   const showResults = isSearchSubmitted(params);
 
   const scope = await getBranchScope(user);
-  const [facilities, customers, layouts] = await Promise.all([
-    showResults ? searchLocations(scope, filters) : Promise.resolve([]),
+  const [facilitiesResult, customers, layouts] = await Promise.all([
+    showResults
+      ? searchLocations(scope, filters, pagination)
+      : Promise.resolve({ items: [], total: 0, page: 1, pageSize: pagination.pageSize, totalPages: 0 }),
     prisma.customer.findMany({
       where: scope,
-      orderBy: { name: "asc" }
+      orderBy: { name: "asc" },
+      select: { id: true, name: true }
     }),
     loadPageLayouts("locations")
   ]);
@@ -69,11 +76,11 @@ export default async function LocationsPage({
           {showResults ? (
             <>
               <p className="muted mb-3">
-                {facilities.length} location{facilities.length === 1 ? "" : "s"} found. Selecting a saved
-                location on a load snapshots its address onto the stop.
+                {facilitiesResult.total} location{facilitiesResult.total === 1 ? "" : "s"} found.
+                Selecting a saved location on a load snapshots its address onto the stop.
               </p>
               <div className="grid gap-4">
-                {facilities.map((facility) => (
+                {facilitiesResult.items.map((facility) => (
                   <div key={facility.id}>
                     <div className="mb-3 flex flex-wrap items-start justify-between gap-3">
                       <div>
@@ -84,7 +91,7 @@ export default async function LocationsPage({
                         </p>
                         <p className="text-xs text-muted-foreground">
                           {humanize(facility.type)} - {facility.customer?.name ?? "No customer link"} -{" "}
-                          {facility.loadStops.length} stops - Updated {formatDate(facility.updatedAt)}
+                          {facility._count.loadStops} stops - Updated {formatDate(facility.updatedAt)}
                         </p>
                       </div>
                       <span className="badge bg-slate-100 text-slate-700">{facility.status}</span>
@@ -111,6 +118,14 @@ export default async function LocationsPage({
                   </div>
                 ))}
               </div>
+              <Suspense fallback={null}>
+                <ServerPagination
+                  page={facilitiesResult.page}
+                  pageSize={facilitiesResult.pageSize}
+                  total={facilitiesResult.total}
+                  totalPages={facilitiesResult.totalPages}
+                />
+              </Suspense>
             </>
           ) : (
             <SearchPrompt entity="locations" />

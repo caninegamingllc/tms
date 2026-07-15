@@ -1,6 +1,6 @@
 # Freight Broker TMS
 
-A beginner-friendly Freight Broker Transportation Management System inspired by the broad workflow of AscendTMS. It is built as one Next.js app with a local SQLite database so you can run it on your machine before moving to a hosted database.
+A Freight Broker Transportation Management System inspired by the broad workflow of AscendTMS. It is built as a Next.js app with **PostgreSQL**, optional **S3-compatible document storage**, **Redis** (rate limits/cache), and a **background job worker** for PDF generation and mailbox sync.
 
 ## What It Includes
 
@@ -20,25 +20,31 @@ A beginner-friendly Freight Broker Transportation Management System inspired by 
 ## First-Time Setup
 
 1. Install Node.js from https://nodejs.org if you do not already have it.
-2. Install dependencies:
+2. Start local infra (Postgres + Redis + MinIO):
+
+```bash
+docker compose up -d
+```
+
+3. Copy `.env.example` to `.env` (defaults point at local Postgres from compose).
+4. Install dependencies and migrate/seed:
 
 ```bash
 npm install
-```
-
-3. Create and seed the local database:
-
-```bash
 npm run setup
 ```
 
-4. Start the app:
+5. Start the app (and optionally the worker):
 
 ```bash
 npm run dev
+# in another terminal:
+npm run worker
 ```
 
-5. Open http://localhost:3000.
+For production cutover from a legacy SQLite file, see `scripts/migrate-sqlite-to-postgres.ts` and `scripts/migrate-uploads-to-s3.ts`.
+
+6. Open http://localhost:3000.
 
 ## Development Login
 

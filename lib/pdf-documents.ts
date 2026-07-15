@@ -1,8 +1,7 @@
-import { readFile } from "fs/promises";
 import { jsPDF } from "jspdf";
 import autoTable from "jspdf-autotable";
 import { formatMoney } from "@/lib/format";
-import { getAbsolutePath } from "@/lib/document-storage";
+import { readStoredFile } from "@/lib/document-storage";
 import type { StructuredDocument } from "@/lib/document-templates";
 import { generateBillOfLadingPdf } from "@/lib/pdf-bol";
 
@@ -20,7 +19,7 @@ async function loadLogoData(doc: StructuredDocument) {
   }
 
   try {
-    const buffer = await readFile(getAbsolutePath(doc.company.logoFilePath));
+    const buffer = await readStoredFile(doc.company.logoFilePath);
     const base64 = buffer.toString("base64");
     const format = doc.company.logoMimeType.includes("png")
       ? "PNG"
@@ -260,7 +259,7 @@ export async function generateDocumentPdf(doc: StructuredDocument): Promise<Buff
     pdf.setFontSize(8);
     for (const term of doc.terms) {
       y = ensureSpace(pdf, y, 10);
-      const wrapped = pdf.splitTextToSize(`â€¢ ${term}`, contentWidth);
+      const wrapped = pdf.splitTextToSize(` ${term}`, contentWidth);
       pdf.text(wrapped, 14, y);
       y += wrapped.length * 4 + 2;
     }
@@ -294,7 +293,7 @@ export async function logoDataUrlForCompany(logoFilePath?: string | null, logoMi
     return null;
   }
   try {
-    const buffer = await readFile(getAbsolutePath(logoFilePath));
+    const buffer = await readStoredFile(logoFilePath);
     return `data:${logoMimeType};base64,${buffer.toString("base64")}`;
   } catch {
     return null;

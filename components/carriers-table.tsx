@@ -19,11 +19,18 @@ export type CarrierTableRow = {
   totalSpendCents: number;
 };
 
-export function CarriersTable({ carriers }: { carriers: CarrierTableRow[] }) {
+export function CarriersTable({
+  carriers,
+  paginated = true
+}: {
+  carriers: CarrierTableRow[];
+  paginated?: boolean;
+}) {
   return (
     <SortableTable
       tableId="carriers"
       data={carriers}
+      paginated={paginated}
       keyExtractor={(carrier) => carrier.id}
       getRowHref={(carrier) => `/carriers/${carrier.id}`}
       defaultSort={{ columnId: "carrier", direction: "asc" }}

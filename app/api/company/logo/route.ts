@@ -1,8 +1,7 @@
-import { readFile } from "fs/promises";
 import { NextResponse } from "next/server";
 import { requireTmsAccess } from "@/lib/permissions";
 import { prisma } from "@/lib/db";
-import { getAbsolutePath } from "@/lib/document-storage";
+import { readStoredFile } from "@/lib/document-storage";
 
 export async function GET() {
   const user = await requireTmsAccess();
@@ -19,8 +18,8 @@ export async function GET() {
     return new NextResponse("Logo not found", { status: 404 });
   }
 
-  const buffer = await readFile(getAbsolutePath(company.logoFilePath));
-  return new NextResponse(buffer, {
+  const buffer = await readStoredFile(company.logoFilePath);
+  return new NextResponse(new Uint8Array(buffer), {
     headers: {
       "Content-Type": company.logoMimeType,
       "Content-Disposition": `inline; filename="${company.logoOriginalFileName ?? "logo"}"`,

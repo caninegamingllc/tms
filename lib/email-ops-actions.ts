@@ -1,6 +1,6 @@
 "use server";
 
-import { readFile } from "fs/promises";
+import { readStoredFile } from "@/lib/document-storage";
 import { revalidatePath } from "next/cache";
 import { redirect } from "next/navigation";
 import { prisma } from "@/lib/db";
@@ -21,10 +21,10 @@ import {
   structuredDocumentForType
 } from "@/lib/document-generate";
 import { parseDocumentTypes } from "@/lib/document-types";
-import { getAbsolutePath } from "@/lib/document-storage";
 import { type MailAttachment, sendViaUserMailbox } from "@/lib/mail/user-mailbox";
 import { generateDocumentPdf, pdfFilenameForDocument } from "@/lib/pdf-documents";
 import { dueDateFromTerms } from "@/lib/accounting-aging";
+import { enqueueJob } from "@/lib/jobs";
 
 export type EmailPurpose =
   | "CARRIER_RATE_CONFIRMATION"
@@ -255,7 +255,7 @@ async function attachmentFromDocument(document: {
   if (!document.filePath) {
     return null;
   }
-  const content = await readFile(getAbsolutePath(document.filePath));
+  const content = await readStoredFile(document.filePath);
   return {
     filename:
       document.originalFileName ||
@@ -592,13 +592,6 @@ export async function generateCustomerLoadConfirmation(formData: FormData) {
   const load = await loadForEmail(loadId, user);
   const documentNumber = await nextDocumentNumber(user.companyId, "CLC");
   const company = await getCompanyBranding(user.companyId);
-  const structured = structuredDocumentForType(
-    "CUSTOMER_LOAD_CONFIRMATION",
-    load,
-    documentNumber,
-    company
-  );
-  const pdf = await persistGeneratedPdf(user.companyId, structured);
 
   const document = await prisma.loadDocument.create({
     data: {
@@ -614,20 +607,24 @@ export async function generateCustomerLoadConfirmation(formData: FormData) {
         documentNumber,
         company
       ),
-      generatedAt: new Date(),
-      filePath: pdf.storedPath,
-      mimeType: pdf.mimeType,
-      originalFileName: pdf.originalFileName,
-      fileSizeBytes: pdf.fileSizeBytes,
+      status: "PROCESSING",
       notes: "Generated customer load confirmation."
     }
+  });
+
+  await enqueueJob("GENERATE_PDF", {
+    companyId: user.companyId,
+    loadId: load.id,
+    documentId: document.id,
+    type: "CUSTOMER_LOAD_CONFIRMATION",
+    documentNumber
   });
 
   await prisma.loadActivity.create({
     data: {
       loadId,
       userId: user.id,
-      action: "Customer load confirmation generated",
+      action: "Customer load confirmation queued",
       details: documentNumber
     }
   });
@@ -641,7 +638,6 @@ export async function syncLoadEmails(formData: FormData) {
   const user = await requireWriteUser();
   const loadId = String(formData.get("loadId") ?? "").trim();
   await loadForEmail(loadId, user);
-  const { syncMailboxThreadsForUser } = await import("@/lib/mail/user-mailbox");
-  await syncMailboxThreadsForUser(user.id, user.companyId);
+  await enqueueJob("SYNC_MAILBOX", { userId: user.id, companyId: user.companyId });
   revalidatePath(`/loads/${loadId}`);
 }

@@ -186,16 +186,22 @@ export default async function AccountingPage({
       })
     : new Map();
 
-  const openAr = invoices
-    .filter((invoice) => invoice.status !== "VOID")
-    .reduce((sum, invoice) => sum + invoice.balanceCents, 0);
-  const openAp = carrierBills
-    .filter((bill) => bill.status !== "VOID")
-    .reduce((sum, bill) => sum + bill.balanceCents, 0);
-  const grossMargin = loads.reduce(
-    (sum, load) => sum + load.revenueCents - load.carrierCostCents,
-    0
-  );
+  const openArAgg = await prisma.invoice.aggregate({
+    where: { companyId: user.companyId, load: loadScope, status: { not: "VOID" } },
+    _sum: { balanceCents: true }
+  });
+  const openApAgg = await prisma.carrierBill.aggregate({
+    where: { companyId: user.companyId, load: loadScope, status: { not: "VOID" } },
+    _sum: { balanceCents: true }
+  });
+  const loadMoneyAgg = await prisma.load.aggregate({
+    where: loadScope,
+    _sum: { revenueCents: true, carrierCostCents: true }
+  });
+  const openAr = openArAgg._sum.balanceCents ?? 0;
+  const openAp = openApAgg._sum.balanceCents ?? 0;
+  const grossMargin =
+    (loadMoneyAgg._sum.revenueCents ?? 0) - (loadMoneyAgg._sum.carrierCostCents ?? 0);
 
   const qboConnected = qboAccount?.status === "Connected";
   const method: QuickbooksMethod = quickbooksMethod;

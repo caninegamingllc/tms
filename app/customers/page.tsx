@@ -1,8 +1,10 @@
+import { Suspense } from "react";
 import { CustomerForm } from "@/components/customer-form";
 import { CustomerSearchFilters } from "@/components/customer-search-filters";
 import { CustomersTable } from "@/components/customers-table";
 import { PageHeader } from "@/components/page-header";
 import { SearchPrompt } from "@/components/search-prompt";
+import { ServerPagination } from "@/components/server-pagination";
 import { TileBoard, Tile } from "@/components/tile-board";
 import { createCustomer } from "@/lib/actions";
 import {
@@ -11,6 +13,7 @@ import {
 } from "@/lib/customer-search";
 import { getBranchScope } from "@/lib/branch-filter-server";
 import { isSearchSubmitted } from "@/lib/list-search";
+import { parsePaginationParams } from "@/lib/pagination";
 import { requireTmsAccess } from "@/lib/permissions";
 import { canPickBranch, isAdminRole } from "@/lib/scope";
 import { prisma } from "@/lib/db";
@@ -31,11 +34,14 @@ export default async function CustomersPage({
   const params = await searchParams;
   const { saved, ...filterParams } = params;
   const filters = parseCustomerSearchParams(filterParams);
+  const pagination = parsePaginationParams(params);
   const showResults = isSearchSubmitted(params);
 
   const scope = await getBranchScope(user);
-  const [customers, branches, layouts] = await Promise.all([
-    showResults ? searchCustomers(scope, filters) : Promise.resolve([]),
+  const [customersResult, branches, layouts] = await Promise.all([
+    showResults
+      ? searchCustomers(scope, filters, pagination)
+      : Promise.resolve({ items: [], total: 0, page: 1, pageSize: pagination.pageSize, totalPages: 0 }),
     canPickBranch(user)
       ? prisma.branch.findMany({
           where: {
@@ -48,10 +54,7 @@ export default async function CustomersPage({
     loadPageLayouts("customers")
   ]);
 
-  const rows = customers.map((customer) => {
-    const openAr = customer.invoices
-      .filter((invoice) => invoice.status !== "PAID" && invoice.status !== "VOID")
-      .reduce((sum, invoice) => sum + invoice.totalCents, 0);
+  const rows = customersResult.items.map((customer) => {
     const primary = customer.contacts.find((contact) => contact.isPrimary);
 
     return {
@@ -64,8 +67,8 @@ export default async function CustomersPage({
       contactEmail: primary?.email ?? customer.email ?? "No email",
       paymentTerms: customer.paymentTerms,
       creditLimit: customer.creditLimit,
-      loadCount: customer.loads.length,
-      openArCents: openAr
+      loadCount: customer._count.loads,
+      openArCents: customer.openArCents
     };
   });
 
@@ -91,12 +94,20 @@ export default async function CustomersPage({
           {showResults ? (
             <>
               <p className="muted mb-3">
-                {customers.length} customer{customers.length === 1 ? "" : "s"} found. Click column headers
-                to sort.
+                {customersResult.total} customer{customersResult.total === 1 ? "" : "s"} found. Click
+                column headers to sort this page.
               </p>
               <div className="overflow-x-auto">
-                <CustomersTable customers={rows} />
+                <CustomersTable customers={rows} paginated={false} />
               </div>
+              <Suspense fallback={null}>
+                <ServerPagination
+                  page={customersResult.page}
+                  pageSize={customersResult.pageSize}
+                  total={customersResult.total}
+                  totalPages={customersResult.totalPages}
+                />
+              </Suspense>
             </>
           ) : (
             <SearchPrompt entity="customers" />

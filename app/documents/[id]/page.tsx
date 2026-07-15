@@ -125,6 +125,18 @@ export default async function DocumentDetailPage({ params }: { params: Promise<{
                 {document.generatedContent}
               </pre>
             </article>
+          ) : document.status === "PROCESSING" ? (
+            <div className="p-8">
+              <p className="font-semibold text-foreground">Generating PDF…</p>
+              <p className="mt-2 text-sm text-muted-foreground">
+                This document is queued for background PDF generation. Refresh in a moment.
+              </p>
+              {document.generatedContent ? (
+                <pre className="mt-6 whitespace-pre-wrap font-sans text-sm leading-7 text-foreground">
+                  {document.generatedContent}
+                </pre>
+              ) : null}
+            </div>
           ) : (
             <div className="p-8">
               <p className="font-semibold text-foreground">No preview available</p>

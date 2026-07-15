@@ -3,6 +3,13 @@ import type { Prisma } from "@prisma/client";
 import type { BranchScope } from "@/lib/scope";
 import { facilityTypes } from "@/lib/constants";
 import { prisma } from "@/lib/db";
+import {
+  DEFAULT_PAGE_SIZE,
+  paginationSkipTake,
+  toPaginatedResult,
+  type PageSize,
+  type PaginatedResult
+} from "@/lib/pagination";
 
 export const locationFiltersSchema = z.object({
   q: z.string().optional(),
@@ -51,11 +58,11 @@ export function buildLocationSearchWhere(
   const q = normalizeOptional(filters.q);
   if (q) {
     where.OR = [
-      { name: { contains: q } },
-      { city: { contains: q } },
-      { state: { contains: q } },
-      { address: { contains: q } },
-      { postalCode: { contains: q } }
+      { name: { contains: q, mode: "insensitive" } },
+      { city: { contains: q, mode: "insensitive" } },
+      { state: { contains: q, mode: "insensitive" } },
+      { address: { contains: q, mode: "insensitive" } },
+      { postalCode: { contains: q, mode: "insensitive" } }
     ];
   }
 
@@ -74,10 +81,38 @@ export function buildLocationQueryString(filters: LocationFilters) {
   return params.toString();
 }
 
-export async function searchLocations(scope: BranchScope, filters: LocationFilters) {
-  return prisma.facility.findMany({
-    where: buildLocationSearchWhere(scope, filters),
-    orderBy: [{ name: "asc" }, { city: "asc" }],
-    include: { customer: true, loadStops: true }
-  });
+export async function searchLocations(
+  scope: BranchScope,
+  filters: LocationFilters,
+  pagination?: { page: number; pageSize: PageSize }
+): Promise<
+  PaginatedResult<
+    Prisma.FacilityGetPayload<{
+      include: {
+        customer: true;
+        _count: { select: { loadStops: true } };
+      };
+    }>
+  >
+> {
+  const page = pagination?.page ?? 1;
+  const pageSize = pagination?.pageSize ?? DEFAULT_PAGE_SIZE;
+  const where = buildLocationSearchWhere(scope, filters);
+  const { skip, take } = paginationSkipTake(page, pageSize);
+
+  const [items, total] = await Promise.all([
+    prisma.facility.findMany({
+      where,
+      orderBy: [{ name: "asc" }, { city: "asc" }],
+      include: {
+        customer: true,
+        _count: { select: { loadStops: true } }
+      },
+      skip,
+      take
+    }),
+    prisma.facility.count({ where })
+  ]);
+
+  return toPaginatedResult(items, total, page, pageSize);
 }

@@ -163,11 +163,41 @@ function mergeBusinessWithAddress(
   };
 }
 
+import { cacheGetJson, cacheSetJson } from "@/lib/cache";
+
 const SEARCH_LIMIT = 8;
 const CACHE_TTL_MS = 5 * 60 * 1000;
 const autocompleteCache = new Map<string, { expiresAt: number; results: BusinessSearchResult[] }>();
 const textSearchCache = new Map<string, { expiresAt: number; results: BusinessSearchResult[] }>();
 const detailsCache = new Map<string, { expiresAt: number; result: BusinessSearchResult }>();
+
+async function getCachedResults(key: string) {
+  const remote = await cacheGetJson<BusinessSearchResult[]>(key);
+  if (remote) return remote;
+  const local = textSearchCache.get(key) ?? autocompleteCache.get(key);
+  if (local && local.expiresAt > Date.now()) return local.results;
+  return null;
+}
+
+async function setCachedResults(key: string, results: BusinessSearchResult[], store: "text" | "auto") {
+  const entry = { results, expiresAt: Date.now() + CACHE_TTL_MS };
+  if (store === "text") textSearchCache.set(key, entry);
+  else autocompleteCache.set(key, entry);
+  await cacheSetJson(key, results, CACHE_TTL_MS);
+}
+
+async function getCachedDetail(key: string) {
+  const remote = await cacheGetJson<BusinessSearchResult>(key);
+  if (remote) return remote;
+  const local = detailsCache.get(key);
+  if (local && local.expiresAt > Date.now()) return local.result;
+  return null;
+}
+
+async function setCachedDetail(key: string, result: BusinessSearchResult) {
+  detailsCache.set(key, { result, expiresAt: Date.now() + CACHE_TTL_MS });
+  await cacheSetJson(key, result, CACHE_TTL_MS);
+}
 
 export function shouldUseTextSearch(query: string, field: "name" | "address") {
   const trimmed = query.trim();
@@ -327,10 +357,9 @@ export async function searchPlacesByText(query: string) {
   }
 
   const cacheKey = `text:${normalizedQuery}`;
-  const now = Date.now();
-  const cached = textSearchCache.get(cacheKey);
-  if (cached && cached.expiresAt > now) {
-    return cached.results;
+  const cached = await getCachedResults(cacheKey);
+  if (cached) {
+    return cached;
   }
 
   const payload = await googlePlacesRequest<GoogleTextSearchResponse>(
@@ -353,16 +382,15 @@ export async function searchPlacesByText(query: string) {
     .filter((result): result is BusinessSearchResult => Boolean(result))
     .slice(0, SEARCH_LIMIT);
 
-  textSearchCache.set(cacheKey, { results, expiresAt: now + CACHE_TTL_MS });
+  await setCachedResults(cacheKey, results, "text");
   return results;
 }
 
 async function searchNearbyEstablishments(latitude: number, longitude: number) {
   const cacheKey = `nearby:${latitude.toFixed(5)}:${longitude.toFixed(5)}`;
-  const now = Date.now();
-  const cached = textSearchCache.get(cacheKey);
-  if (cached && cached.expiresAt > now) {
-    return cached.results;
+  const cached = await getCachedResults(cacheKey);
+  if (cached) {
+    return cached;
   }
 
   const payload = await googlePlacesRequest<GoogleTextSearchResponse>(
@@ -390,7 +418,7 @@ async function searchNearbyEstablishments(latitude: number, longitude: number) {
     .filter((result): result is BusinessSearchResult => Boolean(result))
     .slice(0, SEARCH_LIMIT);
 
-  textSearchCache.set(cacheKey, { results, expiresAt: now + CACHE_TTL_MS });
+  await setCachedResults(cacheKey, results, "text");
   return results;
 }
 
@@ -434,10 +462,9 @@ export async function resolvePlaceForFacility(placeId: string, sessionToken?: st
   }
 
   const cacheKey = `facility:${normalizedPlaceId}:${sessionToken ?? "default"}`;
-  const now = Date.now();
-  const cached = detailsCache.get(cacheKey);
-  if (cached && cached.expiresAt > now) {
-    return cached.result;
+  const cached = await getCachedDetail(cacheKey);
+  if (cached) {
+    return cached;
   }
 
   const encodedPlaceId = encodeURIComponent(normalizedPlaceId);
@@ -461,7 +488,7 @@ export async function resolvePlaceForFacility(placeId: string, sessionToken?: st
     Boolean(addressResult.phone) || isBusinessPlace(payload.types, payload.primaryType);
 
   if (hasBusinessIdentity && !looksLikeStreetAddress(addressResult.name, addressResult.address)) {
-    detailsCache.set(cacheKey, { result: addressResult, expiresAt: now + CACHE_TTL_MS });
+    await setCachedDetail(cacheKey, addressResult);
     return addressResult;
   }
 
@@ -475,7 +502,7 @@ export async function resolvePlaceForFacility(placeId: string, sessionToken?: st
 
     if (matchedBusiness) {
       const resolved = mergeBusinessWithAddress(matchedBusiness, addressResult);
-      detailsCache.set(cacheKey, { result: resolved, expiresAt: now + CACHE_TTL_MS });
+      await setCachedDetail(cacheKey, resolved);
       return resolved;
     }
   }
@@ -502,12 +529,12 @@ export async function resolvePlaceForFacility(placeId: string, sessionToken?: st
 
     if (matchedBusiness) {
       const resolved = mergeBusinessWithAddress(matchedBusiness, addressResult);
-      detailsCache.set(cacheKey, { result: resolved, expiresAt: now + CACHE_TTL_MS });
+      await setCachedDetail(cacheKey, resolved);
       return resolved;
     }
   }
 
-  detailsCache.set(cacheKey, { result: addressResult, expiresAt: now + CACHE_TTL_MS });
+  await setCachedDetail(cacheKey, addressResult);
   return addressResult;
 }
 
@@ -518,10 +545,9 @@ export async function searchAddresses(query: string, sessionToken?: string) {
   }
 
   const cacheKey = `place:${normalizedQuery}:${sessionToken ?? "default"}`;
-  const now = Date.now();
-  const cached = autocompleteCache.get(cacheKey);
-  if (cached && cached.expiresAt > now) {
-    return cached.results;
+  const cached = await getCachedResults(cacheKey);
+  if (cached) {
+    return cached;
   }
 
   const payload = await googlePlacesRequest<GoogleAutocompleteResponse>(
@@ -544,7 +570,7 @@ export async function searchAddresses(query: string, sessionToken?: string) {
     .filter((result): result is BusinessSearchResult => Boolean(result))
     .slice(0, SEARCH_LIMIT);
 
-  autocompleteCache.set(cacheKey, { results, expiresAt: now + CACHE_TTL_MS });
+  await setCachedResults(cacheKey, results, "auto");
   return results;
 }
 
@@ -589,10 +615,9 @@ export async function searchBusinesses(query: string, sessionToken?: string) {
   }
 
   const cacheKey = `${normalizedQuery}:${sessionToken ?? "default"}`;
-  const now = Date.now();
-  const cached = autocompleteCache.get(cacheKey);
-  if (cached && cached.expiresAt > now) {
-    return cached.results;
+  const cached = await getCachedResults(cacheKey);
+  if (cached) {
+    return cached;
   }
 
   const payload = await googlePlacesRequest<GoogleAutocompleteResponse>(
@@ -615,7 +640,7 @@ export async function searchBusinesses(query: string, sessionToken?: string) {
     .filter((result): result is BusinessSearchResult => Boolean(result))
     .slice(0, SEARCH_LIMIT);
 
-  autocompleteCache.set(cacheKey, { results, expiresAt: now + CACHE_TTL_MS });
+  await setCachedResults(cacheKey, results, "auto");
   return results;
 }
 
@@ -630,10 +655,9 @@ export async function getBusinessDetails(
   }
 
   const cacheKey = `${normalizedPlaceId}:${sessionToken ?? "default"}`;
-  const now = Date.now();
-  const cached = detailsCache.get(cacheKey);
-  if (cached && cached.expiresAt > now) {
-    return cached.result;
+  const cached = await getCachedDetail(cacheKey);
+  if (cached) {
+    return cached;
   }
 
   const encodedPlaceId = encodeURIComponent(normalizedPlaceId);
@@ -653,6 +677,6 @@ export async function getBusinessDetails(
 
   const result = mapPlaceDetails(normalizedPlaceId, payload, fallbackName);
 
-  detailsCache.set(cacheKey, { result, expiresAt: now + CACHE_TTL_MS });
+  await setCachedDetail(cacheKey, result);
   return result;
 }

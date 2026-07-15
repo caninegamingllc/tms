@@ -3,7 +3,7 @@ generator client {
 }
 
 datasource db {
-  provider = "sqlite"
+  provider = "postgresql"
   url      = env("DATABASE_URL")
 }
 
@@ -919,4 +919,24 @@ model AccountingExport {
   @@unique([entityType, entityId, method])
   @@index([companyId, method])
   @@index([companyId, entityType, entityId])
+}
+
+/// Durable background jobs (PDF generation, mailbox sync, etc.).
+model BackgroundJob {
+  id          String    @id @default(cuid())
+  type        String
+  payloadJson String
+  status      String    @default("PENDING")
+  attempts    Int       @default(0)
+  maxAttempts Int       @default(5)
+  availableAt DateTime  @default(now())
+  lockedAt    DateTime?
+  lockedBy    String?
+  lastError   String?
+  createdAt   DateTime  @default(now())
+  updatedAt   DateTime  @updatedAt
+  completedAt DateTime?
+
+  @@index([status, availableAt])
+  @@index([type, status])
 }

@@ -124,11 +124,14 @@ const baseColumns: SortableColumn<SerializedSearchLoad>[] = [
 export function LoadSearchResults({
   loads,
   companyName,
-  filterSummary
+  filterSummary,
+  serverTotal
 }: {
   loads: SerializedSearchLoad[];
   companyName: string;
   filterSummary: string;
+  /** When set, this page of loads is already server-paginated — skip client paging. */
+  serverTotal?: number;
 }) {
   const router = useRouter();
   const [selectedIds, setSelectedIds] = useState<Set<string>>(() => new Set(loads.map((load) => load.id)));
@@ -140,8 +143,10 @@ export function LoadSearchResults({
     columnId: "pickup",
     direction: "desc"
   });
-  const pagination = useClientPagination(sortedData, loads);
-  const pageRows = pagination.pageRows;
+  const clientPagination = useClientPagination(sortedData, loads);
+  const useServerPaging = typeof serverTotal === "number";
+  const pageRows = useServerPaging ? sortedData : clientPagination.pageRows;
+  const displayTotal = useServerPaging ? serverTotal : loads.length;
   const pageIds = pageRows.map((load) => load.id);
 
   const allPageSelected = pageIds.length > 0 && pageIds.every((id) => selectedIds.has(id));
@@ -210,7 +215,8 @@ export function LoadSearchResults({
     <div>
       <div className="mb-3 flex flex-wrap items-center justify-between gap-3">
         <p className="muted">
-          {selectedLoads.length} of {loads.length} loads selected
+          {selectedLoads.length} of {displayTotal} loads selected
+          {useServerPaging ? " on this page / matching filters" : ""}
         </p>
         <div className="flex flex-wrap items-center gap-2">
           <ColumnLayoutControls
@@ -286,16 +292,18 @@ export function LoadSearchResults({
           </tbody>
         </table>
       </div>
-      <TablePagination
-        page={pagination.page}
-        pageSize={pagination.pageSize}
-        total={pagination.total}
-        totalPages={pagination.totalPages}
-        start={pagination.start}
-        end={pagination.end}
-        onPageChange={pagination.setPage}
-        onPageSizeChange={pagination.setPageSize}
-      />
+      {!useServerPaging ? (
+        <TablePagination
+          page={clientPagination.page}
+          pageSize={clientPagination.pageSize}
+          total={clientPagination.total}
+          totalPages={clientPagination.totalPages}
+          start={clientPagination.start}
+          end={clientPagination.end}
+          onPageChange={clientPagination.setPage}
+          onPageSizeChange={clientPagination.setPageSize}
+        />
+      ) : null}
     </div>
   );
 }

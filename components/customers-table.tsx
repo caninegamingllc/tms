@@ -18,11 +18,18 @@ export type CustomerTableRow = {
   openArCents: number;
 };
 
-export function CustomersTable({ customers }: { customers: CustomerTableRow[] }) {
+export function CustomersTable({
+  customers,
+  paginated = true
+}: {
+  customers: CustomerTableRow[];
+  paginated?: boolean;
+}) {
   return (
     <SortableTable
       tableId="customers"
       data={customers}
+      paginated={paginated}
       keyExtractor={(customer) => customer.id}
       getRowHref={(customer) => `/customers/${customer.id}`}
       defaultSort={{ columnId: "name", direction: "asc" }}

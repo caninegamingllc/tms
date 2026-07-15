@@ -10,18 +10,20 @@ import {
   SearchViewToggle
 } from "@/components/revenue-report-panel";
 import { SearchPrompt } from "@/components/search-prompt";
+import { ServerPagination } from "@/components/server-pagination";
 import { TileBoard, Tile } from "@/components/tile-board";
 import { getBranchScope } from "@/lib/branch-filter-server";
 import { requireTmsAccess } from "@/lib/permissions";
 import { isSearchSubmitted } from "@/lib/list-search";
 import {
-  buildRevenueSummary,
   describeActiveFilters,
   getLoadSearchOptions,
+  getRevenueSummary,
   parseLoadSearchParams,
   searchLoads,
   serializeSearchLoads
 } from "@/lib/load-search";
+import { parsePaginationParams } from "@/lib/pagination";
 import { SEARCH_PAGE_TILES } from "@/lib/tile-defaults";
 import { loadPageLayouts } from "@/lib/ui-preferences-load";
 
@@ -33,22 +35,25 @@ export default async function SearchPage({ searchParams }: SearchPageProps) {
   const user = await requireTmsAccess();
   const resolvedSearchParams = await searchParams;
   const filters = parseLoadSearchParams(resolvedSearchParams);
+  const pagination = parsePaginationParams(resolvedSearchParams);
   const view = filters.view ?? "loads";
   const showResults = isSearchSubmitted(resolvedSearchParams);
 
   const scope = await getBranchScope(user);
-  const [loads, options, layouts] = await Promise.all([
-    showResults ? searchLoads(scope, filters) : Promise.resolve([]),
+  const [loadsResult, options, layouts, revenueSummary] = await Promise.all([
+    showResults && view === "loads"
+      ? searchLoads(scope, filters, pagination)
+      : Promise.resolve({ items: [], total: 0, page: 1, pageSize: pagination.pageSize, totalPages: 0 }),
     getLoadSearchOptions(scope),
-    loadPageLayouts("search")
+    loadPageLayouts("search"),
+    showResults && view === "revenue" ? getRevenueSummary(scope, filters) : Promise.resolve(null)
   ]);
 
   const customerName = filters.customerId
     ? options.customers.find((customer) => customer.id === filters.customerId)?.name
     : undefined;
   const filterSummary = describeActiveFilters(filters, customerName);
-  const serializedLoads = serializeSearchLoads(loads);
-  const revenueSummary = buildRevenueSummary(loads);
+  const serializedLoads = serializeSearchLoads(loadsResult.items);
 
   return (
     <>
@@ -85,11 +90,20 @@ export default async function SearchPage({ searchParams }: SearchPageProps) {
               loads={serializedLoads}
               companyName={user.companyName}
               filterSummary={filterSummary}
+              serverTotal={loadsResult.total}
             />
+            <Suspense fallback={null}>
+              <ServerPagination
+                page={loadsResult.page}
+                pageSize={loadsResult.pageSize}
+                total={loadsResult.total}
+                totalPages={loadsResult.totalPages}
+              />
+            </Suspense>
           </Tile>
         ) : null}
 
-        {showResults && view === "revenue" ? (
+        {showResults && view === "revenue" && revenueSummary ? (
           <>
             <Tile id="load-profitability">
               <div className="grid gap-4">

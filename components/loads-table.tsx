@@ -26,11 +26,18 @@ export type LoadTableRow = {
   } | null;
 };
 
-export function LoadsTable({ loads }: { loads: LoadTableRow[] }) {
+export function LoadsTable({
+  loads,
+  paginated = true
+}: {
+  loads: LoadTableRow[];
+  paginated?: boolean;
+}) {
   return (
     <SortableTable
       tableId="loads"
       data={loads}
+      paginated={paginated}
       keyExtractor={(load) => load.id}
       getRowHref={(load) => `/loads/${load.id}`}
       defaultSort={{ columnId: "pickup", direction: "desc" }}

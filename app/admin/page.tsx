@@ -49,9 +49,9 @@ export default async function AdminPage({
         include: {
           memberships: true,
           membershipBranches: true,
-          customers: true,
-          carriers: true,
-          loads: true
+          _count: {
+            select: { customers: true, carriers: true, loads: true }
+          }
         }
       }),
       prisma.auditLog.findMany({
@@ -137,10 +137,10 @@ export default async function AdminPage({
       ...branch.memberships.map((membership) => membership.id),
       ...branch.membershipBranches.map((row) => row.membershipId)
     ]).size,
-    customerCount: branch.customers.length,
-    carrierCount: branch.carriers.length,
-    loadCount: branch.loads.length,
-    canDelete: branch.loads.length === 0 && branch.customers.length === 0
+    customerCount: branch._count.customers,
+    carrierCount: branch._count.carriers,
+    loadCount: branch._count.loads,
+    canDelete: branch._count.loads === 0 && branch._count.customers === 0
   }));
 
   const tabs = [

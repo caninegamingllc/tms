@@ -3,26 +3,10 @@ import { getCurrentUser } from "@/lib/auth";
 import { prisma } from "@/lib/db";
 import { getLoadRoute } from "@/lib/load-route";
 import { canAccessRecord } from "@/lib/branch-filter-server";
+import { isRateLimited } from "@/lib/rate-limit";
 
 const RATE_LIMIT_WINDOW_MS = 60_000;
 const RATE_LIMIT_MAX_REQUESTS = 20;
-const requestWindows = new Map<string, number[]>();
-
-function isRateLimited(userId: string) {
-  const now = Date.now();
-  const recent = (requestWindows.get(userId) ?? []).filter(
-    (timestamp) => now - timestamp < RATE_LIMIT_WINDOW_MS
-  );
-
-  if (recent.length >= RATE_LIMIT_MAX_REQUESTS) {
-    requestWindows.set(userId, recent);
-    return true;
-  }
-
-  recent.push(now);
-  requestWindows.set(userId, recent);
-  return false;
-}
 
 export async function GET(
   request: NextRequest,
@@ -43,7 +27,7 @@ export async function GET(
     return NextResponse.json({ error: "Load not found." }, { status: 404 });
   }
 
-  if (isRateLimited(user.id)) {
+  if (await isRateLimited(`load-route:${user.id}`, RATE_LIMIT_MAX_REQUESTS, RATE_LIMIT_WINDOW_MS)) {
     return NextResponse.json({ error: "Too many route requests. Try again shortly." }, { status: 429 });
   }
 

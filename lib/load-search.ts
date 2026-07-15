@@ -2,6 +2,13 @@ import { z } from "zod";
 import { prisma } from "@/lib/db";
 import type { BranchScope } from "@/lib/scope";
 import type { Prisma } from "@prisma/client";
+import {
+  DEFAULT_PAGE_SIZE,
+  paginationSkipTake,
+  toPaginatedResult,
+  type PageSize,
+  type PaginatedResult
+} from "@/lib/pagination";
 
 export const loadSearchViewSchema = z.enum(["loads", "revenue"]);
 export type LoadSearchView = z.infer<typeof loadSearchViewSchema>;
@@ -22,7 +29,7 @@ export const loadSearchFiltersSchema = z.object({
 
 export type LoadSearchFilters = z.infer<typeof loadSearchFiltersSchema>;
 
-export type SearchLoadResult = Awaited<ReturnType<typeof searchLoads>>[number];
+export type SearchLoadResult = Awaited<ReturnType<typeof searchLoads>>["items"][number];
 
 function startOfDay(dateStr: string) {
   const date = new Date(`${dateStr}T00:00:00`);
@@ -69,7 +76,7 @@ export function buildLoadSearchWhere(
 
   const loadNumber = normalizeOptional(filters.loadNumber);
   if (loadNumber) {
-    where.loadNumber = { contains: loadNumber };
+    where.loadNumber = { contains: loadNumber, mode: "insensitive" };
   }
 
   const dateFrom = normalizeOptional(filters.dateFrom);
@@ -98,7 +105,7 @@ export function buildLoadSearchWhere(
 
   const originCity = normalizeOptional(filters.originCity);
   if (originCity) {
-    where.pickupCity = { contains: originCity };
+    where.pickupCity = { contains: originCity, mode: "insensitive" };
   }
 
   const originState = normalizeOptional(filters.originState)?.toUpperCase();
@@ -108,7 +115,7 @@ export function buildLoadSearchWhere(
 
   const destCity = normalizeOptional(filters.destCity);
   if (destCity) {
-    where.deliveryCity = { contains: destCity };
+    where.deliveryCity = { contains: destCity, mode: "insensitive" };
   }
 
   const destState = normalizeOptional(filters.destState)?.toUpperCase();
@@ -190,16 +197,38 @@ export function describeActiveFilters(filters: LoadSearchFilters, customerName?:
   return parts.length ? parts.join(" · ") : "All loads";
 }
 
-export async function searchLoads(scope: BranchScope, filters: LoadSearchFilters) {
-  return prisma.load.findMany({
-    where: buildLoadSearchWhere(scope, filters),
-    orderBy: [{ pickupDate: "desc" }, { loadNumber: "desc" }],
-    include: {
-      customer: true,
-      dispatchAssignment: { include: { carrier: true } },
-      commission: true
-    }
-  });
+export async function searchLoads(
+  scope: BranchScope,
+  filters: LoadSearchFilters,
+  pagination?: { page: number; pageSize: PageSize }
+): Promise<PaginatedResult<Prisma.LoadGetPayload<{
+  include: {
+    customer: true;
+    dispatchAssignment: { include: { carrier: true } };
+    commission: true;
+  };
+}>>> {
+  const page = pagination?.page ?? 1;
+  const pageSize = pagination?.pageSize ?? DEFAULT_PAGE_SIZE;
+  const where = buildLoadSearchWhere(scope, filters);
+  const { skip, take } = paginationSkipTake(page, pageSize);
+
+  const [items, total] = await Promise.all([
+    prisma.load.findMany({
+      where,
+      orderBy: [{ pickupDate: "desc" }, { loadNumber: "desc" }],
+      include: {
+        customer: true,
+        dispatchAssignment: { include: { carrier: true } },
+        commission: true
+      },
+      skip,
+      take
+    }),
+    prisma.load.count({ where })
+  ]);
+
+  return toPaginatedResult(items, total, page, pageSize);
 }
 
 export async function getLoadSearchOptions(scope: BranchScope) {
@@ -314,6 +343,87 @@ export function buildRevenueSummary(loads: SearchLoadResult[]): RevenueSummary {
         costCents: load.carrierCostCents,
         marginCents: margin,
         marginPercent
+      };
+    })
+  };
+}
+
+/** Postgres-backed revenue summary — avoids loading every matching load into memory. */
+export async function getRevenueSummary(
+  scope: BranchScope,
+  filters: LoadSearchFilters
+): Promise<RevenueSummary> {
+  const where = buildLoadSearchWhere(scope, filters);
+  const [totals, laneGroups, customerGroups, topLoads] = await Promise.all([
+    prisma.load.aggregate({
+      where,
+      _sum: { revenueCents: true, carrierCostCents: true },
+      _count: true
+    }),
+    prisma.load.groupBy({
+      by: ["pickupCity", "pickupState", "deliveryCity", "deliveryState"],
+      where,
+      _sum: { revenueCents: true },
+      _count: { _all: true },
+      orderBy: { _sum: { revenueCents: "desc" } },
+      take: 50
+    }),
+    prisma.load.groupBy({
+      by: ["customerId"],
+      where,
+      _sum: { revenueCents: true },
+      _count: { _all: true },
+      orderBy: { _sum: { revenueCents: "desc" } },
+      take: 50
+    }),
+    prisma.load.findMany({
+      where,
+      orderBy: [{ revenueCents: "desc" }, { pickupDate: "desc" }],
+      take: 50,
+      include: { customer: { select: { name: true } } }
+    })
+  ]);
+
+  const customers = await prisma.customer.findMany({
+    where: { id: { in: customerGroups.map((row) => row.customerId) } },
+    select: { id: true, name: true }
+  });
+  const customerNames = new Map(customers.map((row) => [row.id, row.name]));
+
+  const totalRevenueCents = totals._sum.revenueCents ?? 0;
+  const totalCostCents = totals._sum.carrierCostCents ?? 0;
+  const loadCount = totals._count;
+  const marginCents = totalRevenueCents - totalCostCents;
+
+  return {
+    totalRevenueCents,
+    totalCostCents,
+    marginCents,
+    loadCount,
+    avgRevenueCents: loadCount ? Math.round(totalRevenueCents / loadCount) : 0,
+    lanes: laneGroups.map((row) => ({
+      lane: `${row.pickupCity}, ${row.pickupState} to ${row.deliveryCity}, ${row.deliveryState}`,
+      count: row._count._all,
+      revenueCents: row._sum.revenueCents ?? 0
+    })),
+    customers: customerGroups.map((row) => ({
+      customer: customerNames.get(row.customerId) ?? "Unknown",
+      count: row._count._all,
+      revenueCents: row._sum.revenueCents ?? 0
+    })),
+    loads: topLoads.map((load) => {
+      const margin = load.revenueCents - load.carrierCostCents;
+      return {
+        id: load.id,
+        loadNumber: load.loadNumber,
+        customer: load.customer.name,
+        pickupDate: load.pickupDate.toISOString(),
+        revenueCents: load.revenueCents,
+        costCents: load.carrierCostCents,
+        marginCents: margin,
+        marginPercent: load.revenueCents
+          ? `${Math.round((margin / load.revenueCents) * 100)}%`
+          : "0%"
       };
     })
   };

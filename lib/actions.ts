@@ -11,10 +11,9 @@ import { requireWriteUser } from "@/lib/permissions";
 import { documentTitle } from "@/lib/document-templates";
 import {
   getCompanyBranding,
-  persistGeneratedPdf,
-  plainTextForType,
-  structuredDocumentForType
+  plainTextForType
 } from "@/lib/document-generate";
+import { enqueueJob } from "@/lib/jobs";
 import { normalizeCarrierNumber } from "@/lib/carrier-numbers";
 import { parseMoneyToCents } from "@/lib/format";
 import { recalculateLoadCommission } from "@/lib/commission";
@@ -1524,13 +1523,6 @@ export async function generateRateConfirmation(formData: FormData) {
 
   const documentNumber = await nextDocumentNumber(user.companyId, "RC");
   const company = await getCompanyBranding(user.companyId);
-  const structured = structuredDocumentForType(
-    "RATE_CONFIRMATION",
-    load,
-    documentNumber,
-    company
-  );
-  const pdf = await persistGeneratedPdf(user.companyId, structured);
 
   const document = await prisma.loadDocument.create({
     data: {
@@ -1541,20 +1533,24 @@ export async function generateRateConfirmation(formData: FormData) {
       name: documentTitle("RATE_CONFIRMATION", load.loadNumber),
       documentNumber,
       generatedContent: plainTextForType("RATE_CONFIRMATION", load, documentNumber, company),
-      generatedAt: new Date(),
-      filePath: pdf.storedPath,
-      mimeType: pdf.mimeType,
-      originalFileName: pdf.originalFileName,
-      fileSizeBytes: pdf.fileSizeBytes,
+      status: "PROCESSING",
       notes: "Generated carrier rate confirmation."
     }
+  });
+
+  await enqueueJob("GENERATE_PDF", {
+    companyId: user.companyId,
+    loadId: load.id,
+    documentId: document.id,
+    type: "RATE_CONFIRMATION",
+    documentNumber
   });
 
   await prisma.loadActivity.create({
     data: {
       loadId,
       userId: user.id,
-      action: "Rate confirmation generated",
+      action: "Rate confirmation queued",
       details: documentNumber
     }
   });
@@ -1570,8 +1566,6 @@ export async function generateBillOfLading(formData: FormData) {
   const load = await loadForDocument(loadId, user);
   const documentNumber = `BOL-${load.loadNumber}`;
   const company = await getCompanyBranding(user.companyId);
-  const structured = structuredDocumentForType("BOL", load, documentNumber, company);
-  const pdf = await persistGeneratedPdf(user.companyId, structured);
 
   const document = await prisma.loadDocument.create({
     data: {
@@ -1582,20 +1576,24 @@ export async function generateBillOfLading(formData: FormData) {
       name: documentTitle("BOL", load.loadNumber),
       documentNumber,
       generatedContent: plainTextForType("BOL", load, documentNumber, company),
-      generatedAt: new Date(),
-      filePath: pdf.storedPath,
-      mimeType: pdf.mimeType,
-      originalFileName: pdf.originalFileName,
-      fileSizeBytes: pdf.fileSizeBytes,
+      status: "PROCESSING",
       notes: "Generated bill of lading."
     }
+  });
+
+  await enqueueJob("GENERATE_PDF", {
+    companyId: user.companyId,
+    loadId: load.id,
+    documentId: document.id,
+    type: "BOL",
+    documentNumber
   });
 
   await prisma.loadActivity.create({
     data: {
       loadId,
       userId: user.id,
-      action: "BOL generated",
+      action: "BOL queued",
       details: documentNumber
     }
   });
@@ -1631,13 +1629,6 @@ export async function generateCustomerInvoice(formData: FormData) {
 
   const refreshedLoad = await loadForDocument(loadId, user);
   const company = await getCompanyBranding(user.companyId);
-  const structured = structuredDocumentForType(
-    "INVOICE",
-    refreshedLoad,
-    invoice.invoiceNo,
-    company
-  );
-  const pdf = await persistGeneratedPdf(user.companyId, structured);
 
   const document = await prisma.loadDocument.create({
     data: {
@@ -1648,20 +1639,24 @@ export async function generateCustomerInvoice(formData: FormData) {
       name: documentTitle("INVOICE", load.loadNumber),
       documentNumber: invoice.invoiceNo,
       generatedContent: plainTextForType("INVOICE", refreshedLoad, invoice.invoiceNo, company),
-      generatedAt: new Date(),
-      filePath: pdf.storedPath,
-      mimeType: pdf.mimeType,
-      originalFileName: pdf.originalFileName,
-      fileSizeBytes: pdf.fileSizeBytes,
+      status: "PROCESSING",
       notes: "Generated customer invoice."
     }
+  });
+
+  await enqueueJob("GENERATE_PDF", {
+    companyId: user.companyId,
+    loadId: load.id,
+    documentId: document.id,
+    type: "INVOICE",
+    documentNumber: invoice.invoiceNo
   });
 
   await prisma.loadActivity.create({
     data: {
       loadId,
       userId: user.id,
-      action: "Customer invoice generated",
+      action: "Customer invoice queued",
       details: invoice.invoiceNo
     }
   });
