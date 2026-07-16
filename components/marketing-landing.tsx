@@ -2,6 +2,8 @@ import Image from "next/image";
 import Link from "next/link";
 import packageJson from "@/package.json";
 import {
+  LANDING_BAND_KENWORTH_HEAVY_HAUL_PHOTO,
+  LANDING_BAND_KENWORTH_PHOTO,
   LANDING_BAND_PHOTO,
   LANDING_CTA_PHOTO,
   LANDING_HERO_PHOTO
@@ -240,6 +242,20 @@ export function MarketingLanding() {
         </div>
       </section>
 
+      <section
+        className="landing-photo-band relative isolate h-[42vh] min-h-[220px] max-h-[420px] overflow-hidden lg:h-[52vh]"
+        aria-label={LANDING_BAND_KENWORTH_PHOTO.alt}
+      >
+        <Image
+          src={LANDING_BAND_KENWORTH_PHOTO.src}
+          alt=""
+          fill
+          sizes="100vw"
+          className="absolute inset-0 object-cover"
+        />
+        <div className="absolute inset-0 bg-[#0f2438]/25" aria-hidden />
+      </section>
+
       <section className="landing-section border-b border-border">
         <div className="mx-auto max-w-6xl px-6 py-20 lg:px-10 lg:py-24">
           <p className="text-[11px] font-semibold uppercase tracking-[0.22em] text-muted-foreground">
@@ -263,6 +279,20 @@ export function MarketingLanding() {
             ))}
           </ul>
         </div>
+      </section>
+
+      <section
+        className="landing-photo-band relative isolate h-[42vh] min-h-[220px] max-h-[420px] overflow-hidden lg:h-[52vh]"
+        aria-label={LANDING_BAND_KENWORTH_HEAVY_HAUL_PHOTO.alt}
+      >
+        <Image
+          src={LANDING_BAND_KENWORTH_HEAVY_HAUL_PHOTO.src}
+          alt=""
+          fill
+          sizes="100vw"
+          className="absolute inset-0 object-cover"
+        />
+        <div className="absolute inset-0 bg-[#0f2438]/25" aria-hidden />
       </section>
 
       <section className="landing-section relative isolate overflow-hidden">

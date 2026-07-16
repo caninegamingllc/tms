@@ -1,27 +1,36 @@
-/** Curated Unsplash trucking / logistics photos for the marketing landing. */
+/** Local fleet photos for the marketing landing. */
 
 export type LandingPhoto = {
   src: string;
   alt: string;
 };
 
-const unsplash = (id: string, params = "w=1920&q=80&auto=format&fit=crop") =>
-  `https://images.unsplash.com/${id}?${params}`;
-
-/** Oversize / heavy-haul equipment load — hero atmosphere */
+/** Blue Peterbilt with covered flatbed — hero */
 export const LANDING_HERO_PHOTO: LandingPhoto = {
-  src: unsplash("photo-1709735133497-bbead76953a9"),
-  alt: "Heavy-haul truck transporting an oversize backhoe on a multi-axle flatbed trailer"
+  src: "/landing/hero-peterbilt-flatbed.png",
+  alt: "Dark blue Peterbilt semi-truck with a covered flatbed trailer in a parking lot"
 };
 
-/** Warehouse dock / inventory — mid-page visual band */
+/** Green Peterbilt with oversize flatbed load — mid-page band after plans */
 export const LANDING_BAND_PHOTO: LandingPhoto = {
-  src: unsplash("photo-1586528116311-ad8dd3c8310d"),
-  alt: "Warehouse aisle lined with pallet racking and freight inventory"
+  src: "/landing/band-peterbilt-oversize.png",
+  alt: "Green Peterbilt hauling an oversize industrial load on a drop-deck flatbed trailer"
 };
 
-/** Port containers / logistics yard — bottom CTA */
+/** Yellow Kenworth tractor — band after Premium */
+export const LANDING_BAND_KENWORTH_PHOTO: LandingPhoto = {
+  src: "/landing/band-kenworth-yellow.png",
+  alt: "Bright yellow Kenworth semi-truck tractor parked outdoors"
+};
+
+/** Red Kenworth with heavy-haul lowboy — band after Premium + Trucking */
+export const LANDING_BAND_KENWORTH_HEAVY_HAUL_PHOTO: LandingPhoto = {
+  src: "/landing/band-kenworth-heavy-haul.png",
+  alt: "Red Kenworth semi-truck pulling a multi-axle heavy-haul lowboy with a tarped oversize load"
+};
+
+/** Warehouse heavy-haul loading — bottom CTA */
 export const LANDING_CTA_PHOTO: LandingPhoto = {
-  src: unsplash("photo-1494412574643-ff11b0a5c1c3"),
-  alt: "Shipping containers stacked at a logistics port"
+  src: "/landing/cta-heavy-haul-loading.png",
+  alt: "Industrial crane lowering a large wrapped component onto a red heavy-haul trailer"
 };
