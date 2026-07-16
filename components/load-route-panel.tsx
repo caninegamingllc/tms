@@ -2,7 +2,11 @@
 
 import dynamic from "next/dynamic";
 import { useCallback, useEffect, useState } from "react";
-import type { LoadRouteMapPathPoint, LoadRouteMapStop } from "@/components/load-route-map";
+import type {
+  LoadRouteMapPathPoint,
+  LoadRouteMapStop,
+  LoadRouteReportedLocation
+} from "@/components/load-route-map";
 
 const LoadRouteMap = dynamic(
   () => import("@/components/load-route-map").then((module) => module.LoadRouteMap),
@@ -25,6 +29,7 @@ type RouteResponse = {
 
 type LoadRoutePanelProps = {
   loadId: string;
+  reportedLocation?: LoadRouteReportedLocation | null;
 };
 
 async function requestRoute(loadId: string, refresh = false) {
@@ -38,7 +43,7 @@ async function requestRoute(loadId: string, refresh = false) {
   return payload;
 }
 
-export function LoadRoutePanel({ loadId }: LoadRoutePanelProps) {
+export function LoadRoutePanel({ loadId, reportedLocation = null }: LoadRoutePanelProps) {
   const [route, setRoute] = useState<RouteResponse | null>(null);
   const [error, setError] = useState<string | null>(null);
   const [loading, setLoading] = useState(true);
@@ -136,7 +141,14 @@ export function LoadRoutePanel({ loadId }: LoadRoutePanelProps) {
             </div>
           ) : null}
 
-          {canShowMap ? <LoadRouteMap stops={route.stops} path={route.path} compact /> : null}
+          {canShowMap ? (
+            <LoadRouteMap
+              stops={route.stops}
+              path={route.path}
+              reportedLocation={reportedLocation}
+              compact
+            />
+          ) : null}
 
           {!canShowMap ? (
             <div className="rounded-2xl border border-border bg-muted p-4 text-sm text-slate-700">

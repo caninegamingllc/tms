@@ -17,9 +17,16 @@ export type LoadRouteMapPathPoint = {
   longitude: number;
 };
 
+export type LoadRouteReportedLocation = {
+  label: string;
+  latitude: number;
+  longitude: number;
+};
+
 type LoadRouteMapProps = {
   stops: LoadRouteMapStop[];
   path: LoadRouteMapPathPoint[];
+  reportedLocation?: LoadRouteReportedLocation | null;
   compact?: boolean;
 };
 
@@ -29,6 +36,15 @@ function createStopIcon(sequence: number) {
     html: `<span class="load-stop-marker__label">${sequence}</span>`,
     iconSize: [28, 28],
     iconAnchor: [14, 14]
+  });
+}
+
+function createReportedLocationIcon() {
+  return L.divIcon({
+    className: "load-reported-location-marker",
+    html: `<span class="load-reported-location-marker__label">R</span>`,
+    iconSize: [30, 30],
+    iconAnchor: [15, 15]
   });
 }
 
@@ -45,6 +61,7 @@ function applyRouteLayers(
   overlay: L.LayerGroup,
   polyline: LatLngTuple[],
   stopPoints: Array<{ sequence: number; label: string; latLng: LatLngTuple }>,
+  reportedPoint: { label: string; latLng: LatLngTuple } | null,
   center: LatLngTuple
 ) {
   overlay.clearLayers();
@@ -61,7 +78,19 @@ function applyRouteLayers(
       .addTo(overlay);
   }
 
-  const boundsPoints: LatLngTuple[] = [...stopPoints.map((stop) => stop.latLng), ...polyline];
+  if (reportedPoint) {
+    L.marker(reportedPoint.latLng, { icon: createReportedLocationIcon() })
+      .bindPopup(
+        `<div class="text-sm"><p class="font-semibold">Reported</p><p>${escapeHtml(reportedPoint.label)}</p></div>`
+      )
+      .addTo(overlay);
+  }
+
+  const boundsPoints: LatLngTuple[] = [
+    ...stopPoints.map((stop) => stop.latLng),
+    ...polyline,
+    ...(reportedPoint ? [reportedPoint.latLng] : [])
+  ];
 
   if (boundsPoints.length > 0) {
     map.fitBounds(L.latLngBounds(boundsPoints), { padding: [28, 28] });
@@ -72,13 +101,14 @@ function applyRouteLayers(
   map.invalidateSize({ animate: false });
 }
 
-export function LoadRouteMap({ stops, path, compact = false }: LoadRouteMapProps) {
+export function LoadRouteMap({ stops, path, reportedLocation = null, compact = false }: LoadRouteMapProps) {
   const containerRef = useRef<HTMLDivElement>(null);
   const mapRef = useRef<L.Map | null>(null);
   const overlayRef = useRef<L.LayerGroup | null>(null);
   const routeRef = useRef({
     polyline: [] as LatLngTuple[],
     stopPoints: [] as Array<{ sequence: number; label: string; latLng: LatLngTuple }>,
+    reportedPoint: null as { label: string; latLng: LatLngTuple } | null,
     center: [39.8283, -98.5795] as LatLngTuple
   });
 
@@ -95,6 +125,16 @@ export function LoadRouteMap({ stops, path, compact = false }: LoadRouteMapProps
       })),
     [stops]
   );
+  const reportedPoint = useMemo(
+    () =>
+      reportedLocation
+        ? {
+            label: reportedLocation.label,
+            latLng: [reportedLocation.latitude, reportedLocation.longitude] as LatLngTuple
+          }
+        : null,
+    [reportedLocation]
+  );
   const center = useMemo<LatLngTuple>(() => {
     if (stops.length > 0) {
       return [stops[0].latitude, stops[0].longitude];
@@ -107,7 +147,7 @@ export function LoadRouteMap({ stops, path, compact = false }: LoadRouteMapProps
     return [39.8283, -98.5795];
   }, [path, stops]);
 
-  routeRef.current = { polyline, stopPoints, center };
+  routeRef.current = { polyline, stopPoints, reportedPoint, center };
 
   useEffect(() => {
     const container = containerRef.current;
@@ -139,6 +179,7 @@ export function LoadRouteMap({ stops, path, compact = false }: LoadRouteMapProps
       overlay,
       routeRef.current.polyline,
       routeRef.current.stopPoints,
+      routeRef.current.reportedPoint,
       routeRef.current.center
     );
 
@@ -167,8 +208,8 @@ export function LoadRouteMap({ stops, path, compact = false }: LoadRouteMapProps
       return;
     }
 
-    applyRouteLayers(map, overlay, polyline, stopPoints, center);
-  }, [center, polyline, stopPoints]);
+    applyRouteLayers(map, overlay, polyline, stopPoints, reportedPoint, center);
+  }, [center, polyline, reportedPoint, stopPoints]);
 
   return (
     <div className="overflow-hidden rounded-2xl border border-border">

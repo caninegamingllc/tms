@@ -4,6 +4,7 @@ import { DocumentUploadForm } from "@/components/document-upload-form";
 import { DocumentsTable } from "@/components/documents-table";
 import { PageHeader } from "@/components/page-header";
 import { LoadRoutePanel } from "@/components/load-route-panel";
+import { CheckCallForm } from "@/components/check-call-location-input";
 import { SearchCombobox } from "@/components/search-combobox";
 import { CarrierPayLinesEditor } from "@/components/carrier-pay-lines-editor";
 import { LoadDetailsEditor } from "@/components/load-details-editor";
@@ -238,6 +239,17 @@ export default async function LoadDetailPage({
       load.expenses = refreshed.expenses;
     }
   }
+
+  const latestReportedLocation = load.dispatchAssignment?.checkCalls.find(
+    (call) => call.latitude != null && call.longitude != null
+  );
+  const reportedLocation = latestReportedLocation
+    ? {
+        label: latestReportedLocation.location,
+        latitude: latestReportedLocation.latitude!,
+        longitude: latestReportedLocation.longitude!
+      }
+    : null;
 
   const carrierOptions = carriers.map((carrier) => ({
     id: carrier.id,
@@ -580,7 +592,7 @@ export default async function LoadDetailPage({
 
         {canRoute ? (
         <Tile id="route-map">
-          <LoadRoutePanel loadId={load.id} />
+          <LoadRoutePanel loadId={load.id} reportedLocation={reportedLocation} />
         </Tile>
         ) : null}
 
@@ -895,17 +907,11 @@ export default async function LoadDetailPage({
                 </div>
               ))}
             </div>
-            <form action={addCheckCall} className="mt-4 grid gap-3 rounded-2xl bg-muted p-4">
-              <input type="hidden" name="assignmentId" value={load.dispatchAssignment.id} />
-              <input type="hidden" name="loadId" value={load.id} />
-              <input name="location" className="input" placeholder="Location" required />
-              <input name="status" className="input" placeholder="Status update" required />
-              <textarea name="notes" className="textarea" placeholder="Notes" rows={3} />
-              <input name="nextCheckAt" className="input" type="datetime-local" />
-              <button className="btn" type="submit">
-                Add Check Call
-              </button>
-            </form>
+            <CheckCallForm
+              action={addCheckCall}
+              assignmentId={load.dispatchAssignment.id}
+              loadId={load.id}
+            />
           </Tile>
         ) : null}
 

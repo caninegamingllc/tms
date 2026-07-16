@@ -9,6 +9,13 @@ export type BusinessSearchResult = {
   description: string;
 };
 
+export type PlaceLocationResult = {
+  id: string;
+  label: string;
+  latitude: number;
+  longitude: number;
+};
+
 type GoogleAddressComponent = {
   longText?: string;
   shortText?: string;
@@ -168,6 +175,7 @@ const CACHE_TTL_MS = 5 * 60 * 1000;
 const autocompleteCache = new Map<string, { expiresAt: number; results: BusinessSearchResult[] }>();
 const textSearchCache = new Map<string, { expiresAt: number; results: BusinessSearchResult[] }>();
 const detailsCache = new Map<string, { expiresAt: number; result: BusinessSearchResult }>();
+const placeLocationCache = new Map<string, { expiresAt: number; result: PlaceLocationResult }>();
 
 async function getCachedResults(key: string) {
   const local = textSearchCache.get(key) ?? autocompleteCache.get(key);
@@ -189,6 +197,16 @@ async function getCachedDetail(key: string) {
 
 async function setCachedDetail(key: string, result: BusinessSearchResult) {
   detailsCache.set(key, { result, expiresAt: Date.now() + CACHE_TTL_MS });
+}
+
+async function getCachedPlaceLocation(key: string) {
+  const local = placeLocationCache.get(key);
+  if (local && local.expiresAt > Date.now()) return local.result;
+  return null;
+}
+
+async function setCachedPlaceLocation(key: string, result: PlaceLocationResult) {
+  placeLocationCache.set(key, { result, expiresAt: Date.now() + CACHE_TTL_MS });
 }
 
 export function shouldUseTextSearch(query: string, field: "name" | "address") {
@@ -444,6 +462,68 @@ function mapPlaceDetails(
     phone
   });
 
+  return result;
+}
+
+function checkCallLocationLabel(payload: GooglePlaceDetailsResponse) {
+  const parsed = parseAddressComponents(payload.addressComponents ?? []);
+  const cityState = [parsed.city, parsed.state].filter(Boolean).join(", ");
+  if (cityState && !parsed.address) {
+    return cityState;
+  }
+
+  const addressLabel = toDescription(parsed);
+  return (
+    addressLabel ||
+    payload.displayName?.text?.trim() ||
+    payload.formattedAddress?.trim() ||
+    ""
+  );
+}
+
+export async function getPlaceLocation(placeId: string, sessionToken?: string) {
+  const normalizedPlaceId = normalizePlaceId(placeId);
+  if (!normalizedPlaceId) {
+    return null;
+  }
+
+  const cacheKey = `location:${normalizedPlaceId}:${sessionToken ?? "default"}`;
+  const cached = await getCachedPlaceLocation(cacheKey);
+  if (cached) {
+    return cached;
+  }
+
+  const encodedPlaceId = encodeURIComponent(normalizedPlaceId);
+  const detailsParams = new URLSearchParams();
+  if (sessionToken) {
+    detailsParams.set("sessionToken", sessionToken);
+  }
+
+  const detailsUrl = detailsParams.toString()
+    ? `https://places.googleapis.com/v1/places/${encodedPlaceId}?${detailsParams.toString()}`
+    : `https://places.googleapis.com/v1/places/${encodedPlaceId}`;
+
+  const payload = await googlePlacesRequest<GooglePlaceDetailsResponse>(detailsUrl, {
+    method: "GET",
+    fieldMask: "addressComponents,formattedAddress,displayName,location"
+  });
+
+  const latitude = payload.location?.latitude;
+  const longitude = payload.location?.longitude;
+  const label = checkCallLocationLabel(payload);
+
+  if (latitude === undefined || longitude === undefined || !label) {
+    return null;
+  }
+
+  const result = {
+    id: normalizedPlaceId,
+    label,
+    latitude,
+    longitude
+  };
+
+  await setCachedPlaceLocation(cacheKey, result);
   return result;
 }
 

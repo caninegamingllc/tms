@@ -1516,11 +1516,15 @@ export async function unassignCarrier(formData: FormData) {
 
 export async function addCheckCall(formData: FormData) {
   const user = await requireWriteUser();
+  await assertPlanFeature(user.companyId, "check_calls");
   const assignmentId = requiredString(formData, "assignmentId");
   const loadId = requiredString(formData, "loadId");
   await requireCompanyLoad(loadId, user);
 
   const location = requiredString(formData, "location");
+  const latitude = optionalFloat(formData, "latitude");
+  const longitude = optionalFloat(formData, "longitude");
+  const hasCoordinates = latitude !== undefined && longitude !== undefined;
   const status = requiredString(formData, "status");
 
   const checkCall = await prisma.checkCall.create({
@@ -1529,12 +1533,21 @@ export async function addCheckCall(formData: FormData) {
       location,
       status,
       notes: optionalString(formData, "notes"),
-      nextCheckAt: optionalDate(formData, "nextCheckAt")
+      nextCheckAt: optionalDate(formData, "nextCheckAt"),
+      ...(hasCoordinates
+        ? {
+            latitude,
+            longitude,
+            geocodedAt: new Date()
+          }
+        : {})
     }
   });
 
-  const { geocodeAndStoreCheckCallLocation } = await import("@/lib/customer-load-map");
-  await geocodeAndStoreCheckCallLocation(checkCall.id, location);
+  if (!hasCoordinates) {
+    const { geocodeAndStoreCheckCallLocation } = await import("@/lib/customer-load-map");
+    await geocodeAndStoreCheckCallLocation(checkCall.id, location);
+  }
 
   await prisma.loadActivity.create({
     data: {
