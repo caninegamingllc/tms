@@ -171,8 +171,17 @@ export async function searchLocalCarriers(
   type: "mc" | "dot" | "auto",
   query: string
 ): Promise<CarrierLookupResult[]> {
+  const trimmed = query.trim();
   const fields: ("mc" | "dot")[] = type === "auto" ? ["mc", "dot"] : [type];
-  const orClauses: Record<string, { startsWith: string }>[] = [];
+  const orClauses: {
+    name?: { contains: string; mode: "insensitive" };
+    mcNumberNormalized?: { startsWith: string };
+    dotNumberNormalized?: { startsWith: string };
+  }[] = [];
+
+  if (type === "auto" && trimmed.length >= 3) {
+    orClauses.push({ name: { contains: trimmed, mode: "insensitive" } });
+  }
 
   for (const field of fields) {
     const column = field === "mc" ? "mcNumberNormalized" : "dotNumberNormalized";
@@ -274,9 +283,14 @@ async function fetchFmcsaForType(type: "mc" | "dot" | "auto", query: string) {
     return fetchFmcsaCarriers(type, query);
   }
 
+  // FMCSA only supports MC/DOT number lookups. Skip federal search for name queries.
+  const digits = query.replace(/\D/g, "");
+  if (digits.length < 3) {
+    return [];
+  }
+
   // MC dockets are typically <= 6 digits; USDOT numbers run longer. Prefer the
   // more likely authority first, then fall back to the other once.
-  const digits = query.replace(/\D/g, "");
   const order: ("dot" | "mc")[] = digits.length >= 7 ? ["dot", "mc"] : ["mc", "dot"];
 
   for (const candidate of order) {

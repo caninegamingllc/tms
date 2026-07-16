@@ -40,11 +40,16 @@ export function CarrierQuickSearch() {
   const [query, setQuery] = useState("");
   const [open, setOpen] = useState(false);
   const [loading, setLoading] = useState(false);
+  const [autocompleteLoading, setAutocompleteLoading] = useState(false);
   const [error, setError] = useState("");
   const [results, setResults] = useState<CarrierLookupResult[]>([]);
+  const [autocompleteResults, setAutocompleteResults] = useState<CarrierLookupResult[]>([]);
   const [fmcsaAvailable, setFmcsaAvailable] = useState(true);
   const [searchedTerm, setSearchedTerm] = useState("");
   const [hasSearched, setHasSearched] = useState(false);
+  const [autocompleteError, setAutocompleteError] = useState("");
+  const [hasAutocompleteSearched, setHasAutocompleteSearched] = useState(false);
+  const [inputFocused, setInputFocused] = useState(false);
 
   useEffect(() => {
     if (!open) {
@@ -61,6 +66,58 @@ export function CarrierQuickSearch() {
     return () => window.removeEventListener("keydown", onKeyDown);
   }, [open]);
 
+  useEffect(() => {
+    const term = query.trim();
+
+    if (open || !inputFocused || term.length < 3) {
+      setAutocompleteResults([]);
+      setAutocompleteError("");
+      setHasAutocompleteSearched(false);
+      setAutocompleteLoading(false);
+      return;
+    }
+
+    const controller = new AbortController();
+    const timeout = window.setTimeout(async () => {
+      try {
+        setAutocompleteLoading(true);
+        setAutocompleteError("");
+        const params = new URLSearchParams({ type: "auto", q: term });
+        const response = await fetch(`/api/carriers/lookup?${params.toString()}`, {
+          signal: controller.signal
+        });
+
+        if (!response.ok) {
+          const payload = (await response.json().catch(() => null)) as { error?: string } | null;
+          setAutocompleteError(payload?.error ?? "Carrier lookup is unavailable.");
+          setAutocompleteResults([]);
+          return;
+        }
+
+        const payload = (await response.json()) as {
+          results?: CarrierLookupResult[];
+          fmcsaAvailable?: boolean;
+        };
+        setAutocompleteResults(payload.results ?? []);
+        setFmcsaAvailable(payload.fmcsaAvailable ?? true);
+        setHasAutocompleteSearched(true);
+      } catch {
+        if (!controller.signal.aborted) {
+          setAutocompleteResults([]);
+        }
+      } finally {
+        if (!controller.signal.aborted) {
+          setAutocompleteLoading(false);
+        }
+      }
+    }, 450);
+
+    return () => {
+      window.clearTimeout(timeout);
+      controller.abort();
+    };
+  }, [inputFocused, open, query]);
+
   async function runSearch(event: React.FormEvent) {
     event.preventDefault();
     const term = query.trim();
@@ -69,7 +126,7 @@ export function CarrierQuickSearch() {
     setSearchedTerm(term);
 
     if (term.length < 3) {
-      setError("Enter at least 3 characters of an MC or DOT number.");
+      setError("Enter at least 3 characters of a carrier name, MC, or DOT number.");
       setResults([]);
       setHasSearched(false);
       setLoading(false);
@@ -105,6 +162,25 @@ export function CarrierQuickSearch() {
       setLoading(false);
     }
   }
+
+  function selectAutocompleteResult(result: CarrierLookupResult) {
+    const searchValue = result.mcNumber ?? result.dotNumber ?? result.name;
+    setQuery(searchValue);
+    setResults([result]);
+    setSearchedTerm(searchValue);
+    setError("");
+    setHasSearched(true);
+    setAutocompleteResults([]);
+    setHasAutocompleteSearched(false);
+    setInputFocused(false);
+    setOpen(true);
+  }
+
+  const showAutocomplete =
+    inputFocused &&
+    !open &&
+    query.trim().length >= 3 &&
+    (autocompleteLoading || autocompleteError || autocompleteResults.length > 0 || hasAutocompleteSearched);
 
   const modal = open ? (
     <div
@@ -255,11 +331,52 @@ export function CarrierQuickSearch() {
         <input
           type="search"
           value={query}
-          onChange={(event) => setQuery(event.target.value)}
-          placeholder="Carrier Quick Search (MC or DOT)"
+          onChange={(event) => {
+            const nextQuery = event.target.value;
+            setQuery(nextQuery);
+            setAutocompleteResults([]);
+            setAutocompleteError("");
+            setHasAutocompleteSearched(false);
+            setAutocompleteLoading(nextQuery.trim().length >= 3);
+          }}
+          onFocus={() => setInputFocused(true)}
+          onBlur={() => {
+            window.setTimeout(() => setInputFocused(false), 150);
+          }}
+          placeholder="Carrier Quick Search (name, MC, or DOT)"
           aria-label="Carrier Quick Search"
+          autoComplete="off"
           className="h-8 w-48 rounded-full border border-border bg-background pl-8 pr-3 text-[13px] text-foreground outline-none transition focus:w-64 focus:border-primary/50 focus:ring-2 focus:ring-primary/20 lg:w-56 lg:focus:w-72"
         />
+        {showAutocomplete ? (
+          <div className="absolute left-0 right-0 top-full z-50 mt-2 overflow-hidden rounded-2xl border border-border bg-card shadow-card">
+            {autocompleteLoading ? (
+              <p className="px-4 py-3 text-sm text-muted-foreground">Searching carriers...</p>
+            ) : autocompleteError ? (
+              <p className="px-4 py-3 text-sm text-rose-600">{autocompleteError}</p>
+            ) : autocompleteResults.length > 0 ? (
+              autocompleteResults.map((result) => (
+                <button
+                  key={result.id}
+                  type="button"
+                  className="block w-full px-4 py-3 text-left text-sm transition hover:bg-muted"
+                  onMouseDown={(event) => event.preventDefault()}
+                  onClick={() => selectAutocompleteResult(result)}
+                >
+                  <span className="block truncate font-semibold text-foreground">{result.name}</span>
+                  <span className="block truncate text-xs text-muted-foreground">
+                    {result.description}
+                  </span>
+                  <span className="mt-1 block text-[11px] font-semibold uppercase tracking-wide text-primary">
+                    {result.source === "local" ? "Existing carrier in TMS" : "FMCSA match"}
+                  </span>
+                </button>
+              ))
+            ) : (
+              <p className="px-4 py-3 text-sm text-muted-foreground">No matches found.</p>
+            )}
+          </div>
+        ) : null}
       </form>
       {modal && typeof document !== "undefined" ? createPortal(modal, document.body) : null}
     </>
