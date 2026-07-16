@@ -79,6 +79,14 @@ export default async function BillingPage({
         </div>
       ) : null}
 
+      {currentPlan === "FREE" && params.welcome !== "1" ? (
+        <div className="card mb-6 border-amber-200 bg-amber-50 text-sm text-amber-800">
+          Free includes only one seat (usually the owner). Upgrade to{" "}
+          <strong>Lite</strong> (up to 5 seats) or <strong>Premium</strong> (effectively unlimited) to
+          assign seats to teammates.
+        </div>
+      ) : null}
+
       <TileBoard pageId="admin-billing" tiles={ADMIN_BILLING_TILES} initialLayouts={layouts}>
         <Tile id="seat-summary">
           <div className="grid grid-cols-2 gap-3 text-center sm:grid-cols-4">
@@ -157,14 +165,21 @@ export default async function BillingPage({
                   ) : (
                     <form action={createPlanCheckoutSession} className="mt-4 grid gap-3">
                       <input type="hidden" name="plan" value={planId} />
-                      <label className="grid gap-2">
-                        <span className="label">Promo code (optional)</span>
-                        <input
-                          name="promoCode"
-                          className="input"
-                          placeholder={process.env.STRIPE_DEV_PROMO_CODE ?? "DEV100"}
-                        />
-                      </label>
+                      {seatSummary.plan === "FREE" ? (
+                        <label className="grid gap-2">
+                          <span className="label">Promo code (optional)</span>
+                          <input
+                            name="promoCode"
+                            className="input"
+                            placeholder={process.env.STRIPE_DEV_PROMO_CODE ?? "DEV100"}
+                          />
+                        </label>
+                      ) : (
+                        <p className="text-xs text-muted-foreground">
+                          Changing plans updates your existing subscription. Promo codes apply to new
+                          checkouts only.
+                        </p>
+                      )}
                       <button className="btn" type="submit">
                         Upgrade to {plan.name}
                       </button>

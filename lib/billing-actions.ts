@@ -58,6 +58,51 @@ async function ensureStripeCustomer(
   return customer.id;
 }
 
+const UPDATABLE_SUBSCRIPTION_STATUSES = new Set(["active", "trialing", "past_due"]);
+
+function subscriptionCreated(left: Stripe.Subscription, right: Stripe.Subscription) {
+  return right.created - left.created;
+}
+
+async function findUpdatableSeatSubscription(
+  stripe: Stripe,
+  customerId: string,
+  preferredSubscriptionId?: string | null
+) {
+  const subscriptions = await stripe.subscriptions.list({
+    customer: customerId,
+    status: "all",
+    limit: 20,
+    expand: ["data.items.data.price"]
+  });
+
+  const updatable = subscriptions.data
+    .filter((item) => UPDATABLE_SUBSCRIPTION_STATUSES.has(item.status))
+    .sort(subscriptionCreated);
+
+  if (updatable.length > 0) {
+    const preferred = preferredSubscriptionId
+      ? updatable.find((item) => item.id === preferredSubscriptionId)
+      : null;
+    return preferred ?? updatable[0];
+  }
+
+  if (preferredSubscriptionId) {
+    try {
+      const existing = await stripe.subscriptions.retrieve(preferredSubscriptionId, {
+        expand: ["items.data.price"]
+      });
+      if (UPDATABLE_SUBSCRIPTION_STATUSES.has(existing.status)) {
+        return existing;
+      }
+    } catch {
+      // Subscription id may be stale after a new checkout.
+    }
+  }
+
+  return null;
+}
+
 async function applyPromoToCheckout(
   sessionParams: Stripe.Checkout.SessionCreateParams,
   promoCode: string
@@ -142,46 +187,42 @@ export async function createPlanCheckoutSession(formData: FormData) {
       subscription.stripeCustomerId
     );
 
-    if (subscription.stripeSubscriptionId) {
-      try {
-        const existing = await stripe.subscriptions.retrieve(subscription.stripeSubscriptionId, {
-          expand: ["items.data.price"]
+    // Prefer updating an existing paid subscription instead of creating a second one.
+    // Promo codes only apply to new Checkout Sessions; ignore promo on plan changes.
+    try {
+      const existing = await findUpdatableSeatSubscription(
+        stripe,
+        customerId,
+        subscription.stripeSubscriptionId
+      );
+
+      if (existing) {
+        const item = existing.items.data[0];
+        if (!item) {
+          redirectBillingError("Existing subscription has no billable items");
+        }
+
+        const updated = await stripe.subscriptions.update(existing.id, {
+          items: [
+            {
+              id: item.id,
+              price: priceId,
+              quantity: 1
+            }
+          ],
+          proration_behavior: "create_prorations",
+          metadata: { companyId: actor.companyId, plan }
         });
 
-        if (existing.status === "active" || existing.status === "trialing" || existing.status === "past_due") {
-          const item = existing.items.data[0];
-          if (!item) {
-            redirectBillingError("Existing subscription has no billable items");
-          }
-
-          if (promoCode) {
-            redirectBillingError(
-              "Promo codes apply to new checkouts only. Change plans without a promo, or manage billing in the portal."
-            );
-          }
-
-          const updated = await stripe.subscriptions.update(existing.id, {
-            items: [
-              {
-                id: item.id,
-                price: priceId,
-                quantity: 1
-              }
-            ],
-            proration_behavior: "create_prorations",
-            metadata: { companyId: actor.companyId, plan }
-          });
-
-          await syncSeatSubscriptionFromStripe(updated, actor.companyId);
-          await autoAssignOwnerOnPurchase(actor.companyId, actor.membershipId);
-          redirect("/admin/billing?success=1");
-        }
-      } catch (error) {
-        if (error && typeof error === "object" && "digest" in error) {
-          throw error;
-        }
-        // Stale subscription id — fall through to a fresh checkout.
+        await syncSeatSubscriptionFromStripe(updated, actor.companyId);
+        await autoAssignOwnerOnPurchase(actor.companyId, actor.membershipId);
+        redirect("/admin/billing?success=1");
       }
+    } catch (error) {
+      if (error && typeof error === "object" && "digest" in error) {
+        throw error;
+      }
+      // Stale subscription lookup — fall through to a fresh checkout.
     }
 
     const sessionParams: Stripe.Checkout.SessionCreateParams = {
@@ -329,12 +370,41 @@ export async function syncSeatSubscriptionFromStripe(
     return;
   }
 
-  const firstItem = subscription.items.data[0];
+  const existing = await prisma.seatSubscription.findUnique({ where: { companyId } });
+  let target = subscription;
+  const incomingUsable = UPDATABLE_SUBSCRIPTION_STATUSES.has(subscription.status);
+
+  // Prefer an active subscription for this customer so a canceled/stale webhook
+  // cannot wipe a paid plan back to Free.
+  if (!incomingUsable && customerId && isStripeConfigured()) {
+    try {
+      const preferred = await findUpdatableSeatSubscription(
+        getStripe(),
+        customerId,
+        existing?.stripeSubscriptionId
+      );
+      if (preferred) {
+        target = preferred;
+      } else if (
+        existing &&
+        existing.stripeSubscriptionId &&
+        existing.stripeSubscriptionId !== subscription.id &&
+        existing.plan !== "FREE" &&
+        existing.status === "ACTIVE"
+      ) {
+        return;
+      }
+    } catch {
+      // Fall through to sync the event payload if Stripe lookup fails.
+    }
+  }
+
+  const firstItem = target.items.data[0];
   const price = firstItem?.price;
   const priceId = typeof price === "string" ? price : price?.id ?? null;
   const quantity = firstItem?.quantity ?? 0;
   const periodEndSeconds =
-    (subscription as Stripe.Subscription & { current_period_end?: number }).current_period_end ??
+    (target as Stripe.Subscription & { current_period_end?: number }).current_period_end ??
     (firstItem as { current_period_end?: number } | undefined)?.current_period_end;
   const currentPeriodEnd = periodEndSeconds ? new Date(periodEndSeconds * 1000) : null;
 
@@ -349,8 +419,8 @@ export async function syncSeatSubscriptionFromStripe(
     paused: "PAST_DUE"
   };
 
-  const mappedStatus = statusMap[subscription.status] ?? "NONE";
-  const metadataPlan = subscription.metadata?.plan;
+  const mappedStatus = statusMap[target.status] ?? "NONE";
+  const metadataPlan = target.metadata?.plan;
   const resolved =
     mappedStatus === "CANCELED" || mappedStatus === "NONE"
       ? { plan: "FREE" as PlanId, seatQuantity: 1 }
@@ -363,7 +433,7 @@ export async function syncSeatSubscriptionFromStripe(
     create: {
       companyId,
       stripeCustomerId: customerId,
-      stripeSubscriptionId: subscription.id,
+      stripeSubscriptionId: target.id,
       stripePriceId: priceId,
       plan: resolved.plan,
       seatQuantity: resolved.seatQuantity,
@@ -372,8 +442,7 @@ export async function syncSeatSubscriptionFromStripe(
     },
     update: {
       stripeCustomerId: customerId ?? undefined,
-      stripeSubscriptionId:
-        mappedStatus === "CANCELED" ? null : subscription.id,
+      stripeSubscriptionId: mappedStatus === "CANCELED" ? null : target.id,
       stripePriceId: mappedStatus === "CANCELED" ? null : priceId,
       plan: resolved.plan,
       seatQuantity: resolved.seatQuantity,
@@ -410,18 +479,19 @@ export async function syncSeatSubscriptionForCompany(companyId: string) {
   const stripe = getStripe();
   let subscription: Stripe.Subscription | null = null;
 
-  if (local.stripeSubscriptionId) {
+  if (local.stripeCustomerId) {
+    subscription = await findUpdatableSeatSubscription(
+      stripe,
+      local.stripeCustomerId,
+      local.stripeSubscriptionId
+    );
+  } else if (local.stripeSubscriptionId) {
     try {
-      subscription = await stripe.subscriptions.retrieve(local.stripeSubscriptionId, {
+      const retrieved = await stripe.subscriptions.retrieve(local.stripeSubscriptionId, {
         expand: ["items.data.price"]
       });
-
-      if (
-        subscription.status === "canceled" ||
-        subscription.status === "incomplete_expired" ||
-        subscription.status === "unpaid"
-      ) {
-        subscription = null;
+      if (UPDATABLE_SUBSCRIPTION_STATUSES.has(retrieved.status)) {
+        subscription = retrieved;
       }
     } catch {
       // Subscription id may be stale after a new checkout.
@@ -436,21 +506,8 @@ export async function syncSeatSubscriptionForCompany(companyId: string) {
       expand: ["data.items.data.price"]
     });
 
-    const activeSubscriptions = subscriptions.data.filter(
-      (item) => item.status === "active" || item.status === "trialing"
-    );
-
     subscription =
-      activeSubscriptions.sort((left, right) => {
-        const leftQty = left.items.data[0]?.quantity ?? 0;
-        const rightQty = right.items.data[0]?.quantity ?? 0;
-        if (rightQty !== leftQty) {
-          return rightQty - leftQty;
-        }
-        return right.created - left.created;
-      })[0] ??
-      subscriptions.data.sort((left, right) => right.created - left.created)[0] ??
-      null;
+      subscriptions.data.sort((left, right) => right.created - left.created)[0] ?? null;
   }
 
   if (!subscription) {
