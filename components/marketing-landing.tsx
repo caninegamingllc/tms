@@ -49,21 +49,21 @@ export function MarketingLanding() {
             </div>
           </div>
           <div className="flex items-center gap-2">
-            <Link
-              href="/#plans"
-              className="hidden rounded-md px-3 py-1.5 text-[13px] font-semibold text-white/80 transition hover:text-white sm:inline-flex"
+            <a
+              href="#plans"
+              className="hidden rounded-md px-3 py-1.5 text-[13px] font-semibold sm:inline-flex"
             >
               Plans
-            </Link>
+            </a>
             <Link
               href="/portal/login"
-              className="hidden rounded-md px-3 py-1.5 text-[13px] font-semibold text-white/80 transition hover:text-white md:inline-flex"
+              className="hidden rounded-md px-3 py-1.5 text-[13px] font-semibold md:inline-flex"
             >
               Customer portal
             </Link>
             <Link
               href="/login"
-              className="rounded-md border border-white/25 bg-white/10 px-3 py-1.5 text-[13px] font-semibold text-white backdrop-blur transition hover:bg-white/20"
+              className="rounded-md border border-white/25 bg-white/10 px-3 py-1.5 text-[13px] font-semibold backdrop-blur transition hover:bg-white/20"
             >
               Sign in
             </Link>
@@ -125,15 +125,15 @@ export function MarketingLanding() {
               <Link href="/register" className="landing-cta-primary">
                 Start workspace
               </Link>
-              <Link href="/#plans" className="landing-cta-secondary">
+              <a href="#plans" className="landing-cta-secondary">
                 See plans
-              </Link>
+              </a>
             </div>
           </div>
         </div>
       </section>
 
-      <section id="plans" className="landing-section border-b border-border scroll-mt-8">
+      <section id="plans" className="landing-section border-b border-border scroll-mt-24">
         <div className="mx-auto max-w-6xl px-6 py-20 lg:px-10 lg:py-24">
           <p className="text-[11px] font-semibold uppercase tracking-[0.22em] text-muted-foreground">
             Pricing
@@ -318,9 +318,9 @@ export function MarketingLanding() {
             </p>
           </div>
           <nav className="flex flex-wrap gap-x-5 gap-y-2 text-[13px] font-semibold text-muted-foreground">
-            <Link href="/#plans" className="transition hover:text-foreground">
+            <a href="#plans" className="transition hover:text-foreground">
               Plans
-            </Link>
+            </a>
             <Link href="/portal/login" className="transition hover:text-foreground">
               Customer portal
             </Link>

@@ -54,6 +54,26 @@ a {
   text-decoration: none;
 }
 
+html {
+  scroll-behavior: smooth;
+}
+
+@media (prefers-reduced-motion: reduce) {
+  html {
+    scroll-behavior: auto;
+  }
+}
+
+/* Unlayered `a { color: inherit }` beats Tailwind utilities; force landing nav contrast. */
+.landing-nav a {
+  color: #ffffff;
+}
+
+.landing-nav a:hover {
+  color: #ffffff;
+  opacity: 0.92;
+}
+
 input::placeholder,
 textarea::placeholder {
   color: var(--color-muted-foreground);
