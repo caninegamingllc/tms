@@ -324,7 +324,7 @@ function RailNavGroup({
           onOpen();
         }}
       >
-        <Icon className="h-5 w-5" aria-hidden />
+        <Icon className="h-6 w-6" />
         {active ? (
           <span className="absolute top-2 -left-px h-7 w-[3px] rounded-r bg-rail-accent" />
         ) : null}
@@ -385,14 +385,10 @@ function MobileNavList({
                     onClick={onNavigate}
                     className={clsx(
                       "flex items-center gap-3 rounded-md px-3 py-2 text-sm font-medium transition",
-                      active ? "bg-[rgba(255,255,255,0.12)]" : "hover:bg-[rgba(255,255,255,0.08)]"
+                      active ? "bg-white/10 text-white" : "text-white/70 hover:bg-white/5 hover:text-white"
                     )}
-                    style={{
-                      color: active ? "#ffffff" : "#cbd5e1",
-                      WebkitTextFillColor: active ? "#ffffff" : "#cbd5e1"
-                    }}
                   >
-                    <Icon className="h-4 w-4" aria-hidden />
+                    <Icon className="h-4 w-4" />
                     {item.label}
                   </Link>
                 );
@@ -603,7 +599,7 @@ export function AppShell({
       ) : null}
 
       {/* Desktop icon rail — fixed so Safari does not clip popovers under sticky. */}
-      <aside className="app-rail rail-gradient fixed inset-y-0 left-0 z-30 hidden w-[68px] flex-col items-center border-r border-black/40 lg:flex" style={{ color: "#e2e8f0" }}>
+      <aside className="app-rail rail-gradient fixed inset-y-0 left-0 z-30 hidden w-[68px] flex-col items-center border-r border-black/40 text-rail-foreground lg:flex">
         <Link
           href="/"
           className="brand-gradient mt-4 mb-3 flex h-10 w-10 items-center justify-center rounded-md text-white shadow-[0_4px_16px_-4px_rgba(0,0,0,0.5)]"
@@ -664,7 +660,7 @@ export function AppShell({
       </aside>
 
       <div className="flex min-w-0 flex-1 flex-col lg:pl-[68px]">
-        <header className="app-topbar sticky top-0 z-20 flex h-14 shrink-0 items-center gap-3 border-b border-border bg-card px-4 md:px-5" style={{ backgroundColor: "rgba(255,255,255,0.96)" }}>
+        <header className="app-topbar sticky top-0 z-20 flex h-14 shrink-0 items-center gap-3 border-b border-border bg-card/90 px-4 backdrop-blur md:px-5">
           <button
             type="button"
             aria-label="Open navigation"
