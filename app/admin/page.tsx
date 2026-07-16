@@ -194,6 +194,9 @@ export default async function AdminPage({
             <p className="muted">
               {seatSummary.assigned} of {seatSummary.purchased} seats assigned ({seatSummary.available}{" "}
               available)
+              {seatSummary.maxSeats != null
+                ? ` · ${seatSummary.planName} cap ${seatSummary.maxSeats}`
+                : ` · ${seatSummary.planName} has no seat maximum`}
             </p>
             <div className="flex flex-wrap gap-2">
               <Link href="/admin/billing" className="btn-secondary">

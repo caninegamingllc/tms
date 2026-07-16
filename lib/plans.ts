@@ -55,8 +55,9 @@ export type PlanFeature = (typeof PLAN_FEATURES)[number];
 export type PlanDefinition = {
   id: PlanId;
   name: string;
+  /** Per-seat monthly price in cents (Free is $0). */
   priceMonthlyCents: number;
-  /** Max assignable seats. null = unlimited. */
+  /** Max purchasable seats for the plan. null = no purchase cap (Premium). */
   maxSeats: number | null;
   /** Soft cap on loads created per calendar month (Free only). null = unlimited. */
   monthlyLoadCap: number | null;
@@ -130,9 +131,6 @@ export const PLANS: Record<PlanId, PlanDefinition> = {
   }
 };
 
-/** Sensible seat budget stored for Premium (effectively unlimited for typical brokerages). */
-export const PREMIUM_SEAT_BUDGET = 999;
-
 export function isPlanId(value: string | null | undefined): value is PlanId {
   return value === "FREE" || value === "LITE" || value === "PREMIUM";
 }
@@ -152,12 +150,29 @@ export function planHasFeature(
   return getPlan(plan).features.includes(feature);
 }
 
-export function includedSeatQuantity(plan: PlanId | string | null | undefined): number {
-  const definition = getPlan(plan);
-  if (definition.maxSeats == null) {
-    return PREMIUM_SEAT_BUDGET;
+/** Max seats that may be purchased on this plan. null = no cap. */
+export function planSeatPurchaseCap(plan: PlanId | string | null | undefined): number | null {
+  return getPlan(plan).maxSeats;
+}
+
+/**
+ * Validate a purchased seat quantity for a paid plan.
+ * Returns an error message, or null when valid.
+ */
+export function validateSeatQuantityForPlan(
+  plan: Exclude<PlanId, "FREE">,
+  quantity: number
+): string | null {
+  if (!Number.isInteger(quantity) || quantity < 1) {
+    return "Seat quantity must be at least 1";
   }
-  return definition.maxSeats;
+
+  const cap = planSeatPurchaseCap(plan);
+  if (cap != null && quantity > cap) {
+    return `${PLANS[plan].name} allows at most ${cap} seats. Choose Premium for more.`;
+  }
+
+  return null;
 }
 
 export function formatPlanPrice(plan: PlanId): string {
@@ -187,5 +202,5 @@ export function upgradePathMessage(feature: PlanFeature, currentPlan: PlanId): s
   const needsPremium = PLANS.PREMIUM.features.includes(feature) && !PLANS.LITE.features.includes(feature);
   const target = needsPremium ? "Premium" : "Lite";
   const price = needsPremium ? formatPlanPrice("PREMIUM") : formatPlanPrice("LITE");
-  return `This feature requires the ${target} plan (${price}/mo). You are on ${PLANS[currentPlan].name}.`;
+  return `This feature requires the ${target} plan (${price}/seat/mo). You are on ${PLANS[currentPlan].name}.`;
 }

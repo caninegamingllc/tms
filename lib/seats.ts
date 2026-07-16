@@ -1,10 +1,5 @@
 import { prisma } from "@/lib/db";
-import {
-  getPlan,
-  includedSeatQuantity,
-  normalizePlanId,
-  type PlanId
-} from "@/lib/plans";
+import { getPlan, normalizePlanId, type PlanId } from "@/lib/plans";
 
 export type SeatSummary = {
   purchased: number;
@@ -22,6 +17,17 @@ export function canAccessTms(membership: { seatAssignedAt: Date | null }) {
 
 export function canAccessAdmin(role: string) {
   return role === "OWNER" || role === "ADMIN";
+}
+
+function purchasedSeatCount(
+  plan: PlanId,
+  seatQuantity: number | null | undefined
+): number {
+  if (seatQuantity != null && seatQuantity > 0) {
+    return seatQuantity;
+  }
+  // Free includes one seat; paid plans must purchase quantity via Stripe.
+  return plan === "FREE" ? 1 : 0;
 }
 
 export async function getCompanyPlan(companyId: string): Promise<PlanId> {
@@ -42,10 +48,7 @@ export async function getSeatSummary(companyId: string): Promise<SeatSummary> {
 
   const plan = normalizePlanId(subscription?.plan);
   const definition = getPlan(plan);
-  const purchased =
-    subscription?.seatQuantity && subscription.seatQuantity > 0
-      ? subscription.seatQuantity
-      : includedSeatQuantity(plan);
+  const purchased = purchasedSeatCount(plan, subscription?.seatQuantity);
   const subscriptionStatus = subscription?.status ?? "NONE";
 
   return {
@@ -70,18 +73,15 @@ export async function assignSeat(membershipId: string, companyId: string) {
     ]);
 
     const plan = normalizePlanId(subscription?.plan);
-    const purchased =
-      subscription?.seatQuantity && subscription.seatQuantity > 0
-        ? subscription.seatQuantity
-        : includedSeatQuantity(plan);
+    const purchased = purchasedSeatCount(plan, subscription?.seatQuantity);
     const subscriptionStatus = subscription?.status ?? "NONE";
     const available = Math.max(0, purchased - assigned);
 
     if (available <= 0) {
       throw new Error(
         plan === "FREE"
-          ? "Free plan includes only one seat. Upgrade to Lite or Premium to add users."
-          : "No available seats. Upgrade your plan or free a seat in Admin."
+          ? "Free plan includes only one seat. Upgrade to Lite or Premium and purchase seats to add users."
+          : "No available seats. Purchase more seats in Billing or free a seat in Admin."
       );
     }
 

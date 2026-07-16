@@ -1,19 +1,19 @@
 # Stripe Plan Billing Setup
 
-This TMS bills per organization for **subscription plans**:
+This TMS bills per organization for **subscription plans** with **per-seat quantity**:
 
-| Plan | Price | Seats |
-|------|-------|-------|
-| Free | $0 | 1 |
-| Lite | $20/month | up to 5 |
-| Premium | $60/month | unlimited (stored as 999) |
+| Plan | Price | Seat purchase |
+|------|-------|---------------|
+| Free | $0 | 1 included seat (cannot buy more) |
+| Lite | $20 / seat / month | Purchase 1–5 seats |
+| Premium | $60 / seat / month | Purchase any number of seats |
 
-Feature access is controlled by `SeatSubscription.plan` (`FREE` | `LITE` | `PREMIUM`). See `lib/plans.ts`.
+Feature access is controlled by `SeatSubscription.plan` (`FREE` | `LITE` | `PREMIUM`). Purchased seats are stored on `SeatSubscription.seatQuantity` (from Stripe subscription item quantity). See `lib/plans.ts`.
 
 ## Dashboard setup
 
 1. Create products **TMS Lite** and **TMS Premium**.
-2. Add recurring monthly Prices: **$20.00** (Lite) and **$60.00** (Premium).
+2. Add recurring monthly **per-unit** Prices: **$20.00** (Lite) and **$60.00** (Premium). Quantity on the subscription = number of seats.
 3. Copy Price IDs into:
    - `STRIPE_LITE_PRICE_ID`
    - `STRIPE_PREMIUM_PRICE_ID`
@@ -41,7 +41,9 @@ Use the signing secret printed by the Stripe CLI in `STRIPE_WEBHOOK_SECRET` whil
 ## Behavior
 
 - New companies start on **Free** with one seat assigned to the owner.
-- Admins upgrade to Lite or Premium from **Admin → Billing**.
-- Seat counts and feature gates follow the plan (nav, pages, and server actions).
+- Admins choose Lite or Premium from **Admin → Billing** and enter the **total** seats to purchase.
+- Lite rejects quantities above 5; Premium has no maximum.
+- The whole organization is billed on a single plan rate (never mix Lite and Premium seats).
+- Seat assignment and feature gates follow purchased quantity + plan features.
 - Canceling a paid Stripe subscription returns the org to Free (1 seat); excess seats are unassigned.
 - Admin and Billing remain available to owners/admins without a seat.

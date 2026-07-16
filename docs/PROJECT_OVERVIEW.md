@@ -35,7 +35,7 @@ A multi-tenant freight brokerage TMS inspired by AscendTMS-style workflows. One 
 | Styling | Tailwind CSS |
 | ORM / DB | Prisma 6 + SQLite (`DATABASE_URL=file:./dev.db`) |
 | Auth | Cookie sessions (`tms_session`), scrypt password hashes, Google/Microsoft OAuth |
-| Billing | Stripe seat subscriptions ($25/seat/month) |
+| Billing | Stripe plans (Lite/Premium) billed per seat/month |
 | Maps / Places | Google Places, Geocoding, Routes APIs + Leaflet map UI |
 | Carrier lookup | FMCSA QCMobile API |
 | Fuel index | EIA weekly on-highway diesel |
@@ -125,7 +125,9 @@ Enable Places API (New), Geocoding API, and Routes API on the Google Cloud proje
 | `STRIPE_SECRET_KEY` | Server Stripe API |
 | `STRIPE_WEBHOOK_SECRET` | Webhook signature verification |
 | `NEXT_PUBLIC_STRIPE_PUBLISHABLE_KEY` | Client publishable key |
-| `STRIPE_SEAT_PRICE_ID` | Recurring per-seat price |
+| `STRIPE_LITE_PRICE_ID` | Lite per-seat monthly price |
+| `STRIPE_PREMIUM_PRICE_ID` | Premium per-seat monthly price |
+| `STRIPE_SEAT_PRICE_ID` | Optional legacy per-seat price |
 | `STRIPE_DEV_PROMO_CODE` | Optional checkout promo (e.g. `tms100`) |
 
 Details: [`docs/STRIPE_SETUP.md`](./STRIPE_SETUP.md).
@@ -227,8 +229,8 @@ Delegated scopes used: `openid`, `profile`, `email`, `User.Read`, `Mail.Send`, `
 
 ### Seat billing (Stripe)
 
-- Seats purchased per organization at **$25/seat/month**
-- Stored on `SeatSubscription` (`seatQuantity`, Stripe IDs, status, period end)
+- Org picks **Free** (1 included seat), **Lite** ($20/seat/mo, max 5), or **Premium** ($60/seat/mo, no max)
+- Purchased seat count is Stripe subscription quantity on `SeatSubscription.seatQuantity`
 - Admins assign/unassign seats in Admin
 - Operational pages require `seatAssignedAt`
 - Owners/admins can still reach Admin and Billing without a seat

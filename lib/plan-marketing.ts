@@ -14,14 +14,14 @@ export function planHighlights(plan: PlanId): string[] {
       ];
     case "LITE":
       return [
-        "Up to 5 seats",
+        "Buy up to 5 seats ($20/seat/mo)",
         "Dispatch, docs & invoice PDFs",
         "AR/AP + aging + factoring",
         "FMCSA lookup & QuickBooks IIF"
       ];
     case "PREMIUM":
       return [
-        "Unlimited seats & branches",
+        "Buy as many seats as you need ($60/seat/mo)",
         "Customer portal & mailbox email",
         "Commissions, QBO Online, maps",
         "Late fees, bulk workflows, audit log"
@@ -44,10 +44,10 @@ export const PREMIUM_ONLY_HIGHLIGHTS = [
 export function planSeatLabel(plan: PlanId): string {
   switch (plan) {
     case "FREE":
-      return "1 seat";
+      return "1 seat included";
     case "LITE":
-      return "Up to 5 seats";
+      return "Buy up to 5 seats";
     case "PREMIUM":
-      return "Unlimited seats";
+      return "Buy unlimited seats";
   }
 }

@@ -6,7 +6,7 @@ import type Stripe from "stripe";
 import { resolvePublicAppUrl } from "@/lib/app-url";
 import { requireAdmin } from "@/lib/auth";
 import { prisma } from "@/lib/db";
-import { includedSeatQuantity, isPlanId, type PlanId } from "@/lib/plans";
+import { isPlanId, validateSeatQuantityForPlan, type PlanId } from "@/lib/plans";
 import { autoAssignOwnerOnPurchase, pruneSeatsToQuantity } from "@/lib/seats";
 import {
   getPlanPriceId,
@@ -154,12 +154,17 @@ export async function createPlanCheckoutSession(formData: FormData) {
 
   const planRaw = String(formData.get("plan") ?? "").trim().toUpperCase();
   const promoCode = String(formData.get("promoCode") ?? "").trim();
+  const quantity = Number(formData.get("quantity"));
 
   if (planRaw !== "LITE" && planRaw !== "PREMIUM") {
     redirectBillingError("Choose the Lite or Premium plan");
   }
 
   const plan = planRaw as Exclude<PlanId, "FREE">;
+  const quantityError = validateSeatQuantityForPlan(plan, quantity);
+  if (quantityError) {
+    redirectBillingError(quantityError);
+  }
 
   try {
     const stripe = getStripe();
@@ -188,7 +193,7 @@ export async function createPlanCheckoutSession(formData: FormData) {
     );
 
     // Prefer updating an existing paid subscription instead of creating a second one.
-    // Promo codes only apply to new Checkout Sessions; ignore promo on plan changes.
+    // Promo codes only apply to new Checkout Sessions; ignore promo on plan/quantity updates.
     try {
       const existing = await findUpdatableSeatSubscription(
         stripe,
@@ -207,7 +212,7 @@ export async function createPlanCheckoutSession(formData: FormData) {
             {
               id: item.id,
               price: priceId,
-              quantity: 1
+              quantity
             }
           ],
           proration_behavior: "create_prorations",
@@ -228,7 +233,7 @@ export async function createPlanCheckoutSession(formData: FormData) {
     const sessionParams: Stripe.Checkout.SessionCreateParams = {
       mode: "subscription",
       customer: customerId,
-      line_items: [{ price: priceId, quantity: 1 }],
+      line_items: [{ price: priceId, quantity }],
       success_url: `${baseUrl}/admin/billing?success=1`,
       cancel_url: `${baseUrl}/admin/billing?canceled=1`,
       metadata: {
@@ -263,11 +268,15 @@ export async function createPlanCheckoutSession(formData: FormData) {
 /** @deprecated Use createPlanCheckoutSession — kept so old forms do not crash. */
 export async function createSeatCheckoutSession(formData: FormData) {
   const quantity = Number(formData.get("quantity"));
-  if (Number.isInteger(quantity) && quantity > 5) {
-    formData.set("plan", "PREMIUM");
-  } else {
-    formData.set("plan", "LITE");
+  const planFromForm = String(formData.get("plan") ?? "").trim().toUpperCase();
+
+  if (planFromForm !== "LITE" && planFromForm !== "PREMIUM") {
+    formData.set(
+      "plan",
+      Number.isInteger(quantity) && quantity > 5 ? "PREMIUM" : "LITE"
+    );
   }
+
   await createPlanCheckoutSession(formData);
 }
 
@@ -421,12 +430,14 @@ export async function syncSeatSubscriptionFromStripe(
 
   const mappedStatus = statusMap[target.status] ?? "NONE";
   const metadataPlan = target.metadata?.plan;
+  const fromPrice = resolvePlanFromStripePrice(priceId, quantity);
   const resolved =
     mappedStatus === "CANCELED" || mappedStatus === "NONE"
       ? { plan: "FREE" as PlanId, seatQuantity: 1 }
-      : isPlanId(metadataPlan)
-        ? { plan: metadataPlan, seatQuantity: includedSeatQuantity(metadataPlan) }
-        : resolvePlanFromStripePrice(priceId, quantity);
+      : {
+          plan: isPlanId(metadataPlan) ? metadataPlan : fromPrice.plan,
+          seatQuantity: Math.max(1, quantity || fromPrice.seatQuantity)
+        };
 
   await prisma.seatSubscription.upsert({
     where: { companyId },

@@ -35,25 +35,27 @@ export default async function BillingPage({
   ]);
   const stripeReady = isStripeConfigured();
   const currentPlan = seatSummary.plan;
+  const defaultQuantity = Math.max(1, seatSummary.purchased || 1);
 
   return (
     <>
       <PageHeader
         title="Billing & Plans"
-        description="Choose Free ($0), Lite ($20/mo), or Premium ($60/mo). Seat limits and features follow your plan."
+        description="Choose Free ($0), Lite ($20/seat/mo, max 5), or Premium ($60/seat/mo, buy as many as you need)."
       />
 
       {params.welcome === "1" ? (
         <div className="card mb-6 border-primary/20 bg-lightprimary text-sm text-primary">
-          You are on the Free plan with one seat. Upgrade below when you need team seats, documents, or
-          accounting. Dev promo: <strong>{process.env.STRIPE_DEV_PROMO_CODE ?? "DEV100"}</strong>
+          You are on the Free plan with one seat. Upgrade below and purchase seats when you need a team,
+          documents, or accounting. Dev promo:{" "}
+          <strong>{process.env.STRIPE_DEV_PROMO_CODE ?? "DEV100"}</strong>
         </div>
       ) : null}
 
       {params.needsSeat === "1" ? (
         <div className="card mb-6 border-amber-200 bg-amber-50 text-sm text-amber-800">
-          You need a seat assigned to access operational TMS features. Confirm your plan below, then assign
-          seats in{" "}
+          You need a seat assigned to access operational TMS features. Confirm your plan and seat count
+          below, then assign seats in{" "}
           <Link href="/admin" className="font-semibold underline">
             Admin
           </Link>
@@ -63,7 +65,7 @@ export default async function BillingPage({
 
       {params.success === "1" ? (
         <div className="card mb-6 border-emerald-200 bg-emerald-50 text-sm text-emerald-800">
-          Plan updated successfully.
+          Plan and seats updated successfully.
         </div>
       ) : null}
 
@@ -81,9 +83,8 @@ export default async function BillingPage({
 
       {currentPlan === "FREE" && params.welcome !== "1" ? (
         <div className="card mb-6 border-amber-200 bg-amber-50 text-sm text-amber-800">
-          Free includes only one seat (usually the owner). Upgrade to{" "}
-          <strong>Lite</strong> (up to 5 seats) or <strong>Premium</strong> (effectively unlimited) to
-          assign seats to teammates.
+          Free allows only one active user (usually the owner). Upgrade to <strong>Lite</strong> (buy up
+          to 5 seats) or <strong>Premium</strong> (buy as many seats as you need) for teammates.
         </div>
       ) : null}
 
@@ -96,7 +97,7 @@ export default async function BillingPage({
             </div>
             <div className="rounded-2xl bg-muted p-4">
               <p className="text-2xl font-bold text-foreground">{seatSummary.purchased}</p>
-              <p className="text-xs text-muted-foreground">Seats included</p>
+              <p className="text-xs text-muted-foreground">Seats purchased</p>
             </div>
             <div className="rounded-2xl bg-muted p-4">
               <p className="text-2xl font-bold text-foreground">{seatSummary.assigned}</p>
@@ -107,7 +108,17 @@ export default async function BillingPage({
               <p className="text-xs text-muted-foreground">Available</p>
             </div>
           </div>
-          <p className="mt-4 text-sm text-muted-foreground">
+          {seatSummary.maxSeats != null ? (
+            <p className="mt-4 text-sm text-muted-foreground">
+              Plan seat cap:{" "}
+              <span className="font-semibold text-foreground">{seatSummary.maxSeats}</span>
+            </p>
+          ) : (
+            <p className="mt-4 text-sm text-muted-foreground">
+              Plan seat cap: <span className="font-semibold text-foreground">No maximum</span>
+            </p>
+          )}
+          <p className="mt-2 text-sm text-muted-foreground">
             Subscription status:{" "}
             <span className="font-semibold text-foreground">{seatSummary.subscriptionStatus}</span>
           </p>
@@ -121,14 +132,20 @@ export default async function BillingPage({
 
         <Tile id="purchase">
           <p className="muted mb-4">
-            Pick a plan for this organization. Seats are included with the plan and cannot be moved between
-            organizations.
+            Pick one plan for this organization. Everyone is billed on that plan&apos;s per-seat rate.
+            Enter the <strong>total</strong> seats to purchase (not an add-on count). Seats cannot move
+            between organizations.
           </p>
 
           <div className="grid gap-4">
             {PLAN_ORDER.map((planId) => {
               const plan = PLANS[planId];
               const isCurrent = currentPlan === planId;
+              const seatDefault =
+                planId === "LITE"
+                  ? Math.min(5, defaultQuantity)
+                  : defaultQuantity;
+
               return (
                 <div
                   key={planId}
@@ -140,7 +157,7 @@ export default async function BillingPage({
                     <h3 className="text-lg font-semibold text-foreground">{plan.name}</h3>
                     <p className="text-sm font-semibold text-foreground">
                       {formatPlanPrice(planId)}
-                      {planId === "FREE" ? "" : "/mo"}
+                      {planId === "FREE" ? "" : "/seat/mo"}
                     </p>
                   </div>
                   <ul className="mt-3 list-disc space-y-1 pl-5 text-sm text-muted-foreground">
@@ -149,14 +166,16 @@ export default async function BillingPage({
                     ))}
                   </ul>
 
-                  {isCurrent ? (
-                    <p className="mt-4 text-sm font-semibold text-primary">Current plan</p>
-                  ) : planId === "FREE" ? (
-                    <form action={activateFreePlan} className="mt-4">
-                      <button className="btn-secondary" type="submit">
-                        Switch to Free
-                      </button>
-                    </form>
+                  {planId === "FREE" ? (
+                    isCurrent ? (
+                      <p className="mt-4 text-sm font-semibold text-primary">Current plan</p>
+                    ) : (
+                      <form action={activateFreePlan} className="mt-4">
+                        <button className="btn-secondary" type="submit">
+                          Switch to Free
+                        </button>
+                      </form>
+                    )
                   ) : !stripeReady ? (
                     <p className="mt-4 rounded-xl bg-amber-50 px-4 py-3 text-sm text-amber-800">
                       Stripe is not configured. Set STRIPE_SECRET_KEY, STRIPE_LITE_PRICE_ID, and
@@ -165,7 +184,25 @@ export default async function BillingPage({
                   ) : (
                     <form action={createPlanCheckoutSession} className="mt-4 grid gap-3">
                       <input type="hidden" name="plan" value={planId} />
-                      {seatSummary.plan === "FREE" ? (
+                      <label className="grid gap-2">
+                        <span className="label">Total seats</span>
+                        <input
+                          name="quantity"
+                          className="input"
+                          type="number"
+                          min={1}
+                          max={planId === "LITE" ? 5 : undefined}
+                          step={1}
+                          defaultValue={seatDefault}
+                          required
+                        />
+                      </label>
+                      <p className="text-xs text-muted-foreground">
+                        {planId === "LITE"
+                          ? "Lite allows at most 5 seats for the organization."
+                          : "Premium has no seat maximum — purchase as many as you need."}
+                      </p>
+                      {currentPlan === "FREE" ? (
                         <label className="grid gap-2">
                           <span className="label">Promo code (optional)</span>
                           <input
@@ -176,12 +213,13 @@ export default async function BillingPage({
                         </label>
                       ) : (
                         <p className="text-xs text-muted-foreground">
-                          Changing plans updates your existing subscription. Promo codes apply to new
-                          checkouts only.
+                          Updates your existing subscription. Promo codes apply to new checkouts only.
                         </p>
                       )}
                       <button className="btn" type="submit">
-                        Upgrade to {plan.name}
+                        {isCurrent
+                          ? "Update seat quantity"
+                          : `Switch to ${plan.name}`}
                       </button>
                     </form>
                   )}
@@ -201,11 +239,12 @@ export default async function BillingPage({
 
         <Tile id="assign">
           <p className="muted">
-            After upgrading, assign seats to team members in the{" "}
+            After purchasing seats, assign them to team members in the{" "}
             <Link href="/admin" className="font-semibold text-primary underline">
               Admin console
             </Link>
-            . Free includes one seat (the owner). Lite includes up to five. Premium is effectively unlimited.
+            . Free allows one user. Lite is capped at five purchased seats. Premium lets you buy as many
+            seats as you need.
           </p>
         </Tile>
       </TileBoard>

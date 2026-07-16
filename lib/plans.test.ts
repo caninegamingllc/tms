@@ -1,26 +1,36 @@
 import assert from "node:assert/strict";
 import { describe, it } from "node:test";
 import {
-  includedSeatQuantity,
   planHasFeature,
+  planSeatPurchaseCap,
   PLANS,
+  validateSeatQuantityForPlan,
   type PlanFeature
 } from "@/lib/plans";
 
 describe("subscription plans", () => {
-  it("prices Free / Lite / Premium at $0 / $20 / $60", () => {
+  it("prices Free / Lite / Premium at $0 / $20 / $60 per seat", () => {
     assert.equal(PLANS.FREE.priceMonthlyCents, 0);
     assert.equal(PLANS.LITE.priceMonthlyCents, 2000);
     assert.equal(PLANS.PREMIUM.priceMonthlyCents, 6000);
   });
 
-  it("caps seats at 1 / 5 / unlimited", () => {
+  it("caps purchasable seats at 1 / 5 / unlimited", () => {
     assert.equal(PLANS.FREE.maxSeats, 1);
     assert.equal(PLANS.LITE.maxSeats, 5);
     assert.equal(PLANS.PREMIUM.maxSeats, null);
-    assert.equal(includedSeatQuantity("FREE"), 1);
-    assert.equal(includedSeatQuantity("LITE"), 5);
-    assert.ok(includedSeatQuantity("PREMIUM") >= 100);
+    assert.equal(planSeatPurchaseCap("FREE"), 1);
+    assert.equal(planSeatPurchaseCap("LITE"), 5);
+    assert.equal(planSeatPurchaseCap("PREMIUM"), null);
+  });
+
+  it("validates Lite and Premium seat quantities", () => {
+    assert.equal(validateSeatQuantityForPlan("LITE", 1), null);
+    assert.equal(validateSeatQuantityForPlan("LITE", 5), null);
+    assert.match(validateSeatQuantityForPlan("LITE", 6) ?? "", /at most 5/);
+    assert.equal(validateSeatQuantityForPlan("PREMIUM", 1), null);
+    assert.equal(validateSeatQuantityForPlan("PREMIUM", 50), null);
+    assert.match(validateSeatQuantityForPlan("PREMIUM", 0) ?? "", /at least 1/);
   });
 
   it("keeps Free features minimal", () => {
