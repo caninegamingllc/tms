@@ -7,16 +7,29 @@ import { PageHeader } from "@/components/page-header";
 import { TileBoard, Tile } from "@/components/tile-board";
 import { getDieselPrices } from "@/lib/eia-diesel";
 import { formatDateTime, formatMoney } from "@/lib/format";
+import { planHasFeature } from "@/lib/plans";
+import { requireTmsAccess } from "@/lib/permissions";
 import { getDashboardData } from "@/lib/queries";
 import { DASHBOARD_TILES } from "@/lib/tile-defaults";
 import { loadPageLayouts } from "@/lib/ui-preferences-load";
 
-export default async function DashboardPage() {
+export default async function DashboardPage({
+  searchParams
+}: {
+  searchParams: Promise<{ welcome?: string; error?: string }>;
+}) {
+  const user = await requireTmsAccess();
+  const params = await searchParams;
+  const showFuel = planHasFeature(user.plan, "dashboard_fuel_index");
   const [data, dieselPrices, layouts] = await Promise.all([
     getDashboardData(),
-    getDieselPrices(),
+    showFuel ? getDieselPrices() : Promise.resolve(null),
     loadPageLayouts("dashboard")
   ]);
+
+  const tiles = showFuel
+    ? DASHBOARD_TILES
+    : DASHBOARD_TILES.filter((tile) => tile.id !== "fuel-index");
 
   return (
     <>
@@ -31,7 +44,23 @@ export default async function DashboardPage() {
         }
       />
 
-      <TileBoard pageId="dashboard" tiles={DASHBOARD_TILES} initialLayouts={layouts}>
+      {params.welcome === "1" ? (
+        <div className="card mb-6 border-primary/20 bg-lightprimary text-sm text-primary">
+          Welcome! You are on the Free plan with one seat.{" "}
+          <Link href="/admin/billing" className="font-semibold underline">
+            Upgrade in Billing
+          </Link>{" "}
+          for documents, accounting, and team seats.
+        </div>
+      ) : null}
+
+      {params.error ? (
+        <div className="card mb-6 border-rose-200 bg-rose-50 text-sm font-semibold text-rose-700">
+          {params.error}
+        </div>
+      ) : null}
+
+      <TileBoard pageId="dashboard" tiles={tiles} initialLayouts={layouts}>
         <Tile id="metrics">
           <div className="overflow-hidden rounded-lg border border-border bg-card">
             <div className="grid md:grid-cols-2 xl:grid-cols-4 xl:[&>*:nth-child(4n)]:border-r-0">
@@ -63,9 +92,11 @@ export default async function DashboardPage() {
           </div>
         </Tile>
 
-        <Tile id="fuel-index">
-          <FuelIndexCard data={dieselPrices} />
-        </Tile>
+        {showFuel && dieselPrices ? (
+          <Tile id="fuel-index">
+            <FuelIndexCard data={dieselPrices} />
+          </Tile>
+        ) : null}
 
         <Tile id="load-board">
           <div className="flex items-center justify-between gap-3">

@@ -1,7 +1,7 @@
 import Link from "next/link";
 import { PageHeader } from "@/components/page-header";
 import { TileBoard, Tile } from "@/components/tile-board";
-import { requireTmsAccess } from "@/lib/permissions";
+import { requirePlanFeature } from "@/lib/permissions";
 import { canManageUsers } from "@/lib/scope";
 import { prisma } from "@/lib/db";
 import { formatDate, humanize } from "@/lib/format";
@@ -20,7 +20,7 @@ const capabilities: Record<string, string[]> = {
 };
 
 export default async function IntegrationsPage() {
-  const user = await requireTmsAccess();
+  const user = await requirePlanFeature("marketplace_integrations");
   const [integrations, quickbooksMethod, layouts] = await Promise.all([
     prisma.integrationAccount.findMany({
       where: { companyId: user.companyId },

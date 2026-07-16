@@ -2,6 +2,7 @@ import Link from "next/link";
 import { PageHeader } from "@/components/page-header";
 import { TileBoard, Tile } from "@/components/tile-board";
 import { requireUser } from "@/lib/auth";
+import { requirePlanFeature } from "@/lib/permissions";
 import { disconnectMailbox, syncMyMailbox } from "@/lib/mail-actions";
 import { listUserMailboxes } from "@/lib/mail/user-mailbox";
 import { isGoogleOAuthConfigured } from "@/lib/oauth/google";
@@ -20,6 +21,7 @@ export default async function EmailSettingsPage({
     provider?: string;
   }>;
 }) {
+  await requirePlanFeature("email_mailbox");
   const user = await requireUser();
   const params = await searchParams;
   const [mailboxes, layouts] = await Promise.all([

@@ -10,6 +10,7 @@ import { refreshSeatSubscriptionFromStripe } from "@/lib/billing-actions";
 import { requireAdmin } from "@/lib/auth";
 import { ensureCompanyCatalogs } from "@/lib/catalogs";
 import { prisma } from "@/lib/db";
+import { planHasFeature } from "@/lib/plans";
 import { getSeatSummary } from "@/lib/seats";
 import { ADMIN_TILES } from "@/lib/tile-defaults";
 import { loadPageLayouts } from "@/lib/ui-preferences-load";
@@ -22,7 +23,15 @@ export default async function AdminPage({
 }) {
   const currentUser = await requireAdmin();
   const { invite, emailSent, error, tab } = await searchParams;
-  const activeTab = tab === "branches" || tab === "settings" || tab === "audit" ? tab : "users";
+  const canBranches = planHasFeature(currentUser.plan, "multi_branch");
+  const canAudit = planHasFeature(currentUser.plan, "audit_log");
+  const canInvite = planHasFeature(currentUser.plan, "invite_users");
+  const activeTab =
+    (tab === "branches" && canBranches) ||
+    tab === "settings" ||
+    (tab === "audit" && canAudit)
+      ? tab
+      : "users";
 
   await refreshSeatSubscriptionFromStripe(currentUser.companyId);
   await ensureCompanyCatalogs(currentUser.companyId);
@@ -159,10 +168,10 @@ export default async function AdminPage({
 
   const tabs = [
     { id: "users", label: "Users" },
-    { id: "branches", label: "Branches" },
+    ...(canBranches ? [{ id: "branches" as const, label: "Branches" }] : []),
     { id: "settings", label: "Settings" },
-    { id: "audit", label: "Audit Log" }
-  ] as const;
+    ...(canAudit ? [{ id: "audit" as const, label: "Audit Log" }] : [])
+  ];
 
   return (
     <>
@@ -217,6 +226,7 @@ export default async function AdminPage({
               currentUserId={currentUser.id}
               currentUserRole={currentUser.role}
               seatAvailable={seatSummary.available}
+              canInvite={canInvite}
             />
           ) : null}
 

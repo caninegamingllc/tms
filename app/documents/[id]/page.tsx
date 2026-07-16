@@ -4,7 +4,7 @@ import { DocumentMetadataForm } from "@/components/document-metadata-form";
 import { PageHeader } from "@/components/page-header";
 import { PrintButton } from "@/components/print-button";
 import { getBranchScope } from "@/lib/branch-filter-server";
-import { requireTmsAccess } from "@/lib/permissions";
+import { requirePlanFeature } from "@/lib/permissions";
 import { isPreviewableMimeType } from "@/lib/document-storage";
 import { parseDocumentTypes } from "@/lib/document-types";
 import { prisma } from "@/lib/db";
@@ -12,7 +12,7 @@ import { formatDateTime, humanize } from "@/lib/format";
 
 export default async function DocumentDetailPage({ params }: { params: Promise<{ id: string }> }) {
   const { id } = await params;
-  const user = await requireTmsAccess();
+  const user = await requirePlanFeature("documents_upload");
   const scope = await getBranchScope(user);
 
   const [document, loads, customers, carriers, documentIds] = await Promise.all([

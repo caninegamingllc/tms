@@ -8,6 +8,7 @@ import { prisma } from "@/lib/db";
 import { hashPassword, requireAdmin } from "@/lib/auth";
 import { sendInviteEmail } from "@/lib/mail";
 import { assignSeat, unassignSeat } from "@/lib/seats";
+import { assertPlanFeature } from "@/lib/permissions";
 import { setMembershipBranches } from "@/lib/membership-branches";
 
 const inviteDays = 7;
@@ -121,6 +122,7 @@ function redirectWithAdminError(message: string) {
 
 export async function inviteUser(formData: FormData) {
   const actor = await requireAdmin();
+  await assertPlanFeature(actor.companyId, "invite_users");
   const email = requiredString(formData, "email").toLowerCase();
   const branchIds = parseBranchIdsFromForm(formData);
   const primaryBranchId = optionalString(formData, "primaryBranchId");
@@ -599,6 +601,7 @@ export async function unassignSeatFromMember(formData: FormData) {
 
 export async function createBranch(formData: FormData) {
   const actor = await requireAdmin();
+  await assertPlanFeature(actor.companyId, "multi_branch");
 
   const branch = await prisma.branch.create({
     data: {

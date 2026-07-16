@@ -5,7 +5,7 @@ import { PageHeader } from "@/components/page-header";
 import { createCarrierBill } from "@/lib/actions";
 import { buildDefaultCarrierBillForm } from "@/lib/carrier-bill-form";
 import { resolveCarrierApPayee } from "@/lib/accounting-payee";
-import { requireTmsAccess } from "@/lib/permissions";
+import { requirePlanFeature } from "@/lib/permissions";
 import { canAccessRecord } from "@/lib/branch-filter-server";
 import { prisma } from "@/lib/db";
 
@@ -14,7 +14,7 @@ export default async function NewCarrierBillPage({
 }: {
   searchParams: Promise<{ loadId?: string }>;
 }) {
-  const user = await requireTmsAccess();
+  const user = await requirePlanFeature("accounting_ar_ap");
   const { loadId } = await searchParams;
   if (!loadId) {
     redirect("/accounting?tab=bills&error=" + encodeURIComponent("Select a load to record a bill."));

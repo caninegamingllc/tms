@@ -285,6 +285,8 @@ model SeatSubscription {
   stripeCustomerId     String?   @unique
   stripeSubscriptionId String?   @unique
   stripePriceId        String?
+  /// FREE | LITE | PREMIUM — feature package for this organization
+  plan                 String    @default("FREE")
   seatQuantity         Int       @default(0)
   status               String    @default("NONE")
   currentPeriodEnd     DateTime?

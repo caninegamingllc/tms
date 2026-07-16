@@ -6,7 +6,7 @@ import { revalidatePath } from "next/cache";
 import { redirect } from "next/navigation";
 import { requireAdmin } from "@/lib/auth";
 import { prisma } from "@/lib/db";
-import { requireWriteUser } from "@/lib/permissions";
+import { assertPlanFeature, requireWriteUser } from "@/lib/permissions";
 import { canAccessRecord } from "@/lib/branch-filter-server";
 import {
   disconnectQuickbooksOnline,
@@ -25,6 +25,13 @@ export async function updateAccountingSettings(formData: FormData) {
   const methodRaw = String(formData.get("quickbooksMethod") ?? "NONE").trim();
   const method: QuickbooksMethod =
     methodRaw === "ONLINE" || methodRaw === "IIF" || methodRaw === "NONE" ? methodRaw : "NONE";
+
+  if (method === "IIF") {
+    await assertPlanFeature(actor.companyId, "quickbooks_iif");
+  }
+  if (method === "ONLINE") {
+    await assertPlanFeature(actor.companyId, "quickbooks_online");
+  }
 
   const config = {
     accountsReceivable:
@@ -69,6 +76,7 @@ export async function updateAccountingSettings(formData: FormData) {
 
 export async function startQuickbooksConnect() {
   const actor = await requireAdmin();
+  await assertPlanFeature(actor.companyId, "quickbooks_online");
   const state = `${actor.companyId}:${randomBytes(16).toString("hex")}`;
   const cookieStore = await cookies();
   cookieStore.set(OAUTH_STATE_COOKIE, state, {

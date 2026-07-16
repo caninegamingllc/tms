@@ -10,7 +10,8 @@ import {
   updateCustomerRateConfirmationTerms
 } from "@/lib/actions";
 import { canAccessRecord } from "@/lib/branch-filter-server";
-import { requireTmsAccess } from "@/lib/permissions";
+import { requireTmsAccess, userHasPlanFeature } from "@/lib/permissions";
+import { CUSTOMER_DETAIL_TILES } from "@/lib/tile-defaults";
 import { canPickBranch, canWrite, isAdminRole } from "@/lib/scope";
 import { toDocumentTableRows } from "@/lib/document-rows";
 import { prisma } from "@/lib/db";
@@ -23,7 +24,6 @@ import {
   revokeCustomerPortalLink,
   updateCustomerPaymentUrl
 } from "@/lib/portal-admin-actions";
-import { CUSTOMER_DETAIL_TILES } from "@/lib/tile-defaults";
 import { loadPageLayouts } from "@/lib/ui-preferences-load";
 
 export default async function CustomerDetailPage({
@@ -73,6 +73,13 @@ export default async function CustomerDetailPage({
     .filter((invoice) => invoice.status !== "PAID" && invoice.status !== "VOID")
     .reduce((sum, invoice) => sum + invoice.totalCents, 0);
   const writable = canWrite(user);
+  const canPortal = userHasPlanFeature(user, "customer_portal");
+  const canCrmDocs = userHasPlanFeature(user, "crm_documents_activity");
+  const customerTiles = CUSTOMER_DETAIL_TILES.filter((tile) => {
+    if (tile.id === "portal") return canPortal;
+    if (tile.id === "activity" || tile.id === "documents") return canCrmDocs;
+    return true;
+  });
   const showBranchPicker = canPickBranch(user);
   const branches = showBranchPicker
     ? await prisma.branch.findMany({
@@ -122,7 +129,7 @@ export default async function CustomerDetailPage({
         </div>
       ) : null}
 
-      <TileBoard pageId="customer-detail" tiles={CUSTOMER_DETAIL_TILES} initialLayouts={layouts}>
+      <TileBoard pageId="customer-detail" tiles={customerTiles} initialLayouts={layouts}>
         <Tile id="profile">
           {writable ? (
             <form action={updateCustomer} className="grid gap-3">
@@ -313,6 +320,7 @@ export default async function CustomerDetailPage({
           )}
         </Tile>
 
+        {canPortal ? (
         <Tile id="portal">
           <p className="muted">
             Invite contacts to the customer portal or share a magic link. Portal users only see their
@@ -440,7 +448,9 @@ export default async function CustomerDetailPage({
             )}
           </div>
         </Tile>
+        ) : null}
 
+        {canCrmDocs ? (
         <Tile id="activity">
           {writable ? (
             <form action={addCustomerActivityNote} className="grid gap-3 rounded-2xl bg-muted p-4">
@@ -474,7 +484,9 @@ export default async function CustomerDetailPage({
             )}
           </div>
         </Tile>
+        ) : null}
 
+        {canCrmDocs ? (
         <Tile id="documents">
           <div className="flex flex-wrap items-start justify-between gap-4">
             <p className="muted">Upload contracts, credit applications, and other customer-specific paperwork.</p>
@@ -500,6 +512,7 @@ export default async function CustomerDetailPage({
             />
           </div>
         </Tile>
+        ) : null}
       </TileBoard>
     </>
   );

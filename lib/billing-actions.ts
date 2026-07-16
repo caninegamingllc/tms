@@ -6,8 +6,14 @@ import type Stripe from "stripe";
 import { resolvePublicAppUrl } from "@/lib/app-url";
 import { requireAdmin } from "@/lib/auth";
 import { prisma } from "@/lib/db";
-import { autoAssignOwnerOnPurchase } from "@/lib/seats";
-import { getSeatPriceId, getStripe, isStripeConfigured } from "@/lib/stripe";
+import { includedSeatQuantity, isPlanId, type PlanId } from "@/lib/plans";
+import { autoAssignOwnerOnPurchase, pruneSeatsToQuantity } from "@/lib/seats";
+import {
+  getPlanPriceId,
+  getStripe,
+  isStripeConfigured,
+  resolvePlanFromStripePrice
+} from "@/lib/stripe";
 
 async function publicBillingBaseUrl() {
   const headerStore = await headers();
@@ -42,8 +48,9 @@ async function ensureStripeCustomer(
     create: {
       companyId,
       stripeCustomerId: customer.id,
-      status: "NONE",
-      seatQuantity: 0
+      plan: "FREE",
+      status: "ACTIVE",
+      seatQuantity: 1
     },
     update: { stripeCustomerId: customer.id }
   });
@@ -70,7 +77,6 @@ async function applyPromoToCheckout(
     redirectBillingError("Invalid promo code");
   }
 
-  // Only auto-apply the dev promo outside production / public hosts.
   const baseUrl = await publicBillingBaseUrl();
   const allowDevPromo =
     process.env.NODE_ENV !== "production" || /localhost|127\.0\.0\.1/i.test(baseUrl);
@@ -94,23 +100,25 @@ async function applyPromoToCheckout(
   }
 }
 
-export async function createSeatCheckoutSession(formData: FormData) {
+export async function createPlanCheckoutSession(formData: FormData) {
   const actor = await requireAdmin();
 
   if (!isStripeConfigured()) {
     redirectBillingError("Stripe is not configured");
   }
 
-  const quantity = Number(formData.get("quantity"));
+  const planRaw = String(formData.get("plan") ?? "").trim().toUpperCase();
   const promoCode = String(formData.get("promoCode") ?? "").trim();
 
-  if (!Number.isInteger(quantity) || quantity < 1) {
-    redirectBillingError("Quantity must be at least 1");
+  if (planRaw !== "LITE" && planRaw !== "PREMIUM") {
+    redirectBillingError("Choose the Lite or Premium plan");
   }
+
+  const plan = planRaw as Exclude<PlanId, "FREE">;
 
   try {
     const stripe = getStripe();
-    const priceId = getSeatPriceId();
+    const priceId = getPlanPriceId(plan);
     const baseUrl = await publicBillingBaseUrl();
 
     let subscription = await prisma.seatSubscription.findUnique({
@@ -119,7 +127,12 @@ export async function createSeatCheckoutSession(formData: FormData) {
 
     if (!subscription) {
       subscription = await prisma.seatSubscription.create({
-        data: { companyId: actor.companyId, status: "NONE", seatQuantity: 0 }
+        data: {
+          companyId: actor.companyId,
+          plan: "FREE",
+          status: "ACTIVE",
+          seatQuantity: 1
+        }
       });
     }
 
@@ -129,8 +142,6 @@ export async function createSeatCheckoutSession(formData: FormData) {
       subscription.stripeCustomerId
     );
 
-    // Prefer updating an existing active/past_due subscription instead of
-    // creating a second one — sync would otherwise keep only the newest qty.
     if (subscription.stripeSubscriptionId) {
       try {
         const existing = await stripe.subscriptions.retrieve(subscription.stripeSubscriptionId, {
@@ -145,7 +156,7 @@ export async function createSeatCheckoutSession(formData: FormData) {
 
           if (promoCode) {
             redirectBillingError(
-              "Promo codes apply to new checkouts only. Update seat quantity without a promo, or manage billing in the portal."
+              "Promo codes apply to new checkouts only. Change plans without a promo, or manage billing in the portal."
             );
           }
 
@@ -154,11 +165,11 @@ export async function createSeatCheckoutSession(formData: FormData) {
               {
                 id: item.id,
                 price: priceId,
-                quantity
+                quantity: 1
               }
             ],
             proration_behavior: "create_prorations",
-            metadata: { companyId: actor.companyId }
+            metadata: { companyId: actor.companyId, plan }
           });
 
           await syncSeatSubscriptionFromStripe(updated, actor.companyId);
@@ -176,12 +187,16 @@ export async function createSeatCheckoutSession(formData: FormData) {
     const sessionParams: Stripe.Checkout.SessionCreateParams = {
       mode: "subscription",
       customer: customerId,
-      line_items: [{ price: priceId, quantity }],
+      line_items: [{ price: priceId, quantity: 1 }],
       success_url: `${baseUrl}/admin/billing?success=1`,
       cancel_url: `${baseUrl}/admin/billing?canceled=1`,
-      metadata: { companyId: actor.companyId, membershipId: actor.membershipId },
+      metadata: {
+        companyId: actor.companyId,
+        membershipId: actor.membershipId,
+        plan
+      },
       subscription_data: {
-        metadata: { companyId: actor.companyId }
+        metadata: { companyId: actor.companyId, plan }
       }
     };
 
@@ -202,6 +217,53 @@ export async function createSeatCheckoutSession(formData: FormData) {
     const message = error instanceof Error ? error.message : "Checkout failed";
     redirectBillingError(message);
   }
+}
+
+/** @deprecated Use createPlanCheckoutSession — kept so old forms do not crash. */
+export async function createSeatCheckoutSession(formData: FormData) {
+  const quantity = Number(formData.get("quantity"));
+  if (Number.isInteger(quantity) && quantity > 5) {
+    formData.set("plan", "PREMIUM");
+  } else {
+    formData.set("plan", "LITE");
+  }
+  await createPlanCheckoutSession(formData);
+}
+
+export async function activateFreePlan() {
+  const actor = await requireAdmin();
+
+  const subscription = await prisma.seatSubscription.findUnique({
+    where: { companyId: actor.companyId }
+  });
+
+  if (subscription?.stripeSubscriptionId && subscription.status === "ACTIVE") {
+    redirectBillingError(
+      "Cancel your paid subscription in Manage Subscription before switching to Free."
+    );
+  }
+
+  await prisma.seatSubscription.upsert({
+    where: { companyId: actor.companyId },
+    create: {
+      companyId: actor.companyId,
+      plan: "FREE",
+      status: "ACTIVE",
+      seatQuantity: 1
+    },
+    update: {
+      plan: "FREE",
+      status: "ACTIVE",
+      seatQuantity: 1,
+      stripeSubscriptionId: null,
+      stripePriceId: null,
+      currentPeriodEnd: null
+    }
+  });
+
+  await pruneSeatsToQuantity(actor.companyId, 1);
+  await autoAssignOwnerOnPurchase(actor.companyId, actor.membershipId);
+  redirect("/admin/billing?success=1");
 }
 
 export async function createBillingPortalSession() {
@@ -287,6 +349,15 @@ export async function syncSeatSubscriptionFromStripe(
     paused: "PAST_DUE"
   };
 
+  const mappedStatus = statusMap[subscription.status] ?? "NONE";
+  const metadataPlan = subscription.metadata?.plan;
+  const resolved =
+    mappedStatus === "CANCELED" || mappedStatus === "NONE"
+      ? { plan: "FREE" as PlanId, seatQuantity: 1 }
+      : isPlanId(metadataPlan)
+        ? { plan: metadataPlan, seatQuantity: includedSeatQuantity(metadataPlan) }
+        : resolvePlanFromStripePrice(priceId, quantity);
+
   await prisma.seatSubscription.upsert({
     where: { companyId },
     create: {
@@ -294,19 +365,24 @@ export async function syncSeatSubscriptionFromStripe(
       stripeCustomerId: customerId,
       stripeSubscriptionId: subscription.id,
       stripePriceId: priceId,
-      seatQuantity: quantity,
-      status: statusMap[subscription.status] ?? "NONE",
+      plan: resolved.plan,
+      seatQuantity: resolved.seatQuantity,
+      status: mappedStatus === "NONE" ? "ACTIVE" : mappedStatus,
       currentPeriodEnd
     },
     update: {
       stripeCustomerId: customerId ?? undefined,
-      stripeSubscriptionId: subscription.id,
-      stripePriceId: priceId,
-      seatQuantity: quantity,
-      status: statusMap[subscription.status] ?? "NONE",
-      currentPeriodEnd
+      stripeSubscriptionId:
+        mappedStatus === "CANCELED" ? null : subscription.id,
+      stripePriceId: mappedStatus === "CANCELED" ? null : priceId,
+      plan: resolved.plan,
+      seatQuantity: resolved.seatQuantity,
+      status: mappedStatus === "CANCELED" || mappedStatus === "NONE" ? "ACTIVE" : mappedStatus,
+      currentPeriodEnd: mappedStatus === "CANCELED" ? null : currentPeriodEnd
     }
   });
+
+  await pruneSeatsToQuantity(companyId, resolved.seatQuantity);
 
   const ownerMembership = await prisma.companyMembership.findFirst({
     where: { companyId, role: "OWNER", status: "ACTIVE" },
@@ -340,7 +416,6 @@ export async function syncSeatSubscriptionForCompany(companyId: string) {
         expand: ["items.data.price"]
       });
 
-      // Prefer the stored subscription when it is still usable.
       if (
         subscription.status === "canceled" ||
         subscription.status === "incomplete_expired" ||
@@ -365,8 +440,6 @@ export async function syncSeatSubscriptionForCompany(companyId: string) {
       (item) => item.status === "active" || item.status === "trialing"
     );
 
-    // Prefer the highest seat quantity among active subscriptions so a
-    // stray qty-1 checkout cannot silently shrink licensed seats.
     subscription =
       activeSubscriptions.sort((left, right) => {
         const leftQty = left.items.data[0]?.quantity ?? 0;

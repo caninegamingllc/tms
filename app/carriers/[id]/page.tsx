@@ -10,7 +10,7 @@ import {
   updateCarrier,
   updateCarrierInsuranceCoverage
 } from "@/lib/actions";
-import { requireTmsAccess } from "@/lib/permissions";
+import { requireTmsAccess, userHasPlanFeature } from "@/lib/permissions";
 import { canWrite } from "@/lib/scope";
 import { insuranceCoverageTypes } from "@/lib/constants";
 import { toDocumentTableRows } from "@/lib/document-rows";
@@ -37,6 +37,11 @@ export default async function CarrierDetailPage({
   const { id } = await params;
   const { error, saved } = await searchParams;
   const user = await requireTmsAccess();
+  const canCrmDocs = userHasPlanFeature(user, "crm_documents_activity");
+  const carrierTiles = CARRIER_DETAIL_TILES.filter((tile) => {
+    if (tile.id === "activity" || tile.id === "documents") return canCrmDocs;
+    return true;
+  });
   const [carrier, layouts] = await Promise.all([
     prisma.carrier.findUnique({
       where: { id, companyId: user.companyId },
@@ -88,7 +93,7 @@ export default async function CarrierDetailPage({
         </div>
       ) : null}
 
-      <TileBoard pageId="carrier-detail" tiles={CARRIER_DETAIL_TILES} initialLayouts={layouts}>
+      <TileBoard pageId="carrier-detail" tiles={carrierTiles} initialLayouts={layouts}>
         <Tile id="profile">
           {writable ? (
             <form action={updateCarrier} className="grid gap-3">
@@ -205,6 +210,7 @@ export default async function CarrierDetailPage({
           </div>
         </Tile>
 
+        {canCrmDocs ? (
         <Tile id="activity">
           {writable ? (
             <form action={addCarrierActivityNote} className="grid gap-3 rounded-2xl bg-muted p-4">
@@ -238,6 +244,7 @@ export default async function CarrierDetailPage({
             )}
           </div>
         </Tile>
+        ) : null}
 
         <Tile id="insurance">
           <p className="muted">
@@ -318,6 +325,7 @@ export default async function CarrierDetailPage({
           </form>
         </Tile>
 
+        {canCrmDocs ? (
         <Tile id="documents">
           <div className="flex flex-wrap items-start justify-between gap-4">
             <p className="muted">
@@ -345,6 +353,7 @@ export default async function CarrierDetailPage({
             />
           </div>
         </Tile>
+        ) : null}
       </TileBoard>
     </>
   );

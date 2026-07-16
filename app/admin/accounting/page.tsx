@@ -4,6 +4,7 @@ import { FactoringCompaniesAdmin } from "@/components/factoring-companies-admin"
 import { TileBoard, Tile } from "@/components/tile-board";
 import { requireAdmin } from "@/lib/auth";
 import { prisma } from "@/lib/db";
+import { requirePlanFeature } from "@/lib/permissions";
 import {
   disconnectQuickbooksAction,
   startQuickbooksConnect,
@@ -25,6 +26,7 @@ export default async function AdminAccountingPage({
     error?: string;
   }>;
 }) {
+  await requirePlanFeature("factoring_admin");
   const admin = await requireAdmin();
   const params = await searchParams;
 

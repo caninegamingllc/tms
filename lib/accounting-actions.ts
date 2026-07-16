@@ -4,7 +4,7 @@ import { revalidatePath } from "next/cache";
 import { redirect } from "next/navigation";
 import { prisma } from "@/lib/db";
 import { requireAdmin } from "@/lib/auth";
-import { requireWriteUser } from "@/lib/permissions";
+import { assertPlanFeature, requireWriteUser } from "@/lib/permissions";
 import { canAccessRecord } from "@/lib/branch-filter-server";
 import { recalculateLoadCommission } from "@/lib/commission";
 import { parseMoneyToCents } from "@/lib/format";
@@ -166,6 +166,7 @@ export async function applyFullCarrierBillPayment(input: {
 
 export async function createFactoringCompany(formData: FormData) {
   const admin = await requireAdmin();
+  await assertPlanFeature(admin.companyId, "factoring_admin");
   const name = requiredString(formData, "name");
   const nameOnCheck = optionalString(formData, "nameOnCheck") ?? name;
 
@@ -191,6 +192,7 @@ export async function createFactoringCompany(formData: FormData) {
 
 export async function updateFactoringCompany(formData: FormData) {
   const admin = await requireAdmin();
+  await assertPlanFeature(admin.companyId, "factoring_admin");
   const id = requiredString(formData, "factoringCompanyId");
   const name = requiredString(formData, "name");
   const nameOnCheck = optionalString(formData, "nameOnCheck") ?? name;
@@ -217,6 +219,7 @@ export async function updateFactoringCompany(formData: FormData) {
 
 export async function receiveArPayment(formData: FormData) {
   const user = await requireWriteUser();
+  await assertPlanFeature(user.companyId, "accounting_ar_ap");
   const invoiceIds = formIdList(formData, "invoiceIds");
   if (invoiceIds.length === 0) {
     throw new Error("Select at least one invoice.");
@@ -352,6 +355,7 @@ export async function receiveArPayment(formData: FormData) {
 
 export async function recordApPayment(formData: FormData) {
   const user = await requireWriteUser();
+  await assertPlanFeature(user.companyId, "accounting_ar_ap");
   const billIds = formIdList(formData, "billIds");
   if (billIds.length === 0) {
     throw new Error("Select at least one bill.");
@@ -473,6 +477,7 @@ export async function recordApPayment(formData: FormData) {
 
 export async function bulkEmailInvoicesAction(formData: FormData) {
   const user = await requireWriteUser();
+  await assertPlanFeature(user.companyId, "bulk_invoice_email");
   const invoiceIds = formIdList(formData, "invoiceIds");
   if (invoiceIds.length === 0) {
     redirect("/accounting?tab=invoices&error=" + encodeURIComponent("Select at least one invoice."));
@@ -514,6 +519,7 @@ export async function bulkEmailInvoicesAction(formData: FormData) {
 
 export async function bulkPushInvoicesToQuickbooks(formData: FormData) {
   const user = await requireWriteUser();
+  await assertPlanFeature(user.companyId, "bulk_invoice_email");
   const invoiceIds = formIdList(formData, "invoiceIds");
   const method = await getCompanyQuickbooksMethod(user.companyId);
   if (method !== "ONLINE") {
@@ -547,6 +553,7 @@ export async function bulkPushInvoicesToQuickbooks(formData: FormData) {
 
 export async function bulkPushBillsToQuickbooks(formData: FormData) {
   const user = await requireWriteUser();
+  await assertPlanFeature(user.companyId, "bulk_invoice_email");
   const billIds = formIdList(formData, "billIds");
   const method = await getCompanyQuickbooksMethod(user.companyId);
   if (method !== "ONLINE") {

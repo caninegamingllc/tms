@@ -10,6 +10,7 @@ import {
 import { prisma } from "@/lib/db";
 import { seedCompanyCatalogs } from "@/lib/catalogs";
 import { didAcceptLegal, legalAcceptanceData } from "@/lib/legal";
+import { normalizePlanId } from "@/lib/plans";
 import { tryAutoAssignSeat } from "@/lib/seats";
 import { ensureMembershipBranchesSynced } from "@/lib/membership-branches";
 import type { OrganizationSummary, SessionUser } from "@/lib/types";
@@ -74,9 +75,15 @@ async function getActiveMemberships(userId: string) {
       disabledAt: null,
       company: { status: "ACTIVE" }
     },
-    include: { company: true },
+    include: { company: { include: { seatSubscription: true } } },
     orderBy: { company: { name: "asc" } }
   });
+}
+
+function membershipPlan(
+  membership: Awaited<ReturnType<typeof getActiveMemberships>>[number]
+) {
+  return normalizePlanId(membership.company.seatSubscription?.plan);
 }
 
 function toOrganizationSummary(
@@ -87,7 +94,8 @@ function toOrganizationSummary(
     companyId: membership.companyId,
     companyName: membership.company.name,
     role: membership.role,
-    hasSeat: membership.seatAssignedAt != null
+    hasSeat: membership.seatAssignedAt != null,
+    plan: membershipPlan(membership)
   };
 }
 
@@ -110,6 +118,7 @@ function buildSessionUser(
     branchId: membership.branchId,
     branchIds,
     hasSeat: membership.seatAssignedAt != null,
+    plan: membershipPlan(membership),
     organizations
   };
 }
@@ -180,7 +189,7 @@ export const getCurrentUser = cache(async (): Promise<CurrentUser | null> => {
     where: { tokenHash: hashToken(token) },
     include: {
       user: true,
-      membership: { include: { company: true } }
+      membership: { include: { company: { include: { seatSubscription: true } } } }
     }
   });
 
@@ -511,9 +520,15 @@ export async function createCompanyWorkspace(input: {
     await tx.seatSubscription.create({
       data: {
         companyId: company.id,
-        status: "NONE",
-        seatQuantity: 0
+        plan: "FREE",
+        status: "ACTIVE",
+        seatQuantity: 1
       }
+    });
+
+    await tx.companyMembership.update({
+      where: { id: membership.id },
+      data: { seatAssignedAt: new Date() }
     });
 
     await tx.integrationAccount.createMany({
@@ -596,7 +611,7 @@ export async function registerCompany(formData: FormData) {
   });
 
   await createSession(result.owner.id, result.membership.id);
-  redirect("/admin/billing?welcome=1");
+  redirect("/?welcome=1");
 }
 
 export async function changeOwnPassword(formData: FormData) {
