@@ -3,16 +3,11 @@
 import Link from "next/link";
 import { usePathname, useRouter } from "next/navigation";
 import {
-  useCallback,
   useEffect,
-  useId,
   useMemo,
-  useRef,
   useState,
-  useSyncExternalStore,
   type ComponentType
 } from "react";
-import { createPortal } from "react-dom";
 import { clsx } from "clsx";
 import {
   BarChart3,
@@ -42,19 +37,6 @@ import { CarrierQuickSearch } from "@/components/carrier-quick-search";
 import type { BranchSwitcherData } from "@/lib/branch-filter";
 
 const SESSION_HEARTBEAT_MS = 30_000;
-const FLYOUT_CLOSE_DELAY_MS = 200;
-
-function subscribeToClientMount() {
-  return () => {};
-}
-
-function getClientMountSnapshot() {
-  return true;
-}
-
-function getServerMountSnapshot() {
-  return false;
-}
 
 type NavItem = {
   href: string;
@@ -168,201 +150,6 @@ function initials(name: string) {
     .join("");
 }
 
-function NavFlyout({
-  group,
-  pathname,
-  top,
-  left,
-  labelledBy,
-  onPointerEnter,
-  onPointerLeave,
-  onNavigate
-}: {
-  group: NavGroup;
-  pathname: string;
-  top: number;
-  left: number;
-  labelledBy: string;
-  onPointerEnter: () => void;
-  onPointerLeave: () => void;
-  onNavigate?: () => void;
-}) {
-  return (
-    <div
-      role="menu"
-      aria-labelledby={labelledBy}
-      onPointerEnter={onPointerEnter}
-      onPointerLeave={onPointerLeave}
-      // nav-flyout + inline colors: Safari otherwise inherits rail light text into the panel.
-      className="nav-flyout fixed z-[80] min-w-[220px] rounded-md border border-slate-200 bg-white shadow-[0_8px_24px_-12px_rgba(15,23,42,0.18)]"
-      style={{ top, left, color: "#0f172a", backgroundColor: "#ffffff" }}
-    >
-      {/* Bridge the rail→panel gap so Safari does not drop hover before enter. */}
-      <div aria-hidden className="absolute top-0 bottom-0 -left-2 w-2" />
-      <div
-        className="border-b border-slate-200 px-3 py-2 text-[10px] font-semibold uppercase tracking-[0.14em]"
-        style={{ color: "#64748b" }}
-      >
-        {group.label}
-      </div>
-      <div className="p-1">
-        {group.items.map((item) => {
-          const Icon = item.icon;
-          const active = isNavActive(pathname, item.href);
-          return (
-            <Link
-              key={item.href}
-              href={item.href}
-              role="menuitem"
-              onClick={onNavigate}
-              className={clsx(
-                "flex items-center gap-2 rounded px-2 py-1.5 text-[13px] transition",
-                active ? "bg-slate-100 font-medium" : "hover:bg-slate-50"
-              )}
-              style={{ color: "#0f172a" }}
-            >
-              <Icon className="nav-flyout-icon h-4 w-4 shrink-0" />
-              <span style={{ color: "#0f172a" }}>{item.label}</span>
-            </Link>
-          );
-        })}
-      </div>
-    </div>
-  );
-}
-
-function RailNavGroup({
-  group,
-  pathname,
-  active,
-  open,
-  onOpen,
-  onClose,
-  onHoverClose
-}: {
-  group: NavGroup;
-  pathname: string;
-  active: boolean;
-  open: boolean;
-  onOpen: () => void;
-  onClose: () => void;
-  onHoverClose: () => void;
-}) {
-  const Icon = group.icon;
-  const buttonId = useId();
-  const buttonRef = useRef<HTMLButtonElement>(null);
-  const [coords, setCoords] = useState<{ top: number; left: number } | null>(null);
-  const mounted = useSyncExternalStore(
-    subscribeToClientMount,
-    getClientMountSnapshot,
-    getServerMountSnapshot
-  );
-
-  const updateCoords = useCallback(() => {
-    const button = buttonRef.current;
-    if (!button) {
-      return;
-    }
-    const rect = button.getBoundingClientRect();
-    // Flush to the rail edge — a gap makes Safari drop hover before the panel receives it.
-    setCoords({
-      top: rect.top,
-      left: rect.right
-    });
-  }, []);
-
-  useEffect(() => {
-    if (!open) {
-      return;
-    }
-
-    updateCoords();
-    const onScrollOrResize = () => updateCoords();
-    window.addEventListener("resize", onScrollOrResize);
-    window.addEventListener("scroll", onScrollOrResize, true);
-    return () => {
-      window.removeEventListener("resize", onScrollOrResize);
-      window.removeEventListener("scroll", onScrollOrResize, true);
-    };
-  }, [open, updateCoords]);
-
-  useEffect(() => {
-    if (!open) {
-      return;
-    }
-
-    function onPointerDown(event: PointerEvent) {
-      const target = event.target as Node | null;
-      if (!target) {
-        return;
-      }
-      if (buttonRef.current?.contains(target)) {
-        return;
-      }
-      const menu = document.getElementById(`rail-flyout-${group.id}`);
-      if (menu?.contains(target)) {
-        return;
-      }
-      onClose();
-    }
-
-    function onKeyDown(event: KeyboardEvent) {
-      if (event.key === "Escape") {
-        onClose();
-      }
-    }
-
-    // Capture so Safari still sees the dismiss when focus moves oddly.
-    document.addEventListener("pointerdown", onPointerDown, true);
-    document.addEventListener("keydown", onKeyDown);
-    return () => {
-      document.removeEventListener("pointerdown", onPointerDown, true);
-      document.removeEventListener("keydown", onKeyDown);
-    };
-  }, [open, onClose, group.id]);
-
-  return (
-    <div className="relative" onPointerEnter={onOpen} onFocus={onOpen}>
-      <button
-        ref={buttonRef}
-        id={buttonId}
-        type="button"
-        data-active={active ? "true" : "false"}
-        className="rail-nav-btn relative flex h-11 w-11 items-center justify-center rounded-md transition"
-        aria-label={group.label}
-        aria-expanded={open}
-        aria-haspopup="menu"
-        onClick={() => {
-          updateCoords();
-          onOpen();
-        }}
-      >
-        <Icon className="h-6 w-6" />
-        {active ? (
-          <span className="absolute top-2 -left-px h-7 w-[3px] rounded-r bg-rail-accent" />
-        ) : null}
-      </button>
-      {mounted && open && coords
-        ? createPortal(
-            <div id={`rail-flyout-${group.id}`}>
-              <NavFlyout
-                group={group}
-                pathname={pathname}
-                top={coords.top}
-                left={coords.left}
-                labelledBy={buttonId}
-                onPointerEnter={onOpen}
-                onPointerLeave={onHoverClose}
-                onNavigate={onClose}
-              />
-            </div>,
-            document.body
-          )
-        : null}
-    </div>
-  );
-}
-
 function MobileNavList({
   groups,
   pathname,
@@ -377,16 +164,16 @@ function MobileNavList({
   return (
     <div className="flex h-full flex-col">
       <Link href="/" className="border-b border-white/10 px-4 py-4" onClick={onNavigate}>
-        <p className="font-display text-lg font-semibold text-white">Simple Source</p>
-        <p className="text-xs text-white/60">Transportation Management</p>
+        <p className="rail-brand-title font-display text-lg font-semibold">Simple Source</p>
+        <p className="rail-brand-sub text-xs">Transportation Management</p>
       </Link>
 
       <nav className="flex-1 overflow-y-auto px-2 py-3">
         {groups.map((group) => (
           <div key={group.id} className="mb-3">
-            <p className="px-2 py-1 text-[10px] font-semibold uppercase tracking-[0.14em] text-white/45">
-              {group.label}
-            </p>
+              <p className="rail-nav-heading px-2 py-1 text-[10px] font-semibold uppercase tracking-[0.14em]">
+                {group.label}
+              </p>
             <div className="grid gap-0.5">
               {group.items.map((item) => {
                 const Icon = item.icon;
@@ -396,12 +183,10 @@ function MobileNavList({
                     key={item.href}
                     href={item.href}
                     onClick={onNavigate}
-                    className={clsx(
-                      "flex items-center gap-3 rounded-md px-3 py-2 text-sm font-medium transition",
-                      active ? "bg-white/10 text-white" : "text-white/70 hover:bg-white/5 hover:text-white"
-                    )}
+                    data-active={active ? "true" : "false"}
+                    className="rail-nav-link flex items-center gap-3 rounded-md px-3 py-2 text-sm font-medium transition"
                   >
-                    <Icon className="h-4 w-4" />
+                    <Icon className="h-4 w-4 shrink-0" aria-hidden />
                     {item.label}
                   </Link>
                 );
@@ -455,17 +240,6 @@ export function AppShell({
   const pathname = usePathname();
   const router = useRouter();
   const [mobileNavOpen, setMobileNavOpen] = useState(false);
-  const [openGroup, setOpenGroup] = useState<string | null>(null);
-  const [flyoutPathname, setFlyoutPathname] = useState(pathname);
-  const closeTimer = useRef<ReturnType<typeof setTimeout> | null>(null);
-
-  // Close flyouts on navigation without an effect (avoids cascading render lint).
-  if (flyoutPathname !== pathname) {
-    setFlyoutPathname(pathname);
-    if (openGroup !== null) {
-      setOpenGroup(null);
-    }
-  }
 
   const publicPage =
     pathname.startsWith("/portal") ||
@@ -503,40 +277,6 @@ export function AppShell({
       null,
     [pathname, visibleGroups]
   );
-
-  const openRailGroup = useCallback((groupId: string) => {
-    if (closeTimer.current) {
-      clearTimeout(closeTimer.current);
-      closeTimer.current = null;
-    }
-    setOpenGroup(groupId);
-  }, []);
-
-  const closeRailGroup = useCallback(() => {
-    if (closeTimer.current) {
-      clearTimeout(closeTimer.current);
-      closeTimer.current = null;
-    }
-    setOpenGroup(null);
-  }, []);
-
-  const scheduleCloseRailGroup = useCallback(() => {
-    if (closeTimer.current) {
-      clearTimeout(closeTimer.current);
-    }
-    closeTimer.current = setTimeout(() => {
-      setOpenGroup(null);
-      closeTimer.current = null;
-    }, FLYOUT_CLOSE_DELAY_MS);
-  }, []);
-
-  useEffect(() => {
-    return () => {
-      if (closeTimer.current) {
-        clearTimeout(closeTimer.current);
-      }
-    };
-  }, []);
 
   useEffect(() => {
     if (publicPage || !currentUser) {
@@ -616,40 +356,57 @@ export function AppShell({
         />
       ) : null}
 
-      {/* Desktop icon rail — fixed so Safari does not clip popovers under sticky. */}
-      <aside className="app-rail rail-gradient fixed inset-y-0 left-0 z-30 hidden w-[68px] flex-col items-center border-r border-black/40 text-rail-foreground lg:flex">
+      {/* Desktop navigation */}
+      <aside className="app-rail rail-gradient fixed inset-y-0 left-0 z-30 hidden w-[240px] flex-col border-r border-black/40 text-rail-foreground lg:flex">
         <Link
           href="/"
-          className="brand-gradient mt-4 mb-3 flex h-10 w-10 items-center justify-center rounded-md text-white shadow-[0_4px_16px_-4px_rgba(0,0,0,0.5)]"
-          title="Simple Source TMS"
+          className="flex items-center gap-3 border-b border-white/10 px-4 py-4"
         >
-          <span className="font-display text-lg font-semibold">S</span>
+          <span className="brand-gradient flex h-10 w-10 shrink-0 items-center justify-center rounded-md font-display text-lg font-semibold text-white shadow-[0_4px_16px_-4px_rgba(0,0,0,0.5)]">
+            S
+          </span>
+          <span className="min-w-0">
+            <span className="rail-brand-title block font-display text-sm font-semibold">Simple Source</span>
+            <span className="rail-brand-sub block truncate text-[11px]">Transportation Management</span>
+          </span>
         </Link>
 
-        <div
-          className="mt-2 flex flex-1 flex-col gap-1 py-2"
-          onPointerLeave={scheduleCloseRailGroup}
-        >
+        <nav className="flex-1 overflow-y-auto px-3 py-4">
           {visibleGroups.map((group) => (
-            <RailNavGroup
-              key={group.id}
-              group={group}
-              pathname={pathname}
-              active={activeGroup?.id === group.id}
-              open={openGroup === group.id}
-              onOpen={() => openRailGroup(group.id)}
-              onClose={closeRailGroup}
-              onHoverClose={scheduleCloseRailGroup}
-            />
+            <div key={group.id} className="mb-4">
+              <p className="rail-nav-heading px-2 pb-1.5 text-[10px] font-semibold uppercase tracking-[0.14em]">
+                {group.label}
+              </p>
+              <div className="grid gap-0.5">
+                {group.items.map((item) => {
+                  const Icon = item.icon;
+                  const active = isNavActive(pathname, item.href);
+                  return (
+                    <Link
+                      key={item.href}
+                      href={item.href}
+                      data-active={active ? "true" : "false"}
+                      className="rail-nav-link flex items-center gap-3 rounded-md px-3 py-2 text-[13px] font-medium transition"
+                    >
+                      <Icon className="h-4 w-4 shrink-0" aria-hidden />
+                      <span>{item.label}</span>
+                    </Link>
+                  );
+                })}
+              </div>
+            </div>
           ))}
-        </div>
+        </nav>
 
-        <div className="mb-3 flex flex-col items-center gap-2 pb-2">
+        <div className="flex items-center gap-3 border-t border-white/10 p-4">
           <div
-            className="flex h-9 w-9 items-center justify-center rounded-full border border-white/15 bg-white/10 text-[11px] font-semibold text-white"
-            title={`${currentUser.name} · ${currentUser.companyName}`}
+            className="flex h-9 w-9 shrink-0 items-center justify-center rounded-full border border-white/15 bg-white/10 text-[11px] font-semibold text-white"
           >
             {initials(currentUser.name) || "SS"}
+          </div>
+          <div className="min-w-0">
+            <p className="rail-brand-title truncate text-xs font-semibold">{currentUser.name}</p>
+            <p className="rail-brand-sub truncate text-[11px]">{currentUser.companyName}</p>
           </div>
         </div>
       </aside>
@@ -677,7 +434,7 @@ export function AppShell({
         />
       </aside>
 
-      <div className="flex min-w-0 flex-1 flex-col lg:pl-[68px]">
+      <div className="flex min-w-0 flex-1 flex-col lg:pl-[240px]">
         <header className="app-topbar sticky top-0 z-20 flex h-14 shrink-0 items-center gap-3 border-b border-border bg-card/90 px-4 backdrop-blur md:px-5">
           <button
             type="button"

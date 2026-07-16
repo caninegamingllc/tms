@@ -75,48 +75,54 @@ a {
 }
 
 /*
-  Desktop icon rail — scoped only (global button resets broke Chromium).
-  Solid white strokes + light chip so Safari cannot fall back to system button blue/black.
+  Labeled sidebar — solid hex colors so Safari does not drop opacity/color-mix text & icons.
+  Keep scoped to nav links/headings; avoid global button resets that broke Chromium.
 */
-.app-rail .rail-nav-btn {
-  -webkit-appearance: none;
-  appearance: none;
-  color: #ffffff;
-  background-color: rgba(255, 255, 255, 0.1);
-  border: 1px solid rgba(255, 255, 255, 0.22);
-  border-radius: 0.375rem;
+.app-rail .rail-nav-heading,
+.rail-gradient .rail-nav-heading {
+  color: #94a3b8;
+  -webkit-text-fill-color: #94a3b8;
 }
 
-.app-rail .rail-nav-btn:hover,
-.app-rail .rail-nav-btn[data-active="true"],
-.app-rail .rail-nav-btn[aria-expanded="true"] {
-  color: #ffffff;
-  background-color: rgba(255, 255, 255, 0.2);
-  border-color: rgba(255, 255, 255, 0.4);
+.app-rail .rail-nav-link,
+.rail-gradient .rail-nav-link {
+  color: #e2e8f0;
+  -webkit-text-fill-color: #e2e8f0;
+  background-color: transparent;
 }
 
-.app-rail .rail-nav-btn svg {
-  width: 1.35rem;
-  height: 1.35rem;
-  color: #ffffff !important;
-  stroke: #ffffff !important;
-  stroke-width: 2.25;
+.app-rail .rail-nav-link:hover,
+.rail-gradient .rail-nav-link:hover {
+  color: #ffffff;
+  -webkit-text-fill-color: #ffffff;
+  background-color: rgba(255, 255, 255, 0.08);
+}
+
+.app-rail .rail-nav-link[data-active="true"],
+.rail-gradient .rail-nav-link[data-active="true"] {
+  color: #ffffff;
+  -webkit-text-fill-color: #ffffff;
+  background-color: rgba(255, 255, 255, 0.12);
+}
+
+.app-rail .rail-nav-link svg,
+.rail-gradient .rail-nav-link svg {
+  color: inherit;
+  stroke: currentColor;
   fill: none;
 }
 
-.nav-flyout,
-.nav-flyout a,
-.nav-flyout span {
-  color: #0f172a !important;
+/* Brand / user labels on the dark rail — solid white so Safari keeps contrast. */
+.app-rail .rail-brand-title,
+.rail-gradient .rail-brand-title {
+  color: #ffffff;
+  -webkit-text-fill-color: #ffffff;
 }
 
-.nav-flyout a:hover {
-  background-color: #f8fafc;
-}
-
-.nav-flyout-icon {
-  color: #64748b !important;
-  stroke: #64748b !important;
+.app-rail .rail-brand-sub,
+.rail-gradient .rail-brand-sub {
+  color: #94a3b8;
+  -webkit-text-fill-color: #94a3b8;
 }
 
 input::placeholder,
