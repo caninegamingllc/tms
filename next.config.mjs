@@ -1,5 +1,7 @@
 /** @type {import('next').NextConfig} */
 const nextConfig = {
+  // Allow deploys to build into a staging dir, then atomically swap onto `.next`.
+  distDir: process.env.NEXT_DIST_DIR || ".next",
   // Match lib/document-storage MAX_FILE_SIZE (25 MB), with headroom for multipart overhead.
   experimental: {
     serverActions: {

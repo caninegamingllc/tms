@@ -7,6 +7,7 @@ LOG_FILE="/var/log/tms-deploy.log"
 LOCK_FILE="/var/lock/tms-deploy.lock"
 PM2_APP="tms"
 PM2_WORKER="tms-worker"
+BUILD_DIR=".next-build"
 
 export PATH="/usr/local/bin:/usr/bin:/bin:$PATH"
 
@@ -30,6 +31,22 @@ git reset --hard "origin/$BRANCH"
 chmod +x "$APP_DIR/scripts/tms-deploy.sh"
 chmod +x "$APP_DIR/scripts/tms-worker.sh" 2>/dev/null || true
 
+ensure_app_running() {
+  if pm2 describe "$PM2_APP" >/dev/null 2>&1; then
+    pm2 restart "$PM2_APP" --update-env || pm2 start npm --name "$PM2_APP" -- start
+  else
+    pm2 start npm --name "$PM2_APP" -- start
+  fi
+
+  if pm2 describe "$PM2_WORKER" >/dev/null 2>&1; then
+    pm2 restart "$PM2_WORKER" --update-env || true
+  else
+    pm2 start "$APP_DIR/scripts/tms-worker.sh" --name "$PM2_WORKER" || true
+  fi
+
+  pm2 save >/dev/null 2>&1 || true
+}
+
 # NODE_ENV=production causes npm ci to skip devDependencies (prisma CLI, typescript, dotenv).
 npm ci --include=dev
 npx prisma generate
@@ -42,26 +59,22 @@ else
   npx prisma migrate deploy
 fi
 
-# Stop the app before rebuilding. `next build` writes into `.next` while PM2 is
-# still serving from it, which corrupts chunks and causes widespread 500s.
-if pm2 describe "$PM2_APP" >/dev/null 2>&1; then
-  pm2 stop "$PM2_APP" || true
+# Build into a staging directory so a live `.next` is never overwritten mid-request.
+rm -rf "$BUILD_DIR"
+if ! NEXT_DIST_DIR="$BUILD_DIR" NODE_ENV=production NODE_OPTIONS="--max-old-space-size=4096" NEXT_DISABLE_TURBOPACK=1 npm run build; then
+  echo "=== Build failed $(date) — keeping previous .next and ensuring PM2 is up ==="
+  ensure_app_running
+  exit 1
 fi
 
-NODE_ENV=production NODE_OPTIONS="--max-old-space-size=4096" NEXT_DISABLE_TURBOPACK=1 npm run build
-
-if pm2 describe "$PM2_APP" >/dev/null 2>&1; then
-  pm2 restart "$PM2_APP" --update-env
-else
-  pm2 start npm --name "$PM2_APP" -- start
+# Atomic swap: only replace `.next` after a successful build.
+rm -rf .next-prev
+if [[ -d .next ]]; then
+  mv .next .next-prev
 fi
+mv "$BUILD_DIR" .next
+rm -rf .next-prev
 
-if pm2 describe "$PM2_WORKER" >/dev/null 2>&1; then
-  pm2 restart "$PM2_WORKER" --update-env
-else
-  pm2 start "$APP_DIR/scripts/tms-worker.sh" --name "$PM2_WORKER"
-fi
-
-pm2 save >/dev/null 2>&1 || true
+ensure_app_running
 
 echo "=== Deploy finished $(date) ==="
