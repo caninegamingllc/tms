@@ -234,6 +234,17 @@ function digitsOnly(value?: string) {
   return value?.replace(/\D/g, "") || undefined;
 }
 
+/** Motus stores unpadded USDOT strings; strip leading zeros for lookup. */
+function normalizeDotForMotus(value?: string) {
+  const digits = digitsOnly(value);
+  if (!digits) {
+    return undefined;
+  }
+
+  const stripped = digits.replace(/^0+/, "");
+  return stripped || undefined;
+}
+
 async function querySocrata<T>(baseUrl: string, params: URLSearchParams): Promise<T[]> {
   const token = getSocrataAppToken();
   if (token) {
@@ -241,17 +252,41 @@ async function querySocrata<T>(baseUrl: string, params: URLSearchParams): Promis
   }
 
   const url = `${baseUrl}?${params.toString()}`;
-  const response = await fetch(url, {
-    cache: "no-store",
-    headers: { Accept: "application/json" }
-  });
+  let lastError: Error | undefined;
 
-  if (!response.ok) {
-    throw new Error(`FMCSA Motus insurance lookup failed with status ${response.status}.`);
+  for (let attempt = 0; attempt < 3; attempt += 1) {
+    try {
+      const response = await fetch(url, {
+        cache: "no-store",
+        headers: { Accept: "application/json" }
+      });
+
+      if (response.status === 429 || response.status >= 500) {
+        lastError = new Error(`FMCSA Motus insurance lookup failed with status ${response.status}.`);
+        if (attempt < 2) {
+          await new Promise((resolve) => setTimeout(resolve, 250 * (attempt + 1)));
+          continue;
+        }
+        throw lastError;
+      }
+
+      if (!response.ok) {
+        throw new Error(`FMCSA Motus insurance lookup failed with status ${response.status}.`);
+      }
+
+      const payload = (await response.json()) as T[];
+      return Array.isArray(payload) ? payload : [];
+    } catch (error) {
+      lastError = error instanceof Error ? error : new Error("FMCSA Motus insurance lookup failed.");
+      if (attempt < 2 && !lastError.message.includes("status 4")) {
+        await new Promise((resolve) => setTimeout(resolve, 250 * (attempt + 1)));
+        continue;
+      }
+      throw lastError;
+    }
   }
 
-  const payload = (await response.json()) as T[];
-  return Array.isArray(payload) ? payload : [];
+  throw lastError ?? new Error("FMCSA Motus insurance lookup failed.");
 }
 
 async function fetchInsurRowsByField(field: "usdot_number" | "docket_number", value: string) {
@@ -269,23 +304,31 @@ async function fetchInsHistRowsByField(field: "usdot_number" | "docket_number", 
 }
 
 async function fetchInsurRowsForCarrier(dot?: string, docketDigits?: string) {
+  const merged: MotusInsurRow[] = [];
+
   if (dot) {
-    const exact = await fetchInsurRowsByField("usdot_number", dot);
-    if (exact.length) {
-      return exact;
+    const byDot = await fetchInsurRowsByField("usdot_number", dot);
+    merged.push(...byDot);
+
+    // Retry padded form only if unpadded missed (legacy rows).
+    if (!byDot.length) {
+      const padded = dot.padStart(8, "0");
+      if (padded !== dot) {
+        merged.push(...(await fetchInsurRowsByField("usdot_number", padded)));
+      }
     }
   }
 
   if (docketDigits) {
     const withPrefix = await fetchInsurRowsByField("docket_number", `MC${docketDigits}`);
     if (withPrefix.length) {
-      return withPrefix;
+      merged.push(...withPrefix);
+    } else {
+      merged.push(...(await fetchInsurRowsByField("docket_number", docketDigits)));
     }
-
-    return fetchInsurRowsByField("docket_number", docketDigits);
   }
 
-  return [];
+  return merged;
 }
 
 /**
@@ -387,7 +430,7 @@ export async function fetchFmcsaInsuranceCoverages(input: {
   dotNumber?: string;
   mcNumber?: string;
 }): Promise<FmcsaInsuranceCoverage[]> {
-  const dot = digitsOnly(input.dotNumber);
+  const dot = normalizeDotForMotus(input.dotNumber);
   const docket = digitsOnly(input.mcNumber);
 
   if (!dot && !docket) {
@@ -410,9 +453,15 @@ export async function fetchFmcsaInsuranceCoverages(input: {
     return mapRow(row, cancelAt);
   });
 
-  insuranceCache.set(cacheKey, { coverages, expiresAt: now + CACHE_TTL_MS });
-  if (dot && docket) {
-    insuranceCache.set(`docket:${docket}`, { coverages, expiresAt: now + CACHE_TTL_MS });
+  // Never cache empty misses — Motus/Socrata can return transient empties/throttle,
+  // and caching [] made refresh look permanently empty for 5 minutes.
+  if (coverages.length > 0) {
+    insuranceCache.set(cacheKey, { coverages, expiresAt: now + CACHE_TTL_MS });
+    if (dot && docket) {
+      insuranceCache.set(`docket:${docket}`, { coverages, expiresAt: now + CACHE_TTL_MS });
+    }
+  } else {
+    insuranceCache.delete(cacheKey);
   }
 
   return coverages;

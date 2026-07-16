@@ -221,6 +221,12 @@ async function importFmcsaInsuranceCoverages(
     mcNumber: input.mcNumber ?? undefined
   });
 
+  // Only replace when Motus returns filings. An empty miss must not wipe
+  // previously imported rows (Motus/Socrata can fail open as []).
+  if (!coverages.length) {
+    return 0;
+  }
+
   await prisma.carrierInsuranceCoverage.deleteMany({
     where: {
       carrierId,
@@ -230,11 +236,6 @@ async function importFmcsaInsuranceCoverages(
       ]
     }
   });
-
-  if (!coverages.length) {
-    await syncCarrierInsuranceSummary(carrierId);
-    return 0;
-  }
 
   await prisma.carrierInsuranceCoverage.createMany({
     data: coverages.map((coverage) => ({
@@ -838,7 +839,7 @@ export async function refreshCarrierInsuranceFromFmcsa(formData: FormData) {
       details:
         importedCount > 0
           ? `Imported ${importedCount} active/pending federal insurance filing${importedCount === 1 ? "" : "s"} from Motus Insur.`
-          : "No active/pending federal insurance filings found for this DOT/MC."
+          : "No Motus Insur filings found for this DOT/MC (existing FMCSA coverages left unchanged). Try again in a minute, or confirm the DOT/MC on SAFER."
     }
   });
 
