@@ -9,6 +9,7 @@ import {
   useMemo,
   useRef,
   useState,
+  useSyncExternalStore,
   type ComponentType
 } from "react";
 import { createPortal } from "react-dom";
@@ -42,6 +43,18 @@ import type { BranchSwitcherData } from "@/lib/branch-filter";
 
 const SESSION_HEARTBEAT_MS = 30_000;
 const FLYOUT_CLOSE_DELAY_MS = 200;
+
+function subscribeToClientMount() {
+  return () => {};
+}
+
+function getClientMountSnapshot() {
+  return true;
+}
+
+function getServerMountSnapshot() {
+  return false;
+}
 
 type NavItem = {
   href: string;
@@ -239,11 +252,11 @@ function RailNavGroup({
   const buttonId = useId();
   const buttonRef = useRef<HTMLButtonElement>(null);
   const [coords, setCoords] = useState<{ top: number; left: number } | null>(null);
-  const [mounted, setMounted] = useState(false);
-
-  useEffect(() => {
-    setMounted(true);
-  }, []);
+  const mounted = useSyncExternalStore(
+    subscribeToClientMount,
+    getClientMountSnapshot,
+    getServerMountSnapshot
+  );
 
   const updateCoords = useCallback(() => {
     const button = buttonRef.current;
@@ -443,7 +456,16 @@ export function AppShell({
   const router = useRouter();
   const [mobileNavOpen, setMobileNavOpen] = useState(false);
   const [openGroup, setOpenGroup] = useState<string | null>(null);
+  const [flyoutPathname, setFlyoutPathname] = useState(pathname);
   const closeTimer = useRef<ReturnType<typeof setTimeout> | null>(null);
+
+  // Close flyouts on navigation without an effect (avoids cascading render lint).
+  if (flyoutPathname !== pathname) {
+    setFlyoutPathname(pathname);
+    if (openGroup !== null) {
+      setOpenGroup(null);
+    }
+  }
 
   const publicPage =
     pathname.startsWith("/portal") ||
@@ -515,10 +537,6 @@ export function AppShell({
       }
     };
   }, []);
-
-  useEffect(() => {
-    setOpenGroup(null);
-  }, [pathname]);
 
   useEffect(() => {
     if (publicPage || !currentUser) {
