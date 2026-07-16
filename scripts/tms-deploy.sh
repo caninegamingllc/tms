@@ -42,17 +42,22 @@ else
   npx prisma migrate deploy
 fi
 
+# Stop the app before rebuilding. `next build` writes into `.next` while PM2 is
+# still serving from it, which corrupts chunks and causes widespread 500s.
+if pm2 describe "$PM2_APP" >/dev/null 2>&1; then
+  pm2 stop "$PM2_APP" || true
+fi
+
 NODE_ENV=production NODE_OPTIONS="--max-old-space-size=4096" NEXT_DISABLE_TURBOPACK=1 npm run build
 
-# Rolling restart: bring app back before (or without) a hard stop when already running.
 if pm2 describe "$PM2_APP" >/dev/null 2>&1; then
-  pm2 reload "$PM2_APP" --update-env
+  pm2 restart "$PM2_APP" --update-env
 else
   pm2 start npm --name "$PM2_APP" -- start
 fi
 
 if pm2 describe "$PM2_WORKER" >/dev/null 2>&1; then
-  pm2 reload "$PM2_WORKER" --update-env
+  pm2 restart "$PM2_WORKER" --update-env
 else
   pm2 start "$APP_DIR/scripts/tms-worker.sh" --name "$PM2_WORKER"
 fi
