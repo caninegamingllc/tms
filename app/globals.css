@@ -59,70 +59,90 @@ html {
   }
 }
 
-a {
-  color: inherit;
-  text-decoration: none;
+/*
+  Keep link inherit in @layer base so unlayered rail/landing overrides can win in Safari.
+  (Unlayered `a { color: inherit }` previously beat utilities and left dark-on-dark nav links.)
+*/
+@layer base {
+  a {
+    color: inherit;
+    text-decoration: none;
+  }
 }
 
 /* Unlayered overrides for surfaces where inherit would wash out contrast. */
 .landing-nav a {
   color: #ffffff;
+  -webkit-text-fill-color: #ffffff;
 }
 
 .landing-nav a:hover {
   color: #ffffff;
+  -webkit-text-fill-color: #ffffff;
   opacity: 0.92;
 }
 
 /*
-  Labeled sidebar — solid hex colors so Safari does not drop opacity/color-mix text & icons.
-  Keep scoped to nav links/headings; avoid global button resets that broke Chromium.
+  Dark sidebar nav — force solid light paint for Safari.
+  Safari UA + inherited body foreground otherwise leave <a> / SVG strokes near-black.
 */
 .app-rail .rail-nav-heading,
 .rail-gradient .rail-nav-heading {
-  color: #94a3b8;
-  -webkit-text-fill-color: #94a3b8;
+  color: #94a3b8 !important;
+  -webkit-text-fill-color: #94a3b8 !important;
 }
 
-.app-rail .rail-nav-link,
-.rail-gradient .rail-nav-link {
-  color: #e2e8f0;
-  -webkit-text-fill-color: #e2e8f0;
+.app-rail a.rail-nav-link,
+.app-rail a.rail-nav-link:link,
+.app-rail a.rail-nav-link:visited,
+.rail-gradient a.rail-nav-link,
+.rail-gradient a.rail-nav-link:link,
+.rail-gradient a.rail-nav-link:visited {
+  color: #f8fafc !important;
+  -webkit-text-fill-color: #f8fafc !important;
   background-color: transparent;
 }
 
-.app-rail .rail-nav-link:hover,
-.rail-gradient .rail-nav-link:hover {
-  color: #ffffff;
-  -webkit-text-fill-color: #ffffff;
-  background-color: rgba(255, 255, 255, 0.08);
+.app-rail a.rail-nav-link:hover,
+.rail-gradient a.rail-nav-link:hover {
+  color: #ffffff !important;
+  -webkit-text-fill-color: #ffffff !important;
+  background-color: rgba(255, 255, 255, 0.1);
 }
 
-.app-rail .rail-nav-link[data-active="true"],
-.rail-gradient .rail-nav-link[data-active="true"] {
-  color: #ffffff;
-  -webkit-text-fill-color: #ffffff;
-  background-color: rgba(255, 255, 255, 0.12);
+.app-rail a.rail-nav-link[data-active="true"],
+.rail-gradient a.rail-nav-link[data-active="true"] {
+  color: #ffffff !important;
+  -webkit-text-fill-color: #ffffff !important;
+  background-color: rgba(255, 255, 255, 0.16);
 }
 
-.app-rail .rail-nav-link svg,
-.rail-gradient .rail-nav-link svg {
-  color: inherit;
-  stroke: currentColor;
-  fill: none;
+.app-rail a.rail-nav-link svg,
+.rail-gradient a.rail-nav-link svg {
+  color: #f8fafc !important;
+  stroke: #f8fafc !important;
+  fill: none !important;
+}
+
+.app-rail a.rail-nav-link[data-active="true"] svg,
+.app-rail a.rail-nav-link:hover svg,
+.rail-gradient a.rail-nav-link[data-active="true"] svg,
+.rail-gradient a.rail-nav-link:hover svg {
+  color: #ffffff !important;
+  stroke: #ffffff !important;
 }
 
 /* Brand / user labels on the dark rail — solid white so Safari keeps contrast. */
 .app-rail .rail-brand-title,
 .rail-gradient .rail-brand-title {
-  color: #ffffff;
-  -webkit-text-fill-color: #ffffff;
+  color: #ffffff !important;
+  -webkit-text-fill-color: #ffffff !important;
 }
 
 .app-rail .rail-brand-sub,
 .rail-gradient .rail-brand-sub {
-  color: #94a3b8;
-  -webkit-text-fill-color: #94a3b8;
+  color: #cbd5e1 !important;
+  -webkit-text-fill-color: #cbd5e1 !important;
 }
 
 input::placeholder,

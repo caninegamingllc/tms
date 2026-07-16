@@ -6,7 +6,8 @@ import {
   useEffect,
   useMemo,
   useState,
-  type ComponentType
+  type ComponentType,
+  type CSSProperties
 } from "react";
 import { clsx } from "clsx";
 import {
@@ -38,10 +39,12 @@ import type { BranchSwitcherData } from "@/lib/branch-filter";
 
 const SESSION_HEARTBEAT_MS = 30_000;
 
+type NavIcon = ComponentType<{ className?: string; style?: CSSProperties; "aria-hidden"?: boolean }>;
+
 type NavItem = {
   href: string;
   label: string;
-  icon: ComponentType<{ className?: string }>;
+  icon: NavIcon;
   adminOnly?: boolean;
   /** When set, item is hidden unless the org plan includes this feature. */
   feature?: import("@/lib/plans").PlanFeature;
@@ -50,7 +53,7 @@ type NavItem = {
 type NavGroup = {
   id: string;
   label: string;
-  icon: ComponentType<{ className?: string }>;
+  icon: NavIcon;
   items: NavItem[];
 };
 
@@ -185,9 +188,18 @@ function MobileNavList({
                     onClick={onNavigate}
                     data-active={active ? "true" : "false"}
                     className="rail-nav-link flex items-center gap-3 rounded-md px-3 py-2 text-sm font-medium transition"
+                    style={{
+                      color: "#f8fafc",
+                      WebkitTextFillColor: "#f8fafc",
+                      backgroundColor: active ? "rgba(255,255,255,0.16)" : "transparent"
+                    }}
                   >
-                    <Icon className="h-4 w-4 shrink-0" aria-hidden />
-                    {item.label}
+                    <Icon
+                      className="h-4 w-4 shrink-0"
+                      aria-hidden
+                      style={{ color: "#f8fafc", stroke: "#f8fafc" }}
+                    />
+                    <span style={{ color: "#f8fafc", WebkitTextFillColor: "#f8fafc" }}>{item.label}</span>
                   </Link>
                 );
               })}
@@ -387,9 +399,18 @@ export function AppShell({
                       href={item.href}
                       data-active={active ? "true" : "false"}
                       className="rail-nav-link flex items-center gap-3 rounded-md px-3 py-2 text-[13px] font-medium transition"
+                      style={{
+                        color: "#f8fafc",
+                        WebkitTextFillColor: "#f8fafc",
+                        backgroundColor: active ? "rgba(255,255,255,0.16)" : "transparent"
+                      }}
                     >
-                      <Icon className="h-4 w-4 shrink-0" aria-hidden />
-                      <span>{item.label}</span>
+                      <Icon
+                        className="h-4 w-4 shrink-0"
+                        aria-hidden
+                        style={{ color: "#f8fafc", stroke: "#f8fafc" }}
+                      />
+                      <span style={{ color: "#f8fafc", WebkitTextFillColor: "#f8fafc" }}>{item.label}</span>
                     </Link>
                   );
                 })}
