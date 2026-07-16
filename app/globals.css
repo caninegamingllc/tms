@@ -49,11 +49,6 @@ body {
   -webkit-font-smoothing: antialiased;
 }
 
-a {
-  color: inherit;
-  text-decoration: none;
-}
-
 html {
   scroll-behavior: smooth;
 }
@@ -64,14 +59,75 @@ html {
   }
 }
 
-/* Unlayered `a { color: inherit }` beats Tailwind utilities; force landing nav contrast. */
+/*
+  Keep these in @layer base so Tailwind utilities (text-*, btn colors) can override them.
+  Unlayered `a { color: inherit }` previously beat every utility and broke contrast in Safari.
+*/
+@layer base {
+  a {
+    color: inherit;
+    text-decoration: none;
+  }
+
+  /* Safari UA styles set button color to system blue/black and ignore inherited rail colors. */
+  button,
+  [type="button"],
+  [type="submit"],
+  [type="reset"] {
+    -webkit-appearance: none;
+    appearance: none;
+    color: inherit;
+    -webkit-text-fill-color: currentColor;
+  }
+}
+
 .landing-nav a {
   color: #ffffff;
+  -webkit-text-fill-color: #ffffff;
 }
 
 .landing-nav a:hover {
   color: #ffffff;
+  -webkit-text-fill-color: #ffffff;
   opacity: 0.92;
+}
+
+/* Desktop icon rail — solid colors so Safari never drops opacity/color-mix icon paint. */
+.app-rail .rail-nav-btn {
+  -webkit-appearance: none;
+  appearance: none;
+  color: #e2e8f0;
+  -webkit-text-fill-color: #e2e8f0;
+  background-color: transparent;
+  border: 0;
+}
+
+.app-rail .rail-nav-btn:hover,
+.app-rail .rail-nav-btn[data-active="true"],
+.app-rail .rail-nav-btn[aria-expanded="true"] {
+  color: #ffffff;
+  -webkit-text-fill-color: #ffffff;
+  background-color: rgba(255, 255, 255, 0.12);
+}
+
+.app-rail .rail-nav-btn svg {
+  color: inherit;
+  stroke: currentColor;
+}
+
+.nav-flyout,
+.nav-flyout a {
+  color: #0f172a;
+  -webkit-text-fill-color: #0f172a;
+}
+
+.nav-flyout a:hover {
+  background-color: #f8fafc;
+}
+
+.nav-flyout-icon {
+  color: #64748b;
+  stroke: currentColor;
 }
 
 input::placeholder,
@@ -126,16 +182,21 @@ textarea::placeholder {
     @apply inline-flex items-center justify-center rounded-md bg-primary px-3 py-1.5 text-[13px] font-semibold text-primary-foreground transition hover:opacity-90;
     -webkit-appearance: none;
     appearance: none;
+    -webkit-text-fill-color: currentColor;
   }
 
   .btn-secondary {
     @apply inline-flex items-center justify-center rounded-md border border-border bg-card px-3 py-1.5 text-[13px] font-semibold text-foreground transition hover:bg-muted;
     -webkit-appearance: none;
     appearance: none;
+    -webkit-text-fill-color: currentColor;
   }
 
   .btn-danger {
     @apply inline-flex items-center justify-center rounded-md border border-red-200 bg-red-50 px-3 py-1.5 text-[13px] font-semibold text-red-700 transition hover:bg-red-100 disabled:cursor-not-allowed disabled:opacity-50;
+    -webkit-appearance: none;
+    appearance: none;
+    -webkit-text-fill-color: currentColor;
   }
 
   .input,

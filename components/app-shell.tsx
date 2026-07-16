@@ -180,13 +180,16 @@ function NavFlyout({
       aria-labelledby={labelledBy}
       onPointerEnter={onPointerEnter}
       onPointerLeave={onPointerLeave}
-      // Explicit colors: Safari can inherit rail light text into the panel otherwise.
-      className="fixed z-[80] min-w-[220px] rounded-md border border-slate-200 bg-white text-slate-900 shadow-[0_8px_24px_-12px_rgba(15,23,42,0.18)]"
-      style={{ top, left }}
+      // nav-flyout + inline colors: Safari otherwise inherits rail light text into the panel.
+      className="nav-flyout fixed z-[80] min-w-[220px] rounded-md border border-slate-200 bg-white shadow-[0_8px_24px_-12px_rgba(15,23,42,0.18)]"
+      style={{ top, left, color: "#0f172a", backgroundColor: "#ffffff" }}
     >
       {/* Bridge the rail→panel gap so Safari does not drop hover before enter. */}
       <div aria-hidden className="absolute top-0 bottom-0 -left-2 w-2" />
-      <div className="border-b border-slate-200 px-3 py-2 text-[10px] font-semibold uppercase tracking-[0.14em] text-slate-500">
+      <div
+        className="border-b border-slate-200 px-3 py-2 text-[10px] font-semibold uppercase tracking-[0.14em]"
+        style={{ color: "#64748b" }}
+      >
         {group.label}
       </div>
       <div className="p-1">
@@ -200,12 +203,13 @@ function NavFlyout({
               role="menuitem"
               onClick={onNavigate}
               className={clsx(
-                "flex items-center gap-2 rounded px-2 py-1.5 text-[13px] text-slate-900 transition",
+                "flex items-center gap-2 rounded px-2 py-1.5 text-[13px] transition",
                 active ? "bg-slate-100 font-medium" : "hover:bg-slate-50"
               )}
+              style={{ color: "#0f172a" }}
             >
-              <Icon className="h-4 w-4 shrink-0 text-slate-500" />
-              <span className="text-slate-900">{item.label}</span>
+              <Icon className="nav-flyout-icon h-4 w-4 shrink-0" />
+              <span style={{ color: "#0f172a" }}>{item.label}</span>
             </Link>
           );
         })}
@@ -310,10 +314,8 @@ function RailNavGroup({
         ref={buttonRef}
         id={buttonId}
         type="button"
-        className={clsx(
-          "relative flex h-11 w-11 items-center justify-center rounded-md transition",
-          active || open ? "bg-white/10 text-white" : "text-white/60 hover:bg-white/5 hover:text-white"
-        )}
+        data-active={active ? "true" : "false"}
+        className="rail-nav-btn relative flex h-11 w-11 items-center justify-center rounded-md transition"
         aria-label={group.label}
         aria-expanded={open}
         aria-haspopup="menu"
@@ -322,7 +324,7 @@ function RailNavGroup({
           onOpen();
         }}
       >
-        <Icon className="h-5 w-5" />
+        <Icon className="h-5 w-5" aria-hidden />
         {active ? (
           <span className="absolute top-2 -left-px h-7 w-[3px] rounded-r bg-rail-accent" />
         ) : null}
@@ -383,10 +385,14 @@ function MobileNavList({
                     onClick={onNavigate}
                     className={clsx(
                       "flex items-center gap-3 rounded-md px-3 py-2 text-sm font-medium transition",
-                      active ? "bg-white/10 text-white" : "text-white/70 hover:bg-white/5 hover:text-white"
+                      active ? "bg-[rgba(255,255,255,0.12)]" : "hover:bg-[rgba(255,255,255,0.08)]"
                     )}
+                    style={{
+                      color: active ? "#ffffff" : "#cbd5e1",
+                      WebkitTextFillColor: active ? "#ffffff" : "#cbd5e1"
+                    }}
                   >
-                    <Icon className="h-4 w-4" />
+                    <Icon className="h-4 w-4" aria-hidden />
                     {item.label}
                   </Link>
                 );
@@ -597,7 +603,7 @@ export function AppShell({
       ) : null}
 
       {/* Desktop icon rail — fixed so Safari does not clip popovers under sticky. */}
-      <aside className="app-rail rail-gradient fixed inset-y-0 left-0 z-30 hidden w-[68px] flex-col items-center border-r border-black/40 text-rail-foreground lg:flex">
+      <aside className="app-rail rail-gradient fixed inset-y-0 left-0 z-30 hidden w-[68px] flex-col items-center border-r border-black/40 lg:flex" style={{ color: "#e2e8f0" }}>
         <Link
           href="/"
           className="brand-gradient mt-4 mb-3 flex h-10 w-10 items-center justify-center rounded-md text-white shadow-[0_4px_16px_-4px_rgba(0,0,0,0.5)]"
@@ -658,7 +664,7 @@ export function AppShell({
       </aside>
 
       <div className="flex min-w-0 flex-1 flex-col lg:pl-[68px]">
-        <header className="app-topbar sticky top-0 z-20 flex h-14 shrink-0 items-center gap-3 border-b border-border bg-card/90 px-4 backdrop-blur md:px-5">
+        <header className="app-topbar sticky top-0 z-20 flex h-14 shrink-0 items-center gap-3 border-b border-border bg-card px-4 md:px-5" style={{ backgroundColor: "rgba(255,255,255,0.96)" }}>
           <button
             type="button"
             aria-label="Open navigation"
