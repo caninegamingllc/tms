@@ -2,11 +2,9 @@ import Image from "next/image";
 import Link from "next/link";
 import packageJson from "@/package.json";
 import {
-  LANDING_BAND_KENWORTH_HEAVY_HAUL_PHOTO,
-  LANDING_BAND_KENWORTH_PHOTO,
-  LANDING_BAND_PHOTO,
   LANDING_CTA_PHOTO,
-  LANDING_HERO_PHOTO
+  LANDING_HERO_PHOTO,
+  LANDING_MID_PHOTO
 } from "@/lib/landing-photos";
 import {
   PLAN_ORDER,
@@ -42,10 +40,12 @@ export function MarketingLanding() {
               <span className="font-display text-lg font-semibold">S</span>
             </div>
             <div>
-              <div className="text-[10px] font-semibold uppercase tracking-[0.22em] text-white/70">
-                Simple Source
+              <div className="font-display text-[13px] font-medium leading-none">
+                Simple Source TMS
               </div>
-              <div className="font-display text-[13px] font-medium leading-none">TMS</div>
+              <div className="mt-1 text-[9px] font-medium tracking-wide text-white/55">
+                powered by Talent Transport Logistics Inc
+              </div>
             </div>
           </div>
           <div className="flex items-center gap-2">
@@ -71,14 +71,14 @@ export function MarketingLanding() {
         </div>
       </header>
 
-      <section className="landing-hero relative isolate flex min-h-[100svh] flex-col justify-end overflow-hidden pb-16 pt-28 text-white lg:justify-center lg:pb-24 lg:pt-24">
+      <section className="landing-hero relative isolate flex min-h-[100svh] flex-col justify-end overflow-hidden bg-[#0f2438] pb-16 pt-28 text-white lg:justify-center lg:pb-24 lg:pt-24">
         <Image
           src={LANDING_HERO_PHOTO.src}
           alt={LANDING_HERO_PHOTO.alt}
           fill
           priority
           sizes="100vw"
-          className="landing-photo landing-photo-ken absolute inset-0 object-cover"
+          className="landing-photo absolute inset-0 object-contain object-center"
         />
         <div className="absolute inset-0 brand-gradient opacity-[0.72]" />
         <div
@@ -105,10 +105,10 @@ export function MarketingLanding() {
               </div>
               <div>
                 <div className="font-display text-[1.75rem] font-semibold leading-none tracking-tight sm:text-[2.15rem]">
-                  Simple Source
+                  Simple Source TMS
                 </div>
-                <div className="mt-1.5 text-[11px] font-semibold uppercase tracking-[0.28em] text-white/70">
-                  TMS · Freight brokerage
+                <div className="mt-1.5 text-[10px] font-medium tracking-wide text-white/55 sm:text-[11px]">
+                  powered by Talent Transport Logistics Inc
                 </div>
               </div>
             </div>
@@ -149,7 +149,7 @@ export function MarketingLanding() {
           <div className="mt-12 grid gap-4 sm:grid-cols-2 xl:grid-cols-4">
             {PLAN_ORDER.map((planId) => {
               const plan = PLANS[planId];
-              const recommended = planId === "LITE";
+              const recommended = planId === "PREMIUM";
               return (
                 <div
                   key={planId}
@@ -203,29 +203,28 @@ export function MarketingLanding() {
         </div>
       </section>
 
-      <section
-        className="landing-photo-band relative isolate h-[42vh] min-h-[220px] max-h-[420px] overflow-hidden lg:h-[52vh]"
-        aria-label={LANDING_BAND_PHOTO.alt}
-      >
+      <section className="landing-section relative isolate overflow-hidden border-b border-border bg-[#0f2438] text-white">
         <Image
-          src={LANDING_BAND_PHOTO.src}
-          alt=""
+          src={LANDING_MID_PHOTO.src}
+          alt={LANDING_MID_PHOTO.alt}
           fill
           sizes="100vw"
-          className="absolute inset-0 object-cover"
+          className="absolute inset-0 object-contain object-center"
         />
-        <div className="absolute inset-0 bg-[#0f2438]/25" aria-hidden />
-      </section>
-
-      <section className="landing-section border-b border-border">
-        <div className="mx-auto max-w-6xl px-6 py-20 lg:px-10 lg:py-24">
-          <p className="text-[11px] font-semibold uppercase tracking-[0.22em] text-muted-foreground">
+        <div className="absolute inset-0 brand-gradient opacity-[0.78]" />
+        <div
+          className="absolute inset-0 bg-gradient-to-r from-[#0f2438]/85 via-[#0f2438]/55 to-[#0f2438]/35"
+          aria-hidden
+        />
+        <div className="surface-grid absolute inset-0 opacity-[0.1] mix-blend-overlay" aria-hidden />
+        <div className="relative z-10 mx-auto max-w-6xl px-6 py-20 lg:px-10 lg:py-24">
+          <p className="text-[11px] font-semibold uppercase tracking-[0.22em] text-white/60">
             Premium
           </p>
           <h2 className="font-display mt-3 max-w-2xl text-[clamp(1.75rem,4vw,2.5rem)] font-semibold tracking-[-0.02em]">
             Beyond Lite — when the desk scales.
           </h2>
-          <p className="mt-4 max-w-xl text-[15px] leading-relaxed text-muted-foreground">
+          <p className="mt-4 max-w-xl text-[15px] leading-relaxed text-white/75">
             Premium unlocks the modules most brokerages add after they outgrow a five-seat
             operation.
           </p>
@@ -233,27 +232,13 @@ export function MarketingLanding() {
             {PREMIUM_ONLY_HIGHLIGHTS.map((item) => (
               <li
                 key={item}
-                className="landing-capability flex items-baseline gap-3 border-t border-border pt-3 text-[15px]"
+                className="landing-capability flex items-baseline gap-3 border-t border-white/15 pt-3 text-[15px]"
               >
-                <span className="font-display font-semibold text-primary">{item}</span>
+                <span className="font-display font-semibold text-white">{item}</span>
               </li>
             ))}
           </ul>
         </div>
-      </section>
-
-      <section
-        className="landing-photo-band relative isolate h-[42vh] min-h-[220px] max-h-[420px] overflow-hidden lg:h-[52vh]"
-        aria-label={LANDING_BAND_KENWORTH_PHOTO.alt}
-      >
-        <Image
-          src={LANDING_BAND_KENWORTH_PHOTO.src}
-          alt=""
-          fill
-          sizes="100vw"
-          className="absolute inset-0 object-cover"
-        />
-        <div className="absolute inset-0 bg-[#0f2438]/25" aria-hidden />
       </section>
 
       <section className="landing-section border-b border-border">
@@ -281,27 +266,13 @@ export function MarketingLanding() {
         </div>
       </section>
 
-      <section
-        className="landing-photo-band relative isolate h-[42vh] min-h-[220px] max-h-[420px] overflow-hidden lg:h-[52vh]"
-        aria-label={LANDING_BAND_KENWORTH_HEAVY_HAUL_PHOTO.alt}
-      >
-        <Image
-          src={LANDING_BAND_KENWORTH_HEAVY_HAUL_PHOTO.src}
-          alt=""
-          fill
-          sizes="100vw"
-          className="absolute inset-0 object-cover"
-        />
-        <div className="absolute inset-0 bg-[#0f2438]/25" aria-hidden />
-      </section>
-
-      <section className="landing-section relative isolate overflow-hidden">
+      <section className="landing-section relative isolate overflow-hidden bg-[#0f2438]">
         <Image
           src={LANDING_CTA_PHOTO.src}
           alt={LANDING_CTA_PHOTO.alt}
           fill
           sizes="100vw"
-          className="absolute inset-0 object-cover"
+          className="absolute inset-0 object-contain object-center"
         />
         <div className="absolute inset-0 brand-gradient opacity-[0.78]" />
         <div
@@ -335,7 +306,12 @@ export function MarketingLanding() {
               <div className="brand-gradient flex h-8 w-8 items-center justify-center rounded-md text-white">
                 <span className="font-display text-sm font-semibold">S</span>
               </div>
-              <div className="font-display text-[15px] font-semibold">Simple Source TMS</div>
+              <div>
+                <div className="font-display text-[15px] font-semibold">Simple Source TMS</div>
+                <div className="mt-0.5 text-[9px] font-medium tracking-wide text-muted-foreground">
+                  powered by Talent Transport Logistics Inc
+                </div>
+              </div>
             </div>
             <p className="mt-3 text-[11px] uppercase tracking-[0.18em] text-muted-foreground">
               © {year} Simple Source Logistics · v{packageJson.version}
