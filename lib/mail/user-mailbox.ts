@@ -24,6 +24,40 @@ function headerValue(
   return headers?.find((header) => header.name.toLowerCase() === name.toLowerCase())?.value ?? "";
 }
 
+function normalizeEmailSubject(subject: string) {
+  let value = subject.trim();
+  // Strip repeated Re:/Fw:/Fwd: prefixes.
+  for (let i = 0; i < 5; i += 1) {
+    const next = value.replace(/^(re|fw|fwd)\s*:\s*/i, "").trim();
+    if (next === value) break;
+    value = next;
+  }
+  return value.toLowerCase();
+}
+
+function emailSubjectsMatch(a: string, b: string) {
+  const left = normalizeEmailSubject(a);
+  const right = normalizeEmailSubject(b);
+  // Exact match only (after stripping Re:/Fw:). Substring matching lets short
+  // load numbers like "9999" attach unrelated company mail to a thread.
+  return Boolean(left && right && left === right);
+}
+
+function microsoftMessageInvolvesMailbox(
+  message: {
+    from?: { emailAddress?: { address?: string } };
+    toRecipients?: Array<{ emailAddress?: { address?: string } }>;
+  },
+  mailboxEmail: string
+) {
+  const email = mailboxEmail.toLowerCase();
+  const from = message.from?.emailAddress?.address?.toLowerCase() ?? "";
+  if (from === email) return true;
+  return (message.toRecipients ?? []).some(
+    (recipient) => (recipient.emailAddress?.address ?? "").toLowerCase() === email
+  );
+}
+
 export async function getUserMailbox(userId: string, provider?: OAuthProvider) {
   if (provider) {
     return prisma.userMailbox.findUnique({
@@ -409,8 +443,23 @@ export async function syncMailboxThreadsForUser(userId: string, companyId: strin
         thread.messages.map((item) => item.providerMessageId).filter(Boolean) as string[]
       );
 
+      const conversationBelongsToThread = (messages: MicrosoftMessage[]) =>
+        messages.some(
+          (message) =>
+            emailSubjectsMatch(message.subject ?? "", thread.subject) &&
+            microsoftMessageInvolvesMailbox(message, mailbox.emailAddress)
+        );
+
       const importMicrosoftMessage = async (message: MicrosoftMessage) => {
         if (seenMessageIds.has(message.id)) {
+          return;
+        }
+
+        // Never attach unrelated mail into an existing ops thread.
+        if (!emailSubjectsMatch(message.subject ?? "", thread.subject)) {
+          return;
+        }
+        if (!microsoftMessageInvolvesMailbox(message, mailbox.emailAddress)) {
           return;
         }
 
@@ -451,36 +500,76 @@ export async function syncMailboxThreadsForUser(userId: string, companyId: strin
         synced += 1;
       };
 
+      const importConversation = async (conversationId: string) => {
+        const remote = await listMicrosoftConversationMessages(accessToken, conversationId);
+        if (!conversationBelongsToThread(remote.value)) {
+          return false;
+        }
+        for (const message of remote.value) {
+          await importMicrosoftMessage(message);
+        }
+        return true;
+      };
+
+      // Drop previously mis-linked inbound rows (e.g. load-number search false positives).
+      const staleInbound = thread.messages.filter(
+        (message) =>
+          message.direction === "INBOUND" && !emailSubjectsMatch(message.subject, thread.subject)
+      );
+      if (staleInbound.length > 0) {
+        await prisma.emailMessage.deleteMany({
+          where: { id: { in: staleInbound.map((message) => message.id) } }
+        });
+      }
+
       let conversationId = thread.providerThreadId;
-      let conversationFetched = false;
+      let syncedFromConversation = false;
 
       if (conversationId) {
         try {
-          const remote = await listMicrosoftConversationMessages(accessToken, conversationId);
-          conversationFetched = true;
-          for (const message of remote.value) {
-            await importMicrosoftMessage(message);
+          syncedFromConversation = await importConversation(conversationId);
+          if (!syncedFromConversation) {
+            // Stored conversationId was from unrelated mail — clear and rediscover.
+            await prisma.emailThread.update({
+              where: { id: thread.id },
+              data: { providerThreadId: null }
+            });
+            conversationId = null;
           }
         } catch {
-          // Fall through to load-number search when Graph rejects the conversation filter.
-          conversationFetched = false;
+          syncedFromConversation = false;
         }
       }
 
-      if (!conversationFetched && thread.load.loadNumber) {
-        const remote = await searchMicrosoftMessages(accessToken, thread.load.loadNumber);
+      if (!syncedFromConversation) {
+        // Discover OUR outbound in Outlook by thread subject, never by bare load number
+        // (short numbers like "9999" match unrelated company mail).
+        const remote = await searchMicrosoftMessages(accessToken, thread.subject);
+        const outboundMatch = remote.value.find((message) => {
+          const from = (message.from?.emailAddress?.address ?? "").toLowerCase();
+          return (
+            from === mailbox.emailAddress.toLowerCase() &&
+            emailSubjectsMatch(message.subject ?? "", thread.subject) &&
+            Boolean(message.conversationId)
+          );
+        });
+
+        if (outboundMatch?.conversationId) {
+          conversationId = outboundMatch.conversationId;
+          await prisma.emailThread.update({
+            where: { id: thread.id },
+            data: { providerThreadId: conversationId }
+          });
+          try {
+            await importConversation(conversationId);
+          } catch {
+            // Subject-matched search hits below as a last resort for this outbound only.
+          }
+        }
+
+        // Last resort: only import subject-matched messages that involve this mailbox.
+        // Do not adopt conversationId from random load-number hits.
         for (const message of remote.value) {
-          if (message.conversationId && !conversationId) {
-            conversationId = message.conversationId;
-            await prisma.emailThread.update({
-              where: { id: thread.id },
-              data: { providerThreadId: message.conversationId }
-            });
-          }
-          // Only attach messages that belong to this conversation once we know it.
-          if (conversationId && message.conversationId && message.conversationId !== conversationId) {
-            continue;
-          }
           await importMicrosoftMessage(message);
         }
       }
