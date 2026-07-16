@@ -113,7 +113,7 @@ export function MarketingLanding() {
               </div>
             </div>
             <h1 className="font-display mt-8 text-[clamp(2.4rem,6.5vw,4.25rem)] leading-[1.02] font-semibold tracking-[-0.03em]">
-              Move freight like a broker,
+              Move freight like a professional,
               <br />
               <span className="italic text-white/80">not a spreadsheet.</span>
             </h1>
