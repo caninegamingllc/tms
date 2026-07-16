@@ -169,7 +169,7 @@ export function MarketingLanding() {
                     {planId === "FREE" ? (
                       <span className="text-[13px] text-muted-foreground">forever</span>
                     ) : (
-                      <span className="text-[13px] text-muted-foreground">/mo</span>
+                      <span className="text-[13px] text-muted-foreground">/seat/mo</span>
                     )}
                   </p>
                   <p className="mt-1 text-[13px] font-semibold text-primary">{planSeatLabel(planId)}</p>

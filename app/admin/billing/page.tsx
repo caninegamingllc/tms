@@ -40,7 +40,7 @@ export default async function BillingPage({
     <>
       <PageHeader
         title="Billing & Plans"
-        description="Choose Free ($0), Lite ($20/mo), or Premium ($60/mo). Seat limits and features follow your plan."
+        description="Choose Free ($0), Lite ($20/seat/mo), or Premium ($60/seat/mo). Seat limits and features follow your plan."
       />
 
       {params.welcome === "1" ? (
@@ -140,7 +140,7 @@ export default async function BillingPage({
                     <h3 className="text-lg font-semibold text-foreground">{plan.name}</h3>
                     <p className="text-sm font-semibold text-foreground">
                       {formatPlanPrice(planId)}
-                      {planId === "FREE" ? "" : "/mo"}
+                      {planId === "FREE" ? "" : "/seat/mo"}
                     </p>
                   </div>
                   <ul className="mt-3 list-disc space-y-1 pl-5 text-sm text-muted-foreground">
