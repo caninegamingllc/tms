@@ -8,10 +8,10 @@ export type LandingPhoto = {
 const unsplash = (id: string, params = "w=1920&q=80&auto=format&fit=crop") =>
   `https://images.unsplash.com/${id}?${params}`;
 
-/** Highway semi — hero atmosphere */
+/** Oversize / heavy-haul equipment load — hero atmosphere */
 export const LANDING_HERO_PHOTO: LandingPhoto = {
-  src: unsplash("photo-1601584115197-04ecc0da31d7"),
-  alt: "Semi-truck hauling freight on an open highway"
+  src: unsplash("photo-1709735133497-bbead76953a9"),
+  alt: "Heavy-haul truck transporting an oversize backhoe on a multi-axle flatbed trailer"
 };
 
 /** Warehouse dock / inventory — mid-page visual band */
