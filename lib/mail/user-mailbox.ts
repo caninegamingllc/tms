@@ -450,6 +450,28 @@ export async function syncMailboxThreadsForUser(userId: string, companyId: strin
             microsoftMessageInvolvesMailbox(message, mailbox.emailAddress)
         );
 
+      // Collapse duplicate outbounds from earlier syncs (local sent-* row + Graph copy).
+      const matchingOutbounds = thread.messages
+        .filter(
+          (message) =>
+            message.direction === "OUTBOUND" && emailSubjectsMatch(message.subject, thread.subject)
+        )
+        .sort((a, b) => a.createdAt.getTime() - b.createdAt.getTime());
+      if (matchingOutbounds.length > 1) {
+        const keep =
+          matchingOutbounds.find(
+            (message) =>
+              message.providerMessageId && !message.providerMessageId.startsWith("sent-")
+          ) ?? matchingOutbounds[0];
+        const dropIds = matchingOutbounds
+          .filter((message) => message.id !== keep.id)
+          .map((message) => message.id);
+        if (dropIds.length > 0) {
+          await prisma.emailMessage.deleteMany({ where: { id: { in: dropIds } } });
+          thread.messages = thread.messages.filter((message) => !dropIds.includes(message.id));
+        }
+      }
+
       const importMicrosoftMessage = async (message: MicrosoftMessage) => {
         if (seenMessageIds.has(message.id)) {
           return;
@@ -469,6 +491,34 @@ export async function syncMailboxThreadsForUser(userId: string, companyId: strin
           "";
         const direction =
           from.toLowerCase() === mailbox.emailAddress.toLowerCase() ? "OUTBOUND" : "INBOUND";
+
+        // Microsoft sendMail does not return ids, so the original outbound is stored as sent-*.
+        // Reconcile that row instead of inserting a second outbound copy from Graph.
+        if (direction === "OUTBOUND") {
+          const existingOutbound = thread.messages.find(
+            (item) =>
+              item.direction === "OUTBOUND" &&
+              emailSubjectsMatch(item.subject, message.subject ?? thread.subject)
+          );
+          if (existingOutbound) {
+            if (existingOutbound.providerMessageId !== message.id) {
+              await prisma.emailMessage.update({
+                where: { id: existingOutbound.id },
+                data: {
+                  providerMessageId: message.id,
+                  bodyPreview: message.bodyPreview ?? existingOutbound.bodyPreview,
+                  sentAt: message.sentDateTime
+                    ? new Date(message.sentDateTime)
+                    : existingOutbound.sentAt,
+                  toAddresses: to || existingOutbound.toAddresses
+                }
+              });
+              existingOutbound.providerMessageId = message.id;
+            }
+            seenMessageIds.add(message.id);
+            return;
+          }
+        }
 
         await prisma.emailMessage.create({
           data: {
