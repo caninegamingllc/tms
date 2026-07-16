@@ -394,58 +394,82 @@ export async function syncMailboxThreadsForUser(userId: string, companyId: strin
     }
 
     if (mailbox.provider === "MICROSOFT") {
-      if (thread.providerThreadId) {
-        const remote = await listMicrosoftConversationMessages(accessToken, thread.providerThreadId);
-        for (const message of remote.value) {
-          const exists = thread.messages.some((item) => item.providerMessageId === message.id);
-          if (exists) {
-            continue;
+      type MicrosoftMessage = {
+        id: string;
+        subject?: string;
+        bodyPreview?: string;
+        conversationId?: string;
+        receivedDateTime?: string;
+        sentDateTime?: string;
+        from?: { emailAddress?: { address?: string } };
+        toRecipients?: Array<{ emailAddress?: { address?: string } }>;
+      };
+
+      const seenMessageIds = new Set(
+        thread.messages.map((item) => item.providerMessageId).filter(Boolean) as string[]
+      );
+
+      const importMicrosoftMessage = async (message: MicrosoftMessage) => {
+        if (seenMessageIds.has(message.id)) {
+          return;
+        }
+
+        const from = message.from?.emailAddress?.address ?? "";
+        const to =
+          message.toRecipients?.map((recipient) => recipient.emailAddress?.address ?? "").join(", ") ??
+          "";
+        const direction =
+          from.toLowerCase() === mailbox.emailAddress.toLowerCase() ? "OUTBOUND" : "INBOUND";
+
+        await prisma.emailMessage.create({
+          data: {
+            threadId: thread.id,
+            userId,
+            direction,
+            fromAddress: from,
+            toAddresses: to,
+            subject: message.subject ?? thread.subject,
+            bodyPreview: message.bodyPreview ?? null,
+            providerMessageId: message.id,
+            sentAt: message.sentDateTime ? new Date(message.sentDateTime) : null,
+            receivedAt: message.receivedDateTime ? new Date(message.receivedDateTime) : null
           }
+        });
+        seenMessageIds.add(message.id);
 
-          const from = message.from?.emailAddress?.address ?? "";
-          const to =
-            message.toRecipients?.map((recipient) => recipient.emailAddress?.address ?? "").join(", ") ??
-            "";
-          const direction =
-            from.toLowerCase() === mailbox.emailAddress.toLowerCase() ? "OUTBOUND" : "INBOUND";
-
-          await prisma.emailMessage.create({
+        if (direction === "INBOUND") {
+          await prisma.loadActivity.create({
             data: {
-              threadId: thread.id,
+              loadId: thread.loadId,
               userId,
-              direction,
-              fromAddress: from,
-              toAddresses: to,
-              subject: message.subject ?? thread.subject,
-              bodyPreview: message.bodyPreview ?? null,
-              providerMessageId: message.id,
-              sentAt: message.sentDateTime ? new Date(message.sentDateTime) : null,
-              receivedAt: message.receivedDateTime ? new Date(message.receivedDateTime) : null
+              action: "Email reply received",
+              details: message.subject ?? thread.subject
             }
           });
-
-          if (direction === "INBOUND") {
-            await prisma.loadActivity.create({
-              data: {
-                loadId: thread.loadId,
-                userId,
-                action: "Email reply received",
-                details: message.subject ?? thread.subject
-              }
-            });
-          }
-
-          synced += 1;
         }
-      } else if (thread.load.loadNumber) {
+
+        synced += 1;
+      };
+
+      let conversationId = thread.providerThreadId;
+      if (!conversationId && thread.load.loadNumber) {
         const remote = await searchMicrosoftMessages(accessToken, thread.load.loadNumber);
         for (const message of remote.value) {
-          if (message.conversationId && !thread.providerThreadId) {
+          if (message.conversationId && !conversationId) {
+            conversationId = message.conversationId;
             await prisma.emailThread.update({
               where: { id: thread.id },
               data: { providerThreadId: message.conversationId }
             });
           }
+          await importMicrosoftMessage(message);
+        }
+      }
+
+      if (conversationId) {
+        const remote = await listMicrosoftConversationMessages(accessToken, conversationId);
+        for (const message of remote.value) {
+          await importMicrosoftMessage(message);
         }
       }
     }

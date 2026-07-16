@@ -23,7 +23,11 @@ import {
   structuredDocumentForType
 } from "@/lib/document-generate";
 import { parseDocumentTypes } from "@/lib/document-types";
-import { type MailAttachment, sendViaUserMailbox } from "@/lib/mail/user-mailbox";
+import {
+  type MailAttachment,
+  sendViaUserMailbox,
+  syncMailboxThreadsForUser
+} from "@/lib/mail/user-mailbox";
 import { generateDocumentPdf, pdfFilenameForDocument } from "@/lib/pdf-documents";
 import { dueDateFromTerms } from "@/lib/accounting-aging";
 import { enqueueJob } from "@/lib/jobs";
@@ -773,6 +777,8 @@ export async function syncLoadEmails(formData: FormData) {
   const user = await requireWriteUser();
   const loadId = String(formData.get("loadId") ?? "").trim();
   await loadForEmail(loadId, user);
-  await enqueueJob("SYNC_MAILBOX", { userId: user.id, companyId: user.companyId });
+  // Sync inline (same as Settings → Email) so replies appear on revalidate.
+  // Queuing alone looked like a no-op when the job worker was delayed or down.
+  await syncMailboxThreadsForUser(user.id, user.companyId);
   revalidatePath(`/loads/${loadId}`);
 }
