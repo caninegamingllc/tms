@@ -6,6 +6,7 @@ import {
   structuredDocumentForType
 } from "@/lib/document-generate";
 import type { StructuredDocument } from "@/lib/document-templates";
+import { dispatchAssignmentsDocumentInclude } from "@/lib/dispatch-assignment";
 import { syncMailboxThreadsForUser } from "@/lib/mail/user-mailbox";
 
 export type JobType = "GENERATE_PDF" | "SYNC_MAILBOX";
@@ -16,6 +17,7 @@ export type GeneratePdfPayload = {
   documentId: string;
   type: StructuredDocument["type"];
   documentNumber: string;
+  assignmentId?: string;
 };
 
 export type SyncMailboxPayload = {
@@ -54,29 +56,29 @@ async function processGeneratePdf(payload: GeneratePdfPayload) {
         },
         expenses: true,
         notes: { orderBy: { createdAt: "asc" } },
-        dispatchAssignment: {
-          include: {
-            carrier: { include: { contacts: true } }
-          }
-        },
+        dispatchAssignments: dispatchAssignmentsDocumentInclude,
         invoices: { orderBy: { createdAt: "desc" } }
       }
     }),
     prisma.loadDocument.findUniqueOrThrow({ where: { id: payload.documentId } })
   ]);
 
+  const assignmentId = payload.assignmentId ?? document.assignmentId ?? undefined;
+
   const structured = structuredDocumentForType(
     payload.type,
     load as never,
     payload.documentNumber,
-    company
+    company,
+    assignmentId
   );
   const pdf = await persistGeneratedPdf(payload.companyId, structured);
   const generatedContent = plainTextForType(
     payload.type,
     load as never,
     payload.documentNumber,
-    company
+    company,
+    assignmentId
   );
 
   await prisma.loadDocument.update({

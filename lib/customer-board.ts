@@ -1,4 +1,8 @@
 import {
+  carrierDisplayName,
+  primaryAssignment
+} from "@/lib/dispatch-assignment";
+import {
   dispatchBoardStageDescriptions,
   dispatchBoardStageFilterSchema,
   dispatchBoardStageLabels,
@@ -70,18 +74,21 @@ type CustomerBoardLoad = {
   deliveryDate: Date;
   equipmentType: string;
   commodity: string | null;
-  dispatchAssignment: {
+  dispatchAssignments: Array<{
+    id: string;
+    sequence: number;
     driverName: string | null;
     driverPhone: string | null;
     truckNumber: string | null;
     trailerNumber: string | null;
+    carrierId?: string | null;
     carrier: { name: string } | null;
     checkCalls: Array<{
       status: string;
       location: string;
       occurredAt: Date;
     }>;
-  } | null;
+  }>;
 };
 
 export function serializeCustomerBoardRow(load: CustomerBoardLoad): CustomerBoardRow | null {
@@ -90,7 +97,11 @@ export function serializeCustomerBoardRow(load: CustomerBoardLoad): CustomerBoar
     return null;
   }
 
-  const latestCheckCall = load.dispatchAssignment?.checkCalls[0] ?? null;
+  const primary = primaryAssignment(load.dispatchAssignments);
+  const latestCheckCall =
+    load.dispatchAssignments
+      .flatMap((row) => row.checkCalls)
+      .sort((a, b) => b.occurredAt.getTime() - a.occurredAt.getTime())[0] ?? null;
 
   return {
     id: load.id,
@@ -105,11 +116,11 @@ export function serializeCustomerBoardRow(load: CustomerBoardLoad): CustomerBoar
     deliveryDate: load.deliveryDate.toISOString(),
     equipmentType: load.equipmentType,
     commodity: load.commodity,
-    carrierName: load.dispatchAssignment?.carrier?.name ?? "Uncovered",
-    driverName: load.dispatchAssignment?.driverName ?? null,
-    driverPhone: load.dispatchAssignment?.driverPhone ?? null,
-    truckNumber: load.dispatchAssignment?.truckNumber ?? null,
-    trailerNumber: load.dispatchAssignment?.trailerNumber ?? null,
+    carrierName: carrierDisplayName(load.dispatchAssignments),
+    driverName: primary?.driverName ?? null,
+    driverPhone: primary?.driverPhone ?? null,
+    truckNumber: primary?.truckNumber ?? null,
+    trailerNumber: primary?.trailerNumber ?? null,
     lastCheckCallStatus: latestCheckCall?.status ?? null,
     lastCheckCallLocation: latestCheckCall?.location ?? null,
     lastCheckCallAt: latestCheckCall?.occurredAt.toISOString() ?? null

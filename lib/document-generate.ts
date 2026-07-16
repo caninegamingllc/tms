@@ -37,11 +37,12 @@ export function structuredDocumentForType(
   type: StructuredDocument["type"],
   load: LoadForDocument,
   documentNumber: string,
-  company: CompanyBranding
+  company: CompanyBranding,
+  assignmentId?: string | null
 ) {
   switch (type) {
     case "RATE_CONFIRMATION":
-      return buildRateConfirmationDocument(load, documentNumber, company);
+      return buildRateConfirmationDocument(load, documentNumber, company, assignmentId);
     case "CUSTOMER_LOAD_CONFIRMATION":
       return buildCustomerLoadConfirmationDocument(load, documentNumber, company);
     case "BOL":
@@ -55,11 +56,12 @@ export function plainTextForType(
   type: StructuredDocument["type"],
   load: LoadForDocument,
   documentNumber: string,
-  company: CompanyBranding
+  company: CompanyBranding,
+  assignmentId?: string | null
 ) {
   switch (type) {
     case "RATE_CONFIRMATION":
-      return buildRateConfirmation(load, documentNumber, company);
+      return buildRateConfirmation(load, documentNumber, company, assignmentId);
     case "CUSTOMER_LOAD_CONFIRMATION":
       return buildCustomerLoadConfirmation(load, documentNumber, company);
     case "BOL":

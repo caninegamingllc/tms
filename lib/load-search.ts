@@ -1,4 +1,5 @@
 import { z } from "zod";
+import { carrierDisplayName } from "@/lib/dispatch-assignment";
 import { prisma } from "@/lib/db";
 import type { BranchScope } from "@/lib/scope";
 import type { Prisma } from "@prisma/client";
@@ -204,7 +205,7 @@ export async function searchLoads(
 ): Promise<PaginatedResult<Prisma.LoadGetPayload<{
   include: {
     customer: true;
-    dispatchAssignment: { include: { carrier: true } };
+    dispatchAssignments: { include: { carrier: true } };
     commission: true;
   };
 }>>> {
@@ -219,7 +220,10 @@ export async function searchLoads(
       orderBy: [{ pickupDate: "desc" }, { loadNumber: "desc" }],
       include: {
         customer: true,
-        dispatchAssignment: { include: { carrier: true } },
+        dispatchAssignments: {
+          orderBy: { sequence: "asc" },
+          include: { carrier: true }
+        },
         commission: true
       },
       skip,
@@ -442,7 +446,7 @@ export function serializeSearchLoads(loads: SearchLoadResult[]) {
     pickupDate: load.pickupDate.toISOString(),
     equipmentType: load.equipmentType,
     commodity: load.commodity,
-    carrier: load.dispatchAssignment?.carrier?.name ?? "Uncovered",
+    carrier: carrierDisplayName(load.dispatchAssignments),
     revenueCents: load.revenueCents,
     carrierCostCents: load.carrierCostCents,
     marginCents: load.revenueCents - load.carrierCostCents

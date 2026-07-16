@@ -34,7 +34,7 @@ export default async function FleetSettlementsPage({
     prisma.load.findMany({
       where: {
         companyId: user.companyId,
-        dispatchAssignment: { driverId: { not: null } }
+        dispatchAssignments: { some: { driverId: { not: null } } }
       },
       orderBy: { createdAt: "desc" },
       take: 80,

@@ -28,10 +28,7 @@ export function FleetAssignmentPanel({
 
   return (
     <div>
-      <h2 className="text-lg font-semibold">Fleet assignment</h2>
-      <p className="muted mt-1">
-        Assign your driver, tractor, and trailer. This is the primary cover path on Premium + Trucking.
-      </p>
+      <p className="muted mt-1">Assign your driver, tractor, and trailer.</p>
       {hasFleet ? (
         <p className="mt-3 text-sm text-foreground">
           Current:{" "}

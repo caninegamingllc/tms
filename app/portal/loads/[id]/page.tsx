@@ -3,6 +3,7 @@ import { notFound } from "next/navigation";
 import { CustomerPortalShell } from "@/components/customer-portal-shell";
 import { StatusBadge } from "@/components/status-badge";
 import { CUSTOMER_FACING_DOCUMENT_TYPES, getLoadBoardStage } from "@/lib/customer-board";
+import { carrierDisplayName, primaryAssignment } from "@/lib/dispatch-assignment";
 import { prisma } from "@/lib/db";
 import { formatDate, formatDateTime, humanize } from "@/lib/format";
 import { requirePortalViewer } from "@/lib/portal-auth";
@@ -37,7 +38,8 @@ export default async function PortalLoadDetailPage({
           uploadedAt: true
         }
       },
-      dispatchAssignment: {
+      dispatchAssignments: {
+        orderBy: { sequence: "asc" },
         include: {
           carrier: { select: { name: true } },
           checkCalls: {
@@ -60,6 +62,12 @@ export default async function PortalLoadDetailPage({
   }
 
   const boardStage = getLoadBoardStage(load);
+  const primary = primaryAssignment(load.dispatchAssignments);
+  const carrierLabel = carrierDisplayName(load.dispatchAssignments);
+  const recentCheckCalls = load.dispatchAssignments
+    .flatMap((row) => row.checkCalls)
+    .sort((a, b) => b.occurredAt.getTime() - a.occurredAt.getTime())
+    .slice(0, 5);
 
   return (
     <CustomerPortalShell viewer={viewer}>
@@ -139,26 +147,23 @@ export default async function PortalLoadDetailPage({
 
           <section className="rounded-2xl border border-border bg-white p-5">
             <h2 className="section-title">Carrier & driver</h2>
-            {load.dispatchAssignment ? (
+            {primary ? (
               <div className="mt-4 grid gap-3 text-sm">
                 <div>
                   <p className="label">Carrier</p>
                   <p className="font-semibold">
-                    {load.dispatchAssignment.carrier?.name ??
-                      load.dispatchAssignment.driverName ??
-                      "Assigned"}
+                    {carrierLabel !== "Uncovered" ? carrierLabel : primary.driverName ?? "Assigned"}
                   </p>
                 </div>
                 <div>
                   <p className="label">Driver</p>
-                  <p className="font-semibold">{load.dispatchAssignment.driverName ?? "TBD"}</p>
-                  <p className="muted">{load.dispatchAssignment.driverPhone ?? "No phone"}</p>
+                  <p className="font-semibold">{primary.driverName ?? "TBD"}</p>
+                  <p className="muted">{primary.driverPhone ?? "No phone"}</p>
                 </div>
                 <div>
                   <p className="label">Truck / trailer</p>
                   <p className="font-semibold">
-                    {load.dispatchAssignment.truckNumber ?? "Truck TBD"} /{" "}
-                    {load.dispatchAssignment.trailerNumber ?? "Trailer TBD"}
+                    {primary.truckNumber ?? "Truck TBD"} / {primary.trailerNumber ?? "Trailer TBD"}
                   </p>
                 </div>
               </div>
@@ -168,8 +173,8 @@ export default async function PortalLoadDetailPage({
 
             <h3 className="mt-6 text-sm font-semibold">Recent check calls</h3>
             <div className="mt-3 grid gap-2">
-              {load.dispatchAssignment?.checkCalls.length ? (
-                load.dispatchAssignment.checkCalls.map((call, index) => (
+              {recentCheckCalls.length ? (
+                recentCheckCalls.map((call, index) => (
                   <div key={`${call.occurredAt.toISOString()}-${index}`} className="rounded-xl bg-muted p-3 text-sm">
                     <p className="font-semibold">
                       {call.status} — {call.location}

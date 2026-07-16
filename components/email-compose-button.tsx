@@ -25,13 +25,15 @@ export function EmailComposeButton({
   purpose,
   label,
   disabled,
-  className = "btn"
+  className = "btn",
+  assignmentId
 }: {
   loadId: string;
   purpose: EmailPurpose;
   label: string;
   disabled?: boolean;
   className?: string;
+  assignmentId?: string;
 }) {
   const [open, setOpen] = useState(false);
   const [draft, setDraft] = useState<EmailDraft | null>(null);
@@ -42,7 +44,7 @@ export function EmailComposeButton({
     setError(null);
     startTransition(async () => {
       try {
-        const nextDraft = await prepareEmailDraft(loadId, purpose);
+        const nextDraft = await prepareEmailDraft(loadId, purpose, assignmentId);
         setDraft(nextDraft);
         setOpen(true);
       } catch (err) {
@@ -87,6 +89,9 @@ export function EmailComposeButton({
           <form action={sendPreparedEmail} className="grid gap-4">
             <input type="hidden" name="loadId" value={draft.loadId} />
             <input type="hidden" name="purpose" value={draft.purpose} />
+            {draft.assignmentId ? (
+              <input type="hidden" name="assignmentId" value={draft.assignmentId} />
+            ) : null}
 
             <label className="grid gap-2">
               <span className="label">From</span>

@@ -36,7 +36,7 @@ export const LOAD_DETAIL_TILES: TileDefinition[] = [
   { id: "workflow", title: "Load Status", minW: 3, minH: 4, default: { x: 7, y: 0, w: 5, h: 8 } },
   { id: "route-map", title: "Route Map", minW: 3, minH: 6, default: { x: 7, y: 8, w: 5, h: 16 } },
   { id: "rate-terms", title: "Rate Confirmation Terms", minW: 4, minH: 4, default: { x: 0, y: 36, w: 7, h: 10 } },
-  { id: "carrier", title: "Carrier Assignment", minW: 3, minH: 6, default: { x: 7, y: 24, w: 5, h: 16 } },
+  { id: "carrier", title: "Resource Assignment", minW: 3, minH: 6, default: { x: 7, y: 24, w: 5, h: 16 } },
   { id: "check-calls", title: "Check Calls", minW: 3, minH: 5, default: { x: 7, y: 40, w: 5, h: 12 } },
   { id: "documents", title: "Documents", minW: 4, minH: 6, default: { x: 0, y: 46, w: 7, h: 14 } },
   { id: "commission", title: "Commission", minW: 3, minH: 6, default: { x: 7, y: 52, w: 5, h: 16 } },

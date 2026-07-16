@@ -28,6 +28,10 @@ import { generateDocumentPdf, pdfFilenameForDocument } from "@/lib/pdf-documents
 import { dueDateFromTerms } from "@/lib/accounting-aging";
 import { enqueueJob } from "@/lib/jobs";
 import { applyLateFeesForInvoiceSend } from "@/lib/late-fees-apply";
+import {
+  dispatchAssignmentsDocumentInclude,
+  primaryAssignment
+} from "@/lib/dispatch-assignment";
 
 export type EmailPurpose =
   | "CARRIER_RATE_CONFIRMATION"
@@ -54,6 +58,7 @@ export type EmailDraft = {
   body: string;
   primaryAttachmentName: string | null;
   supportingDocuments: EmailDraftAttachment[];
+  assignmentId?: string | null;
 };
 
 async function loadForEmail(loadId: string, user: SessionUser) {
@@ -69,11 +74,7 @@ async function loadForEmail(loadId: string, user: SessionUser) {
         include: { lineType: true }
       },
       documents: { orderBy: { uploadedAt: "desc" } },
-      dispatchAssignment: {
-        include: {
-          carrier: { include: { contacts: true } }
-        }
-      },
+      dispatchAssignments: dispatchAssignmentsDocumentInclude,
       invoices: { orderBy: { createdAt: "desc" } },
       notes: { orderBy: { createdAt: "asc" } }
     }
@@ -103,8 +104,24 @@ function customerEmail(load: Awaited<ReturnType<typeof loadForEmail>>) {
   return (primary?.email || load.customer.email || "").trim();
 }
 
-function carrierEmail(load: Awaited<ReturnType<typeof loadForEmail>>) {
-  const carrier = load.dispatchAssignment?.carrier;
+function resolveCarrierAssignment(
+  load: Awaited<ReturnType<typeof loadForEmail>>,
+  assignmentId?: string | null
+) {
+  if (assignmentId) {
+    return load.dispatchAssignments.find((row) => row.id === assignmentId) ?? null;
+  }
+  return (
+    primaryAssignment(load.dispatchAssignments.filter((row) => row.carrierId)) ??
+    primaryAssignment(load.dispatchAssignments)
+  );
+}
+
+function carrierEmail(
+  load: Awaited<ReturnType<typeof loadForEmail>>,
+  assignmentId?: string | null
+) {
+  const carrier = resolveCarrierAssignment(load, assignmentId)?.carrier;
   const primary = carrier?.contacts.find((contact) => contact.isPrimary);
   return (primary?.email || carrier?.email || "").trim();
 }
@@ -157,7 +174,8 @@ function supportingDocsForInvoice(load: Awaited<ReturnType<typeof loadForEmail>>
 async function ensurePrimaryDocument(
   purpose: EmailPurpose,
   load: Awaited<ReturnType<typeof loadForEmail>>,
-  user: SessionUser
+  user: SessionUser,
+  assignmentId?: string | null
 ) {
   const docType = purposeToDocType(purpose);
   if (!docType) {
@@ -166,6 +184,7 @@ async function ensurePrimaryDocument(
 
   const company = await getCompanyBranding(user.companyId);
   let invoiceId: string | undefined;
+  const assignment = resolveCarrierAssignment(load, assignmentId);
 
   if (docType === "INVOICE") {
     let invoice = load.invoices[0];
@@ -191,7 +210,16 @@ async function ensurePrimaryDocument(
     load = await loadForEmail(load.id, user);
   }
 
-  let document = load.documents.find((item) => item.type === docType);
+  let document =
+    docType === "RATE_CONFIRMATION" && assignment
+      ? load.documents.find(
+          (item) =>
+            item.type === docType &&
+            (item.assignmentId === assignment.id ||
+              (!item.assignmentId && item.carrierId === assignment.carrierId))
+        )
+      : load.documents.find((item) => item.type === docType);
+
   if (!document) {
     const documentNumber =
       docType === "INVOICE"
@@ -200,7 +228,13 @@ async function ensurePrimaryDocument(
           ? `BOL-${load.loadNumber}`
           : await nextDocumentNumber(user.companyId, docTypePrefix(docType));
 
-    const structured = structuredDocumentForType(docType, load, documentNumber, company);
+    const structured = structuredDocumentForType(
+      docType,
+      load,
+      documentNumber,
+      company,
+      assignment?.id
+    );
     const pdf = await persistGeneratedPdf(user.companyId, structured);
 
     document = await prisma.loadDocument.create({
@@ -209,11 +243,18 @@ async function ensurePrimaryDocument(
         loadId: load.id,
         customerId:
           docType === "RATE_CONFIRMATION" ? undefined : load.customerId,
-        carrierId: load.dispatchAssignment?.carrierId,
+        carrierId: assignment?.carrierId,
+        assignmentId: docType === "RATE_CONFIRMATION" ? assignment?.id : undefined,
         type: docType,
         name: documentTitle(docType, load.loadNumber),
         documentNumber,
-        generatedContent: plainTextForType(docType, load, documentNumber, company),
+        generatedContent: plainTextForType(
+          docType,
+          load,
+          documentNumber,
+          company,
+          assignment?.id
+        ),
         generatedAt: new Date(),
         filePath: pdf.storedPath,
         mimeType: pdf.mimeType,
@@ -228,17 +269,30 @@ async function ensurePrimaryDocument(
       (docType === "BOL"
         ? `BOL-${load.loadNumber}`
         : await nextDocumentNumber(user.companyId, docTypePrefix(docType)));
-    const structured = structuredDocumentForType(docType, load, documentNumber, company);
+    const structured = structuredDocumentForType(
+      docType,
+      load,
+      documentNumber,
+      company,
+      assignment?.id ?? document.assignmentId
+    );
     const pdf = await persistGeneratedPdf(user.companyId, structured);
     document = await prisma.loadDocument.update({
       where: { id: document.id },
       data: {
-        generatedContent: plainTextForType(docType, load, documentNumber, company),
+        generatedContent: plainTextForType(
+          docType,
+          load,
+          documentNumber,
+          company,
+          assignment?.id ?? document.assignmentId
+        ),
         generatedAt: new Date(),
         filePath: pdf.storedPath,
         mimeType: pdf.mimeType,
         originalFileName: pdf.originalFileName,
-        fileSizeBytes: pdf.fileSizeBytes
+        fileSizeBytes: pdf.fileSizeBytes,
+        assignmentId: document.assignmentId ?? assignment?.id
       }
     });
   }
@@ -331,7 +385,11 @@ async function recordOutboundEmail(input: {
   return thread;
 }
 
-export async function prepareEmailDraft(loadId: string, purpose: EmailPurpose): Promise<EmailDraft> {
+export async function prepareEmailDraft(
+  loadId: string,
+  purpose: EmailPurpose,
+  assignmentId?: string | null
+): Promise<EmailDraft> {
   const user = await requireWriteUser();
   const load = await loadForEmail(loadId, user);
   const company = await getCompanyBranding(user.companyId);
@@ -344,7 +402,8 @@ export async function prepareEmailDraft(loadId: string, purpose: EmailPurpose): 
   }
 
   if (purpose === "CARRIER_RATE_CONFIRMATION" || purpose === "POD_REQUEST") {
-    if (!load.dispatchAssignment) {
+    const assignment = resolveCarrierAssignment(load, assignmentId);
+    if (!assignment?.carrierId) {
       throw new Error(
         purpose === "POD_REQUEST"
           ? "Assign a carrier before requesting a POD."
@@ -355,7 +414,7 @@ export async function prepareEmailDraft(loadId: string, purpose: EmailPurpose): 
 
   const to =
     purpose === "CARRIER_RATE_CONFIRMATION" || purpose === "POD_REQUEST"
-      ? carrierEmail(load)
+      ? carrierEmail(load, assignmentId)
       : customerEmail(load);
 
   if (!to) {
@@ -366,7 +425,7 @@ export async function prepareEmailDraft(loadId: string, purpose: EmailPurpose): 
     );
   }
 
-  const { document } = await ensurePrimaryDocument(purpose, load, user);
+  const { document } = await ensurePrimaryDocument(purpose, load, user, assignmentId);
   const refreshed = await loadForEmail(loadId, user);
 
   let subject = "";
@@ -418,7 +477,8 @@ export async function prepareEmailDraft(loadId: string, purpose: EmailPurpose): 
         ? buildPodRequestEmail(load, mailbox.emailAddress || user.email)
         : defaultEmailMessage(purpose, load.loadNumber, company.name),
     primaryAttachmentName,
-    supportingDocuments
+    supportingDocuments,
+    assignmentId: assignmentId ?? null
   };
 }
 
@@ -491,7 +551,8 @@ export async function sendPreparedEmail(formData: FormData) {
   }
 
   let load = await loadForEmail(loadId, user);
-  const ensured = await ensurePrimaryDocument(purpose, load, user);
+  const assignmentId = String(formData.get("assignmentId") ?? "").trim() || null;
+  const ensured = await ensurePrimaryDocument(purpose, load, user, assignmentId);
   let document = ensured.document;
   const invoiceId = ensured.invoiceId;
 

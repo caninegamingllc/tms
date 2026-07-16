@@ -1,6 +1,10 @@
 import type { Company, Prisma } from "@prisma/client";
 import { formatDate, formatDateTime, formatMoney } from "@/lib/format";
 import type { BolFormData } from "@/lib/bol-types";
+import {
+  hasAssignmentOriginDestination,
+  primaryAssignment
+} from "@/lib/dispatch-assignment";
 
 export type LoadForDocument = Prisma.LoadGetPayload<{
   include: {
@@ -9,11 +13,18 @@ export type LoadForDocument = Prisma.LoadGetPayload<{
     commodityLines: true;
     charges: true;
     carrierPayLines: { include: { lineType: true } };
-    dispatchAssignment: { include: { carrier: { include: { contacts: true } } } };
+    dispatchAssignments: {
+      include: {
+        carrier: { include: { contacts: true } };
+        payLines: { include: { lineType: true } };
+      };
+    };
     invoices: true;
     notes: true;
   };
 }>;
+
+type AssignmentForDocument = LoadForDocument["dispatchAssignments"][number];
 
 export type CompanyBranding = Pick<
   Company,
@@ -153,28 +164,92 @@ function mapStops(load: LoadForDocument): DocumentStop[] {
     }));
 }
 
-function mapCarrierPayLines(load: LoadForDocument): DocumentCharge[] {
-  if (load.carrierPayLines?.length) {
-    return load.carrierPayLines.map((line) => {
-      const typeName = line.lineType?.name ?? "Pay line";
-      const method = line.lineType?.calculationMethod ?? "FLAT";
-      let label = typeName;
-      if (line.description) {
-        label = `${typeName} — ${line.description}`;
-      } else if (method === "PER_MILE") {
-        label = `${typeName} (${formatMoney(line.unitRateCents)}/mi × ${line.quantity})`;
-      } else if (method === "HOURLY") {
-        label = `${typeName} (${formatMoney(line.unitRateCents)}/hr × ${line.quantity})`;
+function mapAssignmentStops(
+  load: LoadForDocument,
+  assignment: AssignmentForDocument | null | undefined
+): DocumentStop[] {
+  if (assignment && hasAssignmentOriginDestination(assignment)) {
+    return [
+      {
+        sequence: 1,
+        type: "PICKUP",
+        facilityName: assignment.originFacilityName || "Origin",
+        addressLine: [
+          [assignment.originCity, assignment.originState].filter(Boolean).join(", "),
+          assignment.originPostalCode
+        ]
+          .filter(Boolean)
+          .join(" "),
+        appointment: "",
+        instructions: ""
+      },
+      {
+        sequence: 2,
+        type: "DELIVERY",
+        facilityName: assignment.destinationFacilityName || "Destination",
+        addressLine: [
+          [assignment.destinationCity, assignment.destinationState]
+            .filter(Boolean)
+            .join(", "),
+          assignment.destinationPostalCode
+        ]
+          .filter(Boolean)
+          .join(" "),
+        appointment: "",
+        instructions: ""
       }
-      return { label, amountCents: line.amountCents };
-    });
+    ];
+  }
+  return mapStops(load);
+}
+
+function mapCarrierPayLinesForAssignment(
+  load: LoadForDocument,
+  assignment: AssignmentForDocument | null | undefined
+): DocumentCharge[] {
+  const lines =
+    assignment?.payLines?.length
+      ? assignment.payLines
+      : load.carrierPayLines?.filter((line) =>
+          assignment ? line.assignmentId === assignment.id : true
+        );
+
+  if (lines?.length) {
+    return [...lines]
+      .sort((a, b) => a.sortOrder - b.sortOrder)
+      .map((line) => {
+        const typeName = line.lineType?.name ?? "Pay line";
+        const method = line.lineType?.calculationMethod ?? "FLAT";
+        let label = typeName;
+        if (line.description) {
+          label = `${typeName} — ${line.description}`;
+        } else if (method === "PER_MILE") {
+          label = `${typeName} (${formatMoney(line.unitRateCents)}/mi × ${line.quantity})`;
+        } else if (method === "HOURLY") {
+          label = `${typeName} (${formatMoney(line.unitRateCents)}/hr × ${line.quantity})`;
+        }
+        return { label, amountCents: line.amountCents };
+      });
   }
 
-  const total = load.dispatchAssignment?.rateCents ?? load.carrierCostCents;
+  const total = assignment?.rateCents ?? load.carrierCostCents;
   if (total > 0) {
     return [{ label: "Carrier Rate", amountCents: total }];
   }
   return [];
+}
+
+function resolveDocumentAssignment(
+  load: LoadForDocument,
+  assignmentId?: string | null
+): AssignmentForDocument | null {
+  if (assignmentId) {
+    return load.dispatchAssignments.find((row) => row.id === assignmentId) ?? null;
+  }
+  return (
+    primaryAssignment(load.dispatchAssignments.filter((row) => row.carrierId)) ??
+    primaryAssignment(load.dispatchAssignments)
+  );
 }
 
 function mapCharges(load: LoadForDocument): DocumentCharge[] {
@@ -281,12 +356,13 @@ export function documentTitle(type: string, loadNumber: string) {
 export function buildRateConfirmationDocument(
   load: LoadForDocument,
   documentNumber: string,
-  company: CompanyBranding
+  company: CompanyBranding,
+  assignmentId?: string | null
 ): StructuredDocument {
-  const assignment = load.dispatchAssignment;
+  const assignment = resolveDocumentAssignment(load, assignmentId);
   const carrier = assignment?.carrier;
   const carrierContact = carrier?.contacts.find((contact) => contact.isPrimary);
-  const payLines = mapCarrierPayLines(load);
+  const payLines = mapCarrierPayLinesForAssignment(load, assignment);
   const totalCents = assignment?.rateCents ?? load.carrierCostCents;
 
   return {
@@ -320,7 +396,7 @@ export function buildRateConfirmationDocument(
         value: load.weight ? `${load.weight.toLocaleString()} lbs` : "N/A"
       }
     ],
-    stops: mapStops(load),
+    stops: mapAssignmentStops(load, assignment),
     charges: payLines,
     totalCents,
     extraSections: withPublicNotes(
@@ -381,7 +457,7 @@ export function buildBolFormData(
     [...stops].reverse().find((stop) => stop.type.toUpperCase().includes("DELIV")) ??
     stops[stops.length - 1];
 
-  const assignment = load.dispatchAssignment;
+  const assignment = primaryAssignment(load.dispatchAssignments);
   const carrier = assignment?.carrier;
   const weightLabel = load.weight ? load.weight.toLocaleString() : "";
   const stopInstructions = stops
@@ -714,9 +790,12 @@ function structuredToPlainText(doc: StructuredDocument) {
 export function buildRateConfirmation(
   load: LoadForDocument,
   documentNumber: string,
-  company: CompanyBranding
+  company: CompanyBranding,
+  assignmentId?: string | null
 ) {
-  return structuredToPlainText(buildRateConfirmationDocument(load, documentNumber, company));
+  return structuredToPlainText(
+    buildRateConfirmationDocument(load, documentNumber, company, assignmentId)
+  );
 }
 
 export function buildBillOfLading(
@@ -746,7 +825,7 @@ export function buildCustomerLoadConfirmation(
 }
 
 export function buildPodRequestEmail(load: LoadForDocument, brokerEmail: string) {
-  const assignment = load.dispatchAssignment;
+  const assignment = primaryAssignment(load.dispatchAssignments);
   const carrier = assignment?.carrier;
 
   return [

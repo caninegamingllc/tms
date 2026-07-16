@@ -3,6 +3,7 @@
 import { revalidatePath } from "next/cache";
 import { redirect } from "next/navigation";
 import { prisma } from "@/lib/db";
+import { primaryAssignment } from "@/lib/dispatch-assignment";
 import { parseMoneyToCents } from "@/lib/format";
 import { assertPlanFeature, requireWriteUser } from "@/lib/permissions";
 
@@ -214,7 +215,7 @@ export async function importLoadMilesToIfta(formData: FormData) {
 
   const load = await prisma.load.findFirst({
     where: { id: loadId, companyId: user.companyId },
-    include: { dispatchAssignment: true }
+    include: { dispatchAssignments: { orderBy: { sequence: "asc" } } }
   });
   if (!load) throw new Error("Load not found");
 
@@ -230,12 +231,14 @@ export async function importLoadMilesToIfta(formData: FormData) {
     throw new Error("No positive jurisdiction miles on this load.");
   }
 
+  const primary = primaryAssignment(load.dispatchAssignments);
+
   await prisma.iftaTrip.createMany({
     data: entries.map(([jurisdiction, miles]) => ({
       quarterId,
       loadId: load.id,
-      truckId: load.dispatchAssignment?.truckId ?? null,
-      driverId: load.dispatchAssignment?.driverId ?? null,
+      truckId: primary?.truckId ?? null,
+      driverId: primary?.driverId ?? null,
       startAt: load.pickupDate,
       endAt: load.deliveryDate,
       jurisdiction: jurisdiction.toUpperCase(),

@@ -7,6 +7,7 @@ import { SearchCombobox } from "@/components/search-combobox";
 import { createLoad } from "@/lib/actions";
 import { canAccessRecord, getBranchScope } from "@/lib/branch-filter-server";
 import { ensureCompanyCatalogs } from "@/lib/catalogs";
+import { primaryAssignment } from "@/lib/dispatch-assignment";
 import { requireTmsAccess } from "@/lib/permissions";
 import { canPickBranch, isAdminRole } from "@/lib/scope";
 import { loadStatuses } from "@/lib/constants";
@@ -86,7 +87,10 @@ export default async function NewLoadPage({
               orderBy: [{ sortOrder: "asc" }, { createdAt: "asc" }]
             },
             carrierPayLines: { orderBy: { sortOrder: "asc" } },
-            dispatchAssignment: { include: { carrier: true } }
+            dispatchAssignments: {
+              orderBy: { sequence: "asc" },
+              include: { carrier: true }
+            }
           }
         })
       : Promise.resolve(null)
@@ -158,18 +162,24 @@ export default async function NewLoadPage({
             amountCents: charge.amountCents
           }))
       : undefined;
-  const assignment = cloneSource?.dispatchAssignment;
+  const assignment = primaryAssignment(cloneSource?.dispatchAssignments);
   const shouldCloneCarrier = Boolean(keepCarrier && assignment);
   const clonePayLinesJson = shouldCloneCarrier
     ? JSON.stringify(
-        cloneSource!.carrierPayLines.map((line) => ({
-          lineTypeId: line.lineTypeId,
-          description: line.description,
-          unitRateCents: line.unitRateCents,
-          quantity: line.quantity,
-          amountCents: line.amountCents,
-          sortOrder: line.sortOrder
-        }))
+        cloneSource!.carrierPayLines
+          .filter(
+            (line) =>
+              line.assignmentId === assignment!.id ||
+              (line.assignmentId == null && assignment!.sequence === 0)
+          )
+          .map((line) => ({
+            lineTypeId: line.lineTypeId,
+            description: line.description,
+            unitRateCents: line.unitRateCents,
+            quantity: line.quantity,
+            amountCents: line.amountCents,
+            sortOrder: line.sortOrder
+          }))
       )
     : null;
 

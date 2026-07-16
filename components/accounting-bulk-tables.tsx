@@ -775,7 +775,7 @@ export function AccountingBillsPanel({
                           </div>
                         ) : (
                           <Link
-                            href={`/accounting/bills/new?loadId=${row.loadId}`}
+                            href={`/accounting/bills/new?loadId=${row.loadId}&carrierId=${row.carrierId}`}
                             className="btn"
                           >
                             + Record a Received Bill From {row.carrierName} on Load #

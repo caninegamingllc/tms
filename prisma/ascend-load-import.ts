@@ -484,9 +484,10 @@ async function importLoad(
       },
       notes: notes.length ? { create: notes } : undefined,
       activities: { create: activities },
-      dispatchAssignment: carrierId
+      dispatchAssignments: carrierId
         ? {
             create: {
+              sequence: 0,
               carrierId,
               driverName: row.Drivers?.trim() || undefined,
               truckNumber: row["Power Unit"]?.trim() || undefined,

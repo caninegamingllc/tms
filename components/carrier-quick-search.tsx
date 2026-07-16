@@ -274,6 +274,12 @@ export function CarrierQuickSearch() {
                           <dd className="min-w-0">{result.safetyRating}</dd>
                         </div>
                       ) : null}
+                      {result.insuranceHint ? (
+                        <div className="flex gap-2">
+                          <dt className="w-20 shrink-0 font-medium text-foreground">Insurance</dt>
+                          <dd className="min-w-0 text-emerald-700">{result.insuranceHint}</dd>
+                        </div>
+                      ) : null}
                     </dl>
 
                     <div className="mt-3 flex flex-wrap items-center gap-3">
@@ -367,6 +373,11 @@ export function CarrierQuickSearch() {
                   <span className="block truncate text-xs text-muted-foreground">
                     {result.description}
                   </span>
+                  {result.insuranceHint ? (
+                    <span className="mt-0.5 block truncate text-xs text-emerald-700">
+                      {result.insuranceHint}
+                    </span>
+                  ) : null}
                   <span className="mt-1 block text-[11px] font-semibold uppercase tracking-wide text-primary">
                     {result.source === "local" ? "Existing carrier in TMS" : "FMCSA match"}
                   </span>

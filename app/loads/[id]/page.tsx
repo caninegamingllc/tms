@@ -5,8 +5,7 @@ import { DocumentsTable } from "@/components/documents-table";
 import { PageHeader } from "@/components/page-header";
 import { LoadRoutePanel } from "@/components/load-route-panel";
 import { CheckCallForm } from "@/components/check-call-location-input";
-import { SearchCombobox } from "@/components/search-combobox";
-import { CarrierPayLinesEditor } from "@/components/carrier-pay-lines-editor";
+import { CarrierAssignmentsPanel } from "@/components/carrier-assignments-panel";
 import { LoadDetailsEditor } from "@/components/load-details-editor";
 import { StatusBadge } from "@/components/status-badge";
 import { Tile, TileBoard } from "@/components/tile-board";
@@ -16,11 +15,9 @@ import {
   addCheckCall,
   addLoadActivityNote,
   addLoadNote,
-  assignCarrier,
   generateBillOfLading,
   generateCustomerInvoice,
   generateRateConfirmation,
-  unassignCarrier,
   updateLoadRateConfirmationTerms,
   updateLoadStatus
 } from "@/lib/actions";
@@ -47,6 +44,7 @@ import { canManageUsers, canPickBranch, canSettleCommission, canWrite, isAdminRo
 import { expenseTypes, loadStatuses } from "@/lib/constants";
 import { ensureCompanyCatalogs } from "@/lib/catalogs";
 import { prisma } from "@/lib/db";
+import { carrierDisplayName, primaryAssignment } from "@/lib/dispatch-assignment";
 import { commissionMethodLabel, formatDate, formatDateTime, formatMoney, humanize, marginPercent } from "@/lib/format";
 import { isPrivateLoadNote } from "@/lib/document-templates";
 import {
@@ -114,12 +112,17 @@ export default async function LoadDetailPage({
             user: true
           }
         },
-        dispatchAssignment: {
+        dispatchAssignments: {
+          orderBy: { sequence: "asc" },
           include: {
             carrier: { include: { contacts: true } },
             driver: true,
             truck: true,
             trailer: true,
+            payLines: {
+              orderBy: { sortOrder: "asc" },
+              include: { lineType: true }
+            },
             checkCalls: { orderBy: { occurredAt: "desc" } }
           }
         },
@@ -240,9 +243,13 @@ export default async function LoadDetailPage({
     }
   }
 
-  const latestReportedLocation = load.dispatchAssignment?.checkCalls.find(
-    (call) => call.latitude != null && call.longitude != null
-  );
+  const primaryDispatch = primaryAssignment(load.dispatchAssignments);
+  const carrierAssignments = load.dispatchAssignments.filter((row) => row.carrierId);
+  const hasAnyCarrier = carrierAssignments.length > 0;
+
+  const latestReportedLocation = load.dispatchAssignments
+    .flatMap((row) => row.checkCalls)
+    .find((call) => call.latitude != null && call.longitude != null);
   const reportedLocation = latestReportedLocation
     ? {
         label: latestReportedLocation.location,
@@ -641,12 +648,24 @@ export default async function LoadDetailPage({
               <p className="muted">Generate printable carrier, shipper, and customer paperwork.</p>
             </div>
             <div className="flex flex-wrap gap-2">
-              <form action={generateRateConfirmation}>
-                <input type="hidden" name="loadId" value={load.id} />
-                <button className="btn-secondary" type="submit" disabled={!load.dispatchAssignment}>
+              {carrierAssignments.length > 0 ? (
+                carrierAssignments.map((assignment) => (
+                  <form key={assignment.id} action={generateRateConfirmation}>
+                    <input type="hidden" name="loadId" value={load.id} />
+                    <input type="hidden" name="assignmentId" value={assignment.id} />
+                    <button className="btn-secondary" type="submit">
+                      Rate Con
+                      {carrierAssignments.length > 1
+                        ? ` (${assignment.carrier?.name ?? "Carrier"})`
+                        : ""}
+                    </button>
+                  </form>
+                ))
+              ) : (
+                <button className="btn-secondary" type="button" disabled>
                   Generate Rate Con
                 </button>
-              </form>
+              )}
               <form action={generateCustomerLoadConfirmation}>
                 <input type="hidden" name="loadId" value={load.id} />
                 <button className="btn-secondary" type="submit">
@@ -669,12 +688,29 @@ export default async function LoadDetailPage({
           </div>
 
           <div className="mt-4 flex flex-wrap gap-2">
-            <EmailComposeButton
-              loadId={load.id}
-              purpose="CARRIER_RATE_CONFIRMATION"
-              label="Email Rate Con"
-              disabled={!mailbox || !load.dispatchAssignment || !canWrite(user)}
-            />
+            {carrierAssignments.length > 0 ? (
+              carrierAssignments.map((assignment) => (
+                <EmailComposeButton
+                  key={assignment.id}
+                  loadId={load.id}
+                  purpose="CARRIER_RATE_CONFIRMATION"
+                  label={
+                    carrierAssignments.length > 1
+                      ? `Email Rate Con (${assignment.carrier?.name ?? "Carrier"})`
+                      : "Email Rate Con"
+                  }
+                  disabled={!mailbox || !canWrite(user)}
+                  assignmentId={assignment.id}
+                />
+              ))
+            ) : (
+              <EmailComposeButton
+                loadId={load.id}
+                purpose="CARRIER_RATE_CONFIRMATION"
+                label="Email Rate Con"
+                disabled
+              />
+            )}
             <EmailComposeButton
               loadId={load.id}
               purpose="CUSTOMER_LOAD_CONFIRMATION"
@@ -697,7 +733,8 @@ export default async function LoadDetailPage({
               loadId={load.id}
               purpose="POD_REQUEST"
               label="Email POD Request"
-              disabled={!mailbox || !load.dispatchAssignment || !canWrite(user)}
+              disabled={!mailbox || !hasAnyCarrier || !canWrite(user)}
+              assignmentId={primaryDispatch?.id}
             />
           </div>
 
@@ -714,7 +751,7 @@ export default async function LoadDetailPage({
             <DocumentUploadForm
               defaultLoadId={load.id}
               defaultCustomerId={load.customerId}
-              defaultCarrierId={load.dispatchAssignment?.carrierId ?? undefined}
+              defaultCarrierId={primaryDispatch?.carrierId ?? undefined}
               showEntityPickers={false}
               submitLabel="Add Document"
             />
@@ -790,14 +827,14 @@ export default async function LoadDetailPage({
                   label: trailer.unitNumber
                 }))}
                 current={
-                  load.dispatchAssignment
+                  primaryDispatch
                     ? {
-                        driverId: load.dispatchAssignment.driverId,
-                        truckId: load.dispatchAssignment.truckId,
-                        trailerId: load.dispatchAssignment.trailerId,
-                        driverName: load.dispatchAssignment.driverName,
-                        truckNumber: load.dispatchAssignment.truckNumber,
-                        trailerNumber: load.dispatchAssignment.trailerNumber
+                        driverId: primaryDispatch.driverId,
+                        truckId: primaryDispatch.truckId,
+                        trailerId: primaryDispatch.trailerId,
+                        driverName: primaryDispatch.driverName,
+                        truckNumber: primaryDispatch.truckNumber,
+                        trailerNumber: primaryDispatch.trailerNumber
                       }
                     : null
                 }
@@ -805,121 +842,105 @@ export default async function LoadDetailPage({
             </div>
           ) : null}
 
-          <details className={hasFleetDispatch ? "rounded-2xl border border-border p-4" : undefined} open={!hasFleetDispatch}>
+          <details
+            className={hasFleetDispatch ? "rounded-2xl border border-border p-4" : undefined}
+            open={!hasFleetDispatch}
+          >
             {hasFleetDispatch ? (
               <summary className="cursor-pointer text-sm font-semibold text-foreground">
-                Broker to external carrier (secondary)
+                Assign Carrier
               </summary>
             ) : null}
             <div className={hasFleetDispatch ? "mt-4" : undefined}>
               <p className="muted">
-                Current carrier: {load.dispatchAssignment?.carrier?.name ?? "Not covered"}
+                Current: {carrierDisplayName(load.dispatchAssignments)}
               </p>
-              <form
-                key={load.dispatchAssignment?.id ?? "unassigned"}
-                action={assignCarrier}
-                className="mt-4 grid gap-3"
-              >
-                <input type="hidden" name="loadId" value={load.id} />
-                <SearchCombobox
-                  name="carrierId"
-                  label="Carrier"
-                  placeholder="Search carriers"
-                  options={carrierOptions}
-                  defaultValue={load.dispatchAssignment?.carrierId ?? ""}
-                  required
-                />
-                <div className="grid gap-2">
-                  <span className="label">Payment line items</span>
-                  <CarrierPayLinesEditor
-                    lineTypes={payLineTypes.map((type) => ({
-                      id: type.id,
-                      name: type.name,
-                      calculationMethod: type.calculationMethod
-                    }))}
-                    initialLines={load.carrierPayLines.map((line) => ({
+              <div className="mt-4">
+                <CarrierAssignmentsPanel
+                  loadId={load.id}
+                  carrierOptions={carrierOptions}
+                  lineTypes={payLineTypes.map((type) => ({
+                    id: type.id,
+                    name: type.name,
+                    calculationMethod: type.calculationMethod
+                  }))}
+                  defaultMiles={load.routeTotalMiles}
+                  assignments={load.dispatchAssignments.map((assignment) => ({
+                    id: assignment.id,
+                    sequence: assignment.sequence,
+                    carrierId: assignment.carrierId,
+                    carrierName: assignment.carrier?.name ?? null,
+                    rateCents: assignment.rateCents,
+                    driverName: assignment.driverName,
+                    driverPhone: assignment.driverPhone,
+                    truckNumber: assignment.truckNumber,
+                    trailerNumber: assignment.trailerNumber,
+                    originFacilityName: assignment.originFacilityName,
+                    originCity: assignment.originCity,
+                    originState: assignment.originState,
+                    originPostalCode: assignment.originPostalCode,
+                    destinationFacilityName: assignment.destinationFacilityName,
+                    destinationCity: assignment.destinationCity,
+                    destinationState: assignment.destinationState,
+                    destinationPostalCode: assignment.destinationPostalCode,
+                    payLines: (assignment.payLines?.length
+                      ? assignment.payLines
+                      : load.carrierPayLines.filter(
+                          (line) => line.assignmentId === assignment.id
+                        )
+                    ).map((line) => ({
                       lineTypeId: line.lineTypeId,
                       description: line.description,
                       unitRateCents: line.unitRateCents,
                       quantity: line.quantity,
                       amountCents: line.amountCents
-                    }))}
-                    defaultMiles={load.routeTotalMiles}
-                  />
-                </div>
-                {!hasFleetDispatch ? (
-                  <>
-                    <input
-                      name="driverName"
-                      className="input"
-                      placeholder="Driver name"
-                      defaultValue={load.dispatchAssignment?.driverName ?? ""}
-                    />
-                    <input
-                      name="driverPhone"
-                      className="input"
-                      placeholder="Driver phone"
-                      defaultValue={load.dispatchAssignment?.driverPhone ?? ""}
-                    />
-                    <div className="grid gap-3 md:grid-cols-2">
-                      <input
-                        name="truckNumber"
-                        className="input"
-                        placeholder="Truck #"
-                        defaultValue={load.dispatchAssignment?.truckNumber ?? ""}
-                      />
-                      <input
-                        name="trailerNumber"
-                        className="input"
-                        placeholder="Trailer #"
-                        defaultValue={load.dispatchAssignment?.trailerNumber ?? ""}
-                      />
-                    </div>
-                  </>
-                ) : null}
-                <button type="submit" className="btn">
-                  Save carrier assignment
-                </button>
-              </form>
-              {load.dispatchAssignment?.carrierId &&
-              canWrite(user) &&
-              !["INVOICED", "PAID"].includes(load.status) ? (
-                <form action={unassignCarrier} className="mt-3">
-                  <input type="hidden" name="loadId" value={load.id} />
-                  <button type="submit" className="btn-secondary w-full">
-                    Unassign Carrier
-                  </button>
-                </form>
-              ) : null}
+                    }))
+                  }))}
+                  hasFleetDispatch={hasFleetDispatch}
+                  canWrite={canWrite(user)}
+                  canEmail={canEmail}
+                  canGenerateRateCon={userHasPlanFeature(user, "generate_rate_con")}
+                  mailboxConnected={Boolean(mailbox)}
+                  locked={["INVOICED", "PAID"].includes(load.status)}
+                />
+              </div>
             </div>
           </details>
         </Tile>
 
-        {load.dispatchAssignment ? (
+        {primaryDispatch ? (
           <Tile id="check-calls">
             <div className="mt-4 grid gap-3">
-              {load.dispatchAssignment.checkCalls.map((call) => (
-                <div key={call.id} className="rounded-2xl border border-border p-3">
-                  <p className="font-semibold text-foreground">{call.status}</p>
-                  <p className="muted">{call.location}</p>
-                  <p className="text-xs text-muted-foreground">{formatDateTime(call.occurredAt)}</p>
-                  {call.notes ? <p className="mt-2 text-sm text-slate-700">{call.notes}</p> : null}
-                  {call.nextCheckAt ? (
-                    <div className="mt-3 rounded-xl border border-primary/20 bg-lightprimary/50 p-3 text-sm">
-                      <p className="font-semibold text-primary">
-                        Next check call: {formatDateTime(call.nextCheckAt)}
+              {load.dispatchAssignments.flatMap((assignment) =>
+                assignment.checkCalls.map((call) => (
+                  <div key={call.id} className="rounded-2xl border border-border p-3">
+                    {load.dispatchAssignments.length > 1 ? (
+                      <p className="mb-1 text-xs font-semibold uppercase tracking-wide text-muted-foreground">
+                        {assignment.carrier?.name ??
+                          (assignment.sequence === 0 ? "Primary" : `Leg ${assignment.sequence + 1}`)}
                       </p>
-                      {call.nextCheckNotes ? (
-                        <p className="mt-1 text-slate-700">{call.nextCheckNotes}</p>
-                      ) : null}
-                    </div>
-                  ) : null}
-                </div>
-              ))}
+                    ) : null}
+                    <p className="font-semibold text-foreground">{call.status}</p>
+                    <p className="muted">{call.location}</p>
+                    <p className="text-xs text-muted-foreground">{formatDateTime(call.occurredAt)}</p>
+                    {call.notes ? <p className="mt-2 text-sm text-slate-700">{call.notes}</p> : null}
+                    {call.nextCheckAt ? (
+                      <div className="mt-3 rounded-xl border border-primary/20 bg-lightprimary/50 p-3 text-sm">
+                        <p className="font-semibold text-primary">
+                          Next check call: {formatDateTime(call.nextCheckAt)}
+                        </p>
+                        {call.nextCheckNotes ? (
+                          <p className="mt-1 text-slate-700">{call.nextCheckNotes}</p>
+                        ) : null}
+                      </div>
+                    ) : null}
+                  </div>
+                ))
+              )}
             </div>
             <CheckCallForm
               action={addCheckCall}
-              assignmentId={load.dispatchAssignment.id}
+              assignmentId={primaryDispatch.id}
               loadId={load.id}
             />
           </Tile>

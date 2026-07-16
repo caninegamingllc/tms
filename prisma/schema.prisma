@@ -639,7 +639,7 @@ model Load {
   documents            LoadDocument[]
   notes                LoadNote[]
   activities           LoadActivity[]
-  dispatchAssignment   DispatchAssignment?
+  dispatchAssignments  DispatchAssignment[]
   invoices             Invoice[]
   carrierBills         CarrierBill[]
   commission           LoadCommission?
@@ -779,8 +779,10 @@ model LoadCommission {
 
 model DispatchAssignment {
   id             String           @id @default(cuid())
-  loadId         String           @unique
+  loadId         String
   load           Load             @relation(fields: [loadId], references: [id], onDelete: Cascade)
+  /// 0 = primary assignment (fleet lives here); higher = additional carriers
+  sequence       Int              @default(0)
   /// Optional when covering with own fleet (Premium + Trucking)
   carrierId      String?
   carrier        Carrier?         @relation(fields: [carrierId], references: [id])
@@ -795,11 +797,23 @@ model DispatchAssignment {
   driverPhone    String?
   truckNumber    String?
   trailerNumber  String?
+  /// Free-form leg origin/destination (additional carriers); blank on primary falls back to load stops
+  originFacilityName      String?
+  originCity              String?
+  originState             String?
+  originPostalCode        String?
+  destinationFacilityName String?
+  destinationCity         String?
+  destinationState        String?
+  destinationPostalCode   String?
   rateCents      Int              @default(0)
   assignedAt     DateTime         @default(now())
   checkCalls     CheckCall[]
   payLines       CarrierPayLine[]
+  rateConfirmations LoadDocument[]
 
+  @@index([loadId])
+  @@unique([loadId, sequence])
   @@index([carrierId])
   @@index([driverId])
   @@index([truckId])
@@ -852,6 +866,9 @@ model LoadDocument {
   customer          Customer? @relation(fields: [customerId], references: [id])
   carrierId         String?
   carrier           Carrier?  @relation(fields: [carrierId], references: [id])
+  /// Rate confirmation (and similar) can be scoped to a specific carrier assignment
+  assignmentId      String?
+  assignment        DispatchAssignment? @relation(fields: [assignmentId], references: [id], onDelete: SetNull)
   uploadedById      String?
   uploadedBy        User?     @relation(fields: [uploadedById], references: [id])
   type              String
@@ -875,6 +892,7 @@ model LoadDocument {
   @@index([loadId])
   @@index([customerId])
   @@index([carrierId])
+  @@index([assignmentId])
 }
 
 model LoadNote {

@@ -5,6 +5,7 @@ import { PageHeader } from "@/components/page-header";
 import { createCarrierBill } from "@/lib/actions";
 import { buildDefaultCarrierBillForm } from "@/lib/carrier-bill-form";
 import { resolveCarrierApPayee } from "@/lib/accounting-payee";
+import { primaryAssignment } from "@/lib/dispatch-assignment";
 import { requirePlanFeature } from "@/lib/permissions";
 import { canAccessRecord } from "@/lib/branch-filter-server";
 import { prisma } from "@/lib/db";
@@ -12,10 +13,10 @@ import { prisma } from "@/lib/db";
 export default async function NewCarrierBillPage({
   searchParams
 }: {
-  searchParams: Promise<{ loadId?: string }>;
+  searchParams: Promise<{ loadId?: string; carrierId?: string }>;
 }) {
   const user = await requirePlanFeature("accounting_ar_ap");
-  const { loadId } = await searchParams;
+  const { loadId, carrierId: carrierIdParam } = await searchParams;
   if (!loadId) {
     redirect("/accounting?tab=bills&error=" + encodeURIComponent("Select a load to record a bill."));
   }
@@ -23,7 +24,16 @@ export default async function NewCarrierBillPage({
   const load = await prisma.load.findUnique({
     where: { id: loadId, companyId: user.companyId },
     include: {
-      dispatchAssignment: { include: { carrier: true } },
+      dispatchAssignments: {
+        orderBy: { sequence: "asc" },
+        include: {
+          carrier: true,
+          payLines: {
+            orderBy: { sortOrder: "asc" },
+            include: { lineType: true }
+          }
+        }
+      },
       carrierPayLines: {
         orderBy: { sortOrder: "asc" },
         include: { lineType: true }
@@ -36,7 +46,16 @@ export default async function NewCarrierBillPage({
     notFound();
   }
 
-  const carrier = load.dispatchAssignment?.carrier;
+  const withCarrier = load.dispatchAssignments.filter((row) => row.carrierId && row.carrier);
+  const assignment =
+    (carrierIdParam
+      ? withCarrier.find((row) => row.carrierId === carrierIdParam)
+      : null) ??
+    primaryAssignment(withCarrier) ??
+    withCarrier[0] ??
+    null;
+
+  const carrier = assignment?.carrier ?? null;
   if (!carrier) {
     redirect(
       "/accounting?tab=bills&error=" +
@@ -53,7 +72,16 @@ export default async function NewCarrierBillPage({
   const billCount = await prisma.carrierBill.count({ where: { companyId: user.companyId } });
   const suggestedBillNo = `CB-${String(billCount + 1001).padStart(4, "0")}`;
 
-  const lineItems = load.carrierPayLines.map((line) => ({
+  const assignmentPayLines =
+    assignment.payLines.length > 0
+      ? assignment.payLines
+      : load.carrierPayLines.filter(
+          (line) =>
+            line.assignmentId === assignment.id ||
+            (line.assignmentId == null && assignment.sequence === 0)
+        );
+
+  const lineItems = assignmentPayLines.map((line) => ({
     id: line.id,
     description: line.description || line.lineType.name,
     type: line.lineType.name,
@@ -62,14 +90,14 @@ export default async function NewCarrierBillPage({
     amountCents: line.amountCents
   }));
 
-  if (lineItems.length === 0 && load.carrierCostCents > 0) {
+  if (lineItems.length === 0 && assignment.rateCents > 0) {
     lineItems.push({
       id: "linehaul",
       description: "Linehaul",
       type: "Flat Rate",
-      rateCents: load.carrierCostCents,
+      rateCents: assignment.rateCents,
       quantity: 1,
-      amountCents: load.carrierCostCents
+      amountCents: assignment.rateCents
     });
   }
 

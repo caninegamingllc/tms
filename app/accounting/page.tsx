@@ -84,7 +84,8 @@ export default async function AccountingPage({
       include: {
         customer: true,
         expenses: true,
-        dispatchAssignment: {
+        dispatchAssignments: {
+          orderBy: { sequence: "asc" },
           include: {
             carrier: { include: { factoringCompany: true } }
           }
@@ -247,21 +248,29 @@ export default async function AccountingPage({
     };
   });
 
-  const apLoadRows = loads
-    .filter((load) => load.dispatchAssignment?.carrier != null)
-    .map((load) => {
-      const carrier = load.dispatchAssignment!.carrier!;
-      const bill = load.carrierBills.find((entry) => entry.status !== "VOID") ?? null;
+  const apLoadRows = loads.flatMap((load) => {
+    const withCarrier = load.dispatchAssignments.filter((row) => row.carrier != null);
+    if (!withCarrier.length) {
+      return [];
+    }
+
+    const deliveryStop = [...load.stops].reverse().find((stop) => stop.type === "DELIVERY");
+    const loadExpenseBase = load.expenses.reduce((sum, expense) => sum + expense.amountCents, 0);
+
+    return withCarrier.map((assignment) => {
+      const carrier = assignment.carrier!;
+      const bill =
+        load.carrierBills.find(
+          (entry) => entry.carrierId === carrier.id && entry.status !== "VOID"
+        ) ?? null;
       const exportView =
         bill && activeExportMethod
           ? toExportStatusView(activeExportMethod, billExports.get(bill.id) ?? null)
           : null;
-      const expenseCents =
-        load.carrierCostCents + load.expenses.reduce((sum, expense) => sum + expense.amountCents, 0);
-      const deliveryStop = [...load.stops].reverse().find((stop) => stop.type === "DELIVERY");
+      const expenseCents = (assignment.rateCents ?? 0) + loadExpenseBase;
 
       return {
-        rowKey: bill?.id ?? `load-${load.id}`,
+        rowKey: bill?.id ?? `load-${load.id}-carrier-${carrier.id}`,
         loadId: load.id,
         loadNumber: load.loadNumber,
         loadStatus: load.status,
@@ -292,6 +301,7 @@ export default async function AccountingPage({
         )
       };
     });
+  });
 
   const arReportRows = invoices
     .filter((invoice) => invoice.balanceCents > 0 && invoice.status !== "VOID")

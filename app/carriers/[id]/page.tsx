@@ -7,6 +7,7 @@ import { TileBoard, Tile } from "@/components/tile-board";
 import {
   addCarrierActivityNote,
   createCarrierInsuranceCoverage,
+  refreshCarrierInsuranceFromFmcsa,
   updateCarrier,
   updateCarrierInsuranceCoverage
 } from "@/lib/actions";
@@ -38,6 +39,7 @@ export default async function CarrierDetailPage({
   const { error, saved } = await searchParams;
   const user = await requireTmsAccess();
   const canCrmDocs = userHasPlanFeature(user, "crm_documents_activity");
+  const canFmcsaLookup = userHasPlanFeature(user, "fmcsa_lookup");
   const carrierTiles = CARRIER_DETAIL_TILES.filter((tile) => {
     if (tile.id === "activity" || tile.id === "documents") return canCrmDocs;
     return true;
@@ -250,6 +252,28 @@ export default async function CarrierDetailPage({
           <p className="muted">
             Track coverage type, insurer, policy number, limits, effective dates, and expiration dates.
           </p>
+          <p className="mt-2 text-xs text-muted-foreground">
+            Refresh pulls active/pending federal filings from FMCSA Motus Insur. Manual coverages are kept;
+            previously synced FMCSA rows are replaced.
+          </p>
+
+          {writable && canFmcsaLookup ? (
+            <form action={refreshCarrierInsuranceFromFmcsa} className="mt-4">
+              <input type="hidden" name="carrierId" value={carrier.id} />
+              <button
+                className="btn-secondary"
+                type="submit"
+                disabled={!carrier.dotNumber && !carrier.mcNumber}
+                title={
+                  !carrier.dotNumber && !carrier.mcNumber
+                    ? "Add a DOT or MC number before refreshing FMCSA insurance"
+                    : "Refresh insurance from FMCSA Motus Insur"
+                }
+              >
+                Refresh from FMCSA
+              </button>
+            </form>
+          ) : null}
 
           <div className="mt-4 grid gap-4">
             {carrier.insuranceCoverages.map((coverage) => (

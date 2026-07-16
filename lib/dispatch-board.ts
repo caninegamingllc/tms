@@ -1,4 +1,9 @@
 import { z } from "zod";
+import {
+  carrierDisplayName,
+  primaryAssignment,
+  sumAssignmentRateCents
+} from "@/lib/dispatch-assignment";
 
 export const dispatchBoardStages = [
   "pending",
@@ -91,7 +96,7 @@ export type DispatchBoardRow = {
 
 type BoardStageInput = {
   status: string;
-  dispatchAssignment: unknown | null;
+  dispatchAssignments: unknown[] | null | undefined;
 };
 
 export function getLoadBoardStage(load: BoardStageInput): DispatchBoardStage | null {
@@ -111,11 +116,13 @@ export function getLoadBoardStage(load: BoardStageInput): DispatchBoardStage | n
     return "en_route";
   }
 
-  if (load.dispatchAssignment && ["COVERED", "DISPATCHED"].includes(load.status)) {
+  const hasAssignment = Boolean(load.dispatchAssignments?.length);
+
+  if (hasAssignment && ["COVERED", "DISPATCHED"].includes(load.status)) {
     return "active";
   }
 
-  if (!load.dispatchAssignment && ["QUOTE", "AVAILABLE"].includes(load.status)) {
+  if (!hasAssignment && ["QUOTE", "AVAILABLE"].includes(load.status)) {
     return "pending";
   }
 
@@ -218,12 +225,15 @@ type DispatchBoardLoad = {
   revenueCents: number;
   carrierCostCents: number;
   customer: { name: string };
-  dispatchAssignment: {
+  dispatchAssignments: Array<{
+    id: string;
+    sequence: number;
     driverName: string | null;
     driverPhone: string | null;
     truckNumber: string | null;
     trailerNumber: string | null;
     rateCents: number;
+    carrierId?: string | null;
     carrier: { name: string } | null;
     checkCalls: Array<{
       status: string;
@@ -232,7 +242,7 @@ type DispatchBoardLoad = {
       nextCheckAt: Date | null;
       nextCheckNotes: string | null;
     }>;
-  } | null;
+  }>;
 };
 
 export function serializeDispatchBoardRow(load: DispatchBoardLoad): DispatchBoardRow | null {
@@ -241,7 +251,11 @@ export function serializeDispatchBoardRow(load: DispatchBoardLoad): DispatchBoar
     return null;
   }
 
-  const latestCheckCall = load.dispatchAssignment?.checkCalls[0] ?? null;
+  const primary = primaryAssignment(load.dispatchAssignments);
+  const latestCheckCall =
+    load.dispatchAssignments
+      .flatMap((row) => row.checkCalls)
+      .sort((a, b) => b.occurredAt.getTime() - a.occurredAt.getTime())[0] ?? null;
 
   return {
     id: load.id,
@@ -258,12 +272,12 @@ export function serializeDispatchBoardRow(load: DispatchBoardLoad): DispatchBoar
     equipmentType: load.equipmentType,
     reeferTempF: load.reeferTempF,
     commodity: load.commodity,
-    carrierName: load.dispatchAssignment?.carrier?.name ?? "Uncovered",
-    driverName: load.dispatchAssignment?.driverName ?? null,
-    driverPhone: load.dispatchAssignment?.driverPhone ?? null,
-    truckNumber: load.dispatchAssignment?.truckNumber ?? null,
-    trailerNumber: load.dispatchAssignment?.trailerNumber ?? null,
-    rateCents: load.dispatchAssignment?.rateCents ?? 0,
+    carrierName: carrierDisplayName(load.dispatchAssignments),
+    driverName: primary?.driverName ?? null,
+    driverPhone: primary?.driverPhone ?? null,
+    truckNumber: primary?.truckNumber ?? null,
+    trailerNumber: primary?.trailerNumber ?? null,
+    rateCents: sumAssignmentRateCents(load.dispatchAssignments),
     revenueCents: load.revenueCents,
     carrierCostCents: load.carrierCostCents,
     lastCheckCallStatus: latestCheckCall?.status ?? null,

@@ -504,8 +504,9 @@ async function main() {
           }
         ]
       },
-      dispatchAssignment: {
+      dispatchAssignments: {
         create: {
+          sequence: 0,
           carrierId: carrier.id,
           driverName: "Sam Brooks",
           driverPhone: "865-555-0202",
@@ -775,8 +776,9 @@ async function main() {
           }
         ]
       },
-      dispatchAssignment: {
+      dispatchAssignments: {
         create: {
+          sequence: 0,
           carrierId: carrier.id,
           driverName: "Pat Lee",
           rateCents: 70000

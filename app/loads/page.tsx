@@ -1,3 +1,4 @@
+import { carrierDisplayName } from "@/lib/dispatch-assignment";
 import Link from "next/link";
 import { after } from "next/server";
 import { Suspense } from "react";
@@ -52,7 +53,7 @@ export default async function LoadsPage({
     pickupDate: load.pickupDate.toISOString(),
     equipmentType: load.equipmentType,
     commodity: load.commodity,
-    carrierName: load.dispatchAssignment?.carrier?.name ?? "Uncovered",
+    carrierName: carrierDisplayName(load.dispatchAssignments),
     revenueCents: load.revenueCents,
     carrierCostCents: load.carrierCostCents,
     commission: load.commission

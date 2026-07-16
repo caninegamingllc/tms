@@ -23,7 +23,8 @@ export default async function DispatchPage({
     orderBy: [{ pickupDate: "asc" }, { loadNumber: "asc" }],
     include: {
       customer: true,
-      dispatchAssignment: {
+      dispatchAssignments: {
+        orderBy: { sequence: "asc" },
         include: {
           carrier: true,
           checkCalls: { orderBy: { occurredAt: "desc" }, take: 1 }

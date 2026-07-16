@@ -289,7 +289,7 @@ export async function assignFleetToLoad(formData: FormData) {
   const loadId = requiredString(formData, "loadId");
   const load = await prisma.load.findFirst({
     where: { id: loadId, companyId: user.companyId },
-    include: { dispatchAssignment: true }
+    include: { dispatchAssignments: { orderBy: { sequence: "asc" } } }
   });
   if (!load) throw new Error("Load not found");
 
@@ -331,10 +331,15 @@ export async function assignFleetToLoad(formData: FormData) {
   const nextStatus =
     load.status === "AVAILABLE" || load.status === "QUOTE" ? "COVERED" : load.status;
 
+  const primary =
+    load.dispatchAssignments.find((row) => row.sequence === 0) ??
+    load.dispatchAssignments[0] ??
+    null;
+
   await prisma.$transaction(async (tx) => {
-    if (load.dispatchAssignment) {
+    if (primary) {
       await tx.dispatchAssignment.update({
-        where: { loadId },
+        where: { id: primary.id },
         data: {
           driverId,
           truckId,
@@ -349,6 +354,7 @@ export async function assignFleetToLoad(formData: FormData) {
       await tx.dispatchAssignment.create({
         data: {
           loadId,
+          sequence: 0,
           carrierId: null,
           driverId,
           truckId,
@@ -396,9 +402,13 @@ export async function clearFleetAssignment(formData: FormData) {
   const loadId = requiredString(formData, "loadId");
   const load = await prisma.load.findFirst({
     where: { id: loadId, companyId: user.companyId },
-    include: { dispatchAssignment: true }
+    include: { dispatchAssignments: { orderBy: { sequence: "asc" } } }
   });
-  if (!load?.dispatchAssignment) {
+  const primary =
+    load?.dispatchAssignments.find((row) => row.sequence === 0) ??
+    load?.dispatchAssignments[0] ??
+    null;
+  if (!load || !primary) {
     redirect(`/loads/${loadId}?error=${encodeURIComponent("No assignment on this load.")}`);
   }
 
@@ -408,13 +418,13 @@ export async function clearFleetAssignment(formData: FormData) {
     );
   }
 
-  const assignment = load.dispatchAssignment;
-  const hasCarrier = Boolean(assignment.carrierId);
+  const hasCarrier = Boolean(primary.carrierId);
+  const hasOtherAssignments = load.dispatchAssignments.some((row) => row.id !== primary.id);
 
   await prisma.$transaction(async (tx) => {
-    if (hasCarrier) {
+    if (hasCarrier || hasOtherAssignments) {
       await tx.dispatchAssignment.update({
-        where: { loadId },
+        where: { id: primary.id },
         data: {
           driverId: null,
           truckId: null,
@@ -426,7 +436,7 @@ export async function clearFleetAssignment(formData: FormData) {
         }
       });
     } else {
-      await tx.dispatchAssignment.delete({ where: { loadId } });
+      await tx.dispatchAssignment.delete({ where: { id: primary.id } });
       const nextStatus =
         load.status === "COVERED" || load.status === "DISPATCHED" ? "AVAILABLE" : load.status;
       await tx.load.update({

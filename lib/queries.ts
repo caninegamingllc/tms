@@ -22,7 +22,10 @@ export async function getDashboardData() {
         orderBy: [{ pickupDate: "desc" }, { loadNumber: "desc" }],
         include: {
           customer: true,
-          dispatchAssignment: { include: { carrier: true } }
+          dispatchAssignments: {
+            orderBy: { sequence: "asc" },
+            include: { carrier: true }
+          }
         },
         take: 8
       }),

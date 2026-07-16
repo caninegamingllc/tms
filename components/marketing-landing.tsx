@@ -99,20 +99,7 @@ export function MarketingLanding() {
 
         <div className="relative z-10 mx-auto w-full max-w-6xl px-6 lg:px-10">
           <div className="landing-hero-copy max-w-3xl">
-            <div className="flex items-center gap-3">
-              <div className="flex h-12 w-12 items-center justify-center rounded-md bg-white/15 backdrop-blur sm:h-14 sm:w-14">
-                <span className="font-display text-2xl font-semibold sm:text-[1.75rem]">S</span>
-              </div>
-              <div>
-                <div className="font-display text-[1.75rem] font-semibold leading-none tracking-tight sm:text-[2.15rem]">
-                  Simple Source TMS
-                </div>
-                <div className="mt-1.5 text-[10px] font-medium tracking-wide text-white/55 sm:text-[11px]">
-                  powered by Talent Transport Logistics Inc
-                </div>
-              </div>
-            </div>
-            <h1 className="font-display mt-8 text-[clamp(2.4rem,6.5vw,4.25rem)] leading-[1.02] font-semibold tracking-[-0.03em]">
+            <h1 className="font-display text-[clamp(2.4rem,6.5vw,4.25rem)] leading-[1.02] font-semibold tracking-[-0.03em]">
               Move freight like a professional,
               <br />
               <span className="italic text-white/80">not a spreadsheet.</span>

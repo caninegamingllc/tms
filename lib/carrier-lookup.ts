@@ -1,5 +1,11 @@
 import { prisma } from "@/lib/db";
 import { formatDotNumber, formatMcNumber, normalizeCarrierNumber } from "@/lib/carrier-numbers";
+import {
+  earliestInsuranceExpiry,
+  fetchFmcsaInsuranceCoverages,
+  formatInsuranceLookupHint,
+  type FmcsaInsuranceCoverage
+} from "@/lib/fmcsa-insurance";
 
 export type CarrierLookupResult = {
   id: string;
@@ -18,6 +24,11 @@ export type CarrierLookupResult = {
   safetyRating?: string;
   complianceStatus?: string;
   description: string;
+  insuranceCoverages?: FmcsaInsuranceCoverage[];
+  /** ISO date (YYYY-MM-DD) for form prefill */
+  insuranceExpiresAt?: string;
+  /** Preformatted hint for lookup dropdowns */
+  insuranceHint?: string;
 };
 
 type FmcsaCarrierRecord = {
@@ -269,13 +280,39 @@ async function fetchFmcsaCarriers(type: "mc" | "dot", query: string) {
   }
 
   const payload = (await response.json()) as FmcsaResponse;
-  const results = extractFmcsaCarriers(payload)
+  const baseResults = extractFmcsaCarriers(payload)
     .map((carrier, index) => mapFmcsaCarrier(carrier, index))
     .filter((result): result is CarrierLookupResult => Boolean(result))
     .slice(0, SEARCH_LIMIT);
 
+  const results = await Promise.all(baseResults.map((result) => attachFmcsaInsurance(result)));
+
   fmcsaCache.set(cacheKey, { results, expiresAt: now + CACHE_TTL_MS });
   return results;
+}
+
+async function attachFmcsaInsurance(result: CarrierLookupResult): Promise<CarrierLookupResult> {
+  try {
+    const coverages = await fetchFmcsaInsuranceCoverages({
+      dotNumber: result.dotNumber,
+      mcNumber: result.mcNumber
+    });
+
+    if (!coverages.length) {
+      return result;
+    }
+
+    const earliest = earliestInsuranceExpiry(coverages);
+
+    return {
+      ...result,
+      insuranceCoverages: coverages,
+      insuranceExpiresAt: earliest ? earliest.toISOString().slice(0, 10) : undefined,
+      insuranceHint: formatInsuranceLookupHint(coverages)
+    };
+  } catch {
+    return result;
+  }
 }
 
 async function fetchFmcsaForType(type: "mc" | "dot" | "auto", query: string) {

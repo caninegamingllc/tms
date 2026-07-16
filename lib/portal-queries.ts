@@ -11,7 +11,8 @@ export async function loadCustomerPortalBoardRows(viewer: PortalViewer): Promise
       status: { not: "CANCELED" }
     },
     include: {
-      dispatchAssignment: {
+      dispatchAssignments: {
+        orderBy: { sequence: "asc" },
         include: {
           carrier: { select: { name: true } },
           checkCalls: {

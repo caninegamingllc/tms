@@ -207,7 +207,8 @@ export async function resolveCustomerLoadMapMarkers(input: {
           longitude: true
         }
       },
-      dispatchAssignment: {
+      dispatchAssignments: {
+        orderBy: { sequence: "asc" },
         select: {
           checkCalls: {
             orderBy: { occurredAt: "desc" },
@@ -230,7 +231,7 @@ export async function resolveCustomerLoadMapMarkers(input: {
   for (const load of loads) {
     const boardStage = getLoadBoardStage({
       status: load.status,
-      dispatchAssignment: load.dispatchAssignment
+      dispatchAssignments: load.dispatchAssignments
     });
     if (!boardStage) {
       continue;
@@ -249,7 +250,10 @@ export async function resolveCustomerLoadMapMarkers(input: {
       coords = await resolveStopOrCity(deliveryStop, load.deliveryCity, load.deliveryState);
       positionSource = "delivery";
     } else {
-      const latestCheckCall = load.dispatchAssignment?.checkCalls[0] ?? null;
+      const latestCheckCall =
+        load.dispatchAssignments
+          .flatMap((row) => row.checkCalls)
+          .sort((a, b) => b.occurredAt.getTime() - a.occurredAt.getTime())[0] ?? null;
       if (latestCheckCall) {
         const checkCoords = await ensureCheckCallCoords(latestCheckCall);
         if (checkCoords) {

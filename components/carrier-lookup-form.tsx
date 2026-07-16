@@ -154,6 +154,9 @@ export function CarrierLookupForm({
     if (result.complianceStatus) {
       setComplianceStatus(result.complianceStatus);
     }
+    if (result.insuranceExpiresAt) {
+      setInsuranceExpiresAt(result.insuranceExpiresAt);
+    }
     setSelectedLocalCarrierId(null);
     clearLookupState();
     setActiveField(null);
@@ -193,6 +196,9 @@ export function CarrierLookupForm({
               >
                 <span className="font-semibold text-foreground">{result.name}</span>
                 <span className="block text-xs text-muted-foreground">{result.description}</span>
+                {result.insuranceHint ? (
+                  <span className="mt-0.5 block text-xs text-emerald-700">{result.insuranceHint}</span>
+                ) : null}
                 <span className="mt-1 block text-[11px] font-semibold uppercase tracking-wide text-primary">
                   {resultLabel(result)}
                 </span>
@@ -401,8 +407,12 @@ export function CarrierLookupForm({
           type="date"
           value={insuranceExpiresAt}
           onChange={(event) => setInsuranceExpiresAt(event.target.value)}
+          title="Auto-fills from FMCSA when available; otherwise enter manually"
         />
       </div>
+      <p className="-mt-1 text-xs text-muted-foreground">
+        Insurance date auto-fills from FMCSA federal filings when available. Leave blank or override as needed.
+      </p>
 
       <div className="rounded-2xl border border-border p-4">
         <p className="mb-3 text-sm font-semibold text-foreground">Payment & Factoring</p>

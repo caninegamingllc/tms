@@ -8,7 +8,7 @@ import type { SessionUser } from "@/lib/types";
 import { canAccessRecord } from "@/lib/branch-filter-server";
 import { resolveBranchId } from "@/lib/scope";
 import { assertPlanFeature, requireWriteUser } from "@/lib/permissions";
-import { getPlan } from "@/lib/plans";
+import { getPlan, planHasFeature } from "@/lib/plans";
 import { getCompanyPlan } from "@/lib/seats";
 import { documentTitle, isPrivateLoadNote } from "@/lib/document-templates";
 import {
@@ -17,6 +17,11 @@ import {
 } from "@/lib/document-generate";
 import { enqueueJob } from "@/lib/jobs";
 import { normalizeCarrierNumber } from "@/lib/carrier-numbers";
+import {
+  FMCSA_INSURANCE_NOTE,
+  FMCSA_INSURANCE_NOTE_LEGACY,
+  fetchFmcsaInsuranceCoverages
+} from "@/lib/fmcsa-insurance";
 import { parseMoneyToCents } from "@/lib/format";
 import { LATE_FEE_CHARGE_TYPE, parseLateFeePercent } from "@/lib/late-fees";
 import { recalculateLoadCommission } from "@/lib/commission";
@@ -48,6 +53,14 @@ import {
   parseLoadStopsFromForm,
   stopsCreateData
 } from "@/lib/load-stops";
+import {
+  dispatchAssignmentsDocumentInclude,
+  hasAssignmentOriginDestination,
+  nextAssignmentSequence,
+  parseAssignmentLaneFields,
+  primaryAssignment,
+  sumAssignmentRateCents
+} from "@/lib/dispatch-assignment";
 
 function requiredString(formData: FormData, key: string) {
   const value = String(formData.get(key) ?? "").trim();
@@ -90,11 +103,7 @@ async function loadForDocument(loadId: string, user: SessionUser) {
         orderBy: { sortOrder: "asc" },
         include: { lineType: true }
       },
-      dispatchAssignment: {
-        include: {
-          carrier: { include: { contacts: true } }
-        }
-      },
+      dispatchAssignments: dispatchAssignmentsDocumentInclude,
       invoices: { orderBy: { createdAt: "desc" } },
       notes: { orderBy: { createdAt: "asc" } }
     }
@@ -105,6 +114,19 @@ async function loadForDocument(loadId: string, user: SessionUser) {
   }
 
   return load;
+}
+
+async function syncLoadCarrierCost(
+  tx: Prisma.TransactionClient,
+  loadId: string
+): Promise<number> {
+  const assignments = await tx.dispatchAssignment.findMany({ where: { loadId } });
+  const total = sumAssignmentRateCents(assignments);
+  await tx.load.update({
+    where: { id: loadId },
+    data: { carrierCostCents: total }
+  });
+  return total;
 }
 
 async function nextDocumentNumber(companyId: string, prefix: string) {
@@ -188,6 +210,48 @@ async function syncCarrierInsuranceSummary(carrierId: string) {
     where: { id: carrierId },
     data: { insuranceExpiresAt: coverages[0]?.expiresAt ?? null }
   });
+}
+
+async function importFmcsaInsuranceCoverages(
+  carrierId: string,
+  input: { dotNumber?: string | null; mcNumber?: string | null }
+) {
+  const coverages = await fetchFmcsaInsuranceCoverages({
+    dotNumber: input.dotNumber ?? undefined,
+    mcNumber: input.mcNumber ?? undefined
+  });
+
+  await prisma.carrierInsuranceCoverage.deleteMany({
+    where: {
+      carrierId,
+      OR: [
+        { notes: { contains: FMCSA_INSURANCE_NOTE } },
+        { notes: { contains: FMCSA_INSURANCE_NOTE_LEGACY } }
+      ]
+    }
+  });
+
+  if (!coverages.length) {
+    await syncCarrierInsuranceSummary(carrierId);
+    return 0;
+  }
+
+  await prisma.carrierInsuranceCoverage.createMany({
+    data: coverages.map((coverage) => ({
+      carrierId,
+      coverageType: coverage.coverageType,
+      insurerName: coverage.insurerName ?? null,
+      policyNumber: coverage.policyNumber ?? null,
+      limitAmount: coverage.limitAmount ?? null,
+      effectiveAt: coverage.effectiveAt ?? null,
+      expiresAt: coverage.expiresAt ?? null,
+      status: coverage.status,
+      notes: coverage.notes
+    }))
+  });
+
+  await syncCarrierInsuranceSummary(carrierId);
+  return coverages.length;
 }
 
 async function requireCompanyCustomer(customerId: string, user: SessionUser) {
@@ -469,7 +533,7 @@ export async function createCarrier(formData: FormData) {
     redirect(`/carriers?error=${encodeURIComponent(duplicate)}`);
   }
 
-  await prisma.carrier.create({
+  const carrier = await prisma.carrier.create({
     data: {
       companyId: user.companyId,
       branchId: user.branchId,
@@ -491,17 +555,7 @@ export async function createCarrier(formData: FormData) {
       paymentTerms: optionalString(formData, "paymentTerms") ?? "Net 30",
       paymentMethod: optionalString(formData, "paymentMethod"),
       factoringCompanyId: factoringCompanyId || null,
-      insuranceExpiresAt,
-      insuranceCoverages: insuranceExpiresAt
-        ? {
-            create: {
-              coverageType: "AUTO_LIABILITY",
-              expiresAt: insuranceExpiresAt,
-              status: "Current",
-              notes: "Created from the carrier summary insurance date."
-            }
-          }
-        : undefined,
+      insuranceExpiresAt: null,
       contacts: {
         create: {
           name: optionalString(formData, "contactName") ?? "Dispatcher",
@@ -520,6 +574,36 @@ export async function createCarrier(formData: FormData) {
       }
     }
   });
+
+  let importedCount = 0;
+  if (dotNumber || mcNumber) {
+    try {
+      const plan = await getCompanyPlan(user.companyId);
+      if (planHasFeature(plan, "fmcsa_lookup")) {
+        importedCount = await importFmcsaInsuranceCoverages(carrier.id, {
+          dotNumber,
+          mcNumber
+        });
+      }
+    } catch {
+      importedCount = 0;
+    }
+  }
+
+  if (!importedCount && insuranceExpiresAt) {
+    await prisma.carrierInsuranceCoverage.create({
+      data: {
+        carrierId: carrier.id,
+        coverageType: "AUTO_LIABILITY",
+        expiresAt: insuranceExpiresAt,
+        status: "Current",
+        notes: "Created from the carrier summary insurance date."
+      }
+    });
+    await syncCarrierInsuranceSummary(carrier.id);
+  } else if (!importedCount) {
+    await syncCarrierInsuranceSummary(carrier.id);
+  }
 
   revalidatePath("/carriers");
   redirect("/carriers?saved=1");
@@ -723,6 +807,44 @@ export async function updateCarrierInsuranceCoverage(formData: FormData) {
   revalidatePath("/carriers");
   revalidatePath(`/carriers/${coverage.carrierId}`);
   redirect(`/carriers/${coverage.carrierId}?saved=1`);
+}
+
+export async function refreshCarrierInsuranceFromFmcsa(formData: FormData) {
+  const user = await requireWriteUser();
+  await assertPlanFeature(user.companyId, "fmcsa_lookup");
+  const carrierId = requiredString(formData, "carrierId");
+  const carrier = await requireCompanyCarrier(carrierId, user.companyId);
+
+  if (!carrier.dotNumber && !carrier.mcNumber) {
+    redirect(`/carriers/${carrierId}?error=${encodeURIComponent("Add a DOT or MC number before refreshing FMCSA insurance.")}`);
+  }
+
+  let importedCount = 0;
+  try {
+    importedCount = await importFmcsaInsuranceCoverages(carrierId, {
+      dotNumber: carrier.dotNumber,
+      mcNumber: carrier.mcNumber
+    });
+  } catch (error) {
+    const message = error instanceof Error ? error.message : "FMCSA insurance refresh failed.";
+    redirect(`/carriers/${carrierId}?error=${encodeURIComponent(message)}`);
+  }
+
+  await prisma.carrierActivity.create({
+    data: {
+      carrierId,
+      userId: user.id,
+      action: "FMCSA insurance refreshed",
+      details:
+        importedCount > 0
+          ? `Imported ${importedCount} active/pending federal insurance filing${importedCount === 1 ? "" : "s"} from Motus Insur.`
+          : "No active/pending federal insurance filings found for this DOT/MC."
+    }
+  });
+
+  revalidatePath("/carriers");
+  revalidatePath(`/carriers/${carrierId}`);
+  redirect(`/carriers/${carrierId}?saved=1`);
 }
 
 export async function createFacility(formData: FormData) {
@@ -986,6 +1108,7 @@ export async function createLoad(formData: FormData) {
       const assignment = await tx.dispatchAssignment.create({
         data: {
           loadId: createdLoad.id,
+          sequence: 0,
           carrierId: cloneCarrierId,
           driverName: optionalString(formData, "cloneDriverName"),
           driverPhone: optionalString(formData, "cloneDriverPhone"),
@@ -1307,9 +1430,18 @@ export async function assignCarrier(formData: FormData) {
   const user = await requireWriteUser();
   const loadId = requiredString(formData, "loadId");
   const carrierId = requiredString(formData, "carrierId");
+  const assignmentId = optionalString(formData, "assignmentId");
+  const isAdditional = String(formData.get("isAdditional") ?? "") === "1";
   await requireCompanyLoad(loadId, user);
   await requireCompanyCarrier(carrierId, user.companyId);
   await ensureCompanyCatalogs(user.companyId);
+
+  const lane = parseAssignmentLaneFields(formData);
+  if (isAdditional && !hasAssignmentOriginDestination(lane)) {
+    throw new Error(
+      "Origin and destination city/state are required for additional carriers."
+    );
+  }
 
   const payLinesRaw = String(formData.get("payLinesJson") ?? "").trim();
   if (!payLinesRaw) {
@@ -1379,52 +1511,99 @@ export async function assignCarrier(formData: FormData) {
     throw new Error("Carrier pay total must be greater than zero.");
   }
 
+  const driverFields = {
+    driverName: optionalString(formData, "driverName"),
+    driverPhone: optionalString(formData, "driverPhone"),
+    truckNumber: optionalString(formData, "truckNumber"),
+    trailerNumber: optionalString(formData, "trailerNumber")
+  };
+
   await prisma.$transaction(async (tx) => {
-    await tx.carrierPayLine.deleteMany({ where: { loadId } });
+    let targetId: string;
 
-    await tx.load.update({
-      where: { id: loadId },
-      data: {
-        status: "COVERED",
-        carrierCostCents: rateCents,
-        dispatchAssignment: {
-          upsert: {
-            create: {
-              carrierId,
-              driverName: optionalString(formData, "driverName"),
-              driverPhone: optionalString(formData, "driverPhone"),
-              truckNumber: optionalString(formData, "truckNumber"),
-              trailerNumber: optionalString(formData, "trailerNumber"),
-              rateCents
-            },
-            update: {
-              carrierId,
-              driverName: optionalString(formData, "driverName"),
-              driverPhone: optionalString(formData, "driverPhone"),
-              truckNumber: optionalString(formData, "truckNumber"),
-              trailerNumber: optionalString(formData, "trailerNumber"),
-              rateCents
-            }
-          }
-        },
-        activities: {
-          create: {
-            userId: user.id,
-            action: "Carrier assigned",
-            details: `Carrier assignment updated with ${normalizedLines.length} pay line(s) totaling ${(rateCents / 100).toFixed(2)}.`
-          }
-        }
+    if (assignmentId) {
+      const existing = await tx.dispatchAssignment.findFirst({
+        where: { id: assignmentId, loadId }
+      });
+      if (!existing) {
+        throw new Error("Carrier assignment not found.");
       }
-    });
+      if (existing.sequence > 0 && !hasAssignmentOriginDestination(lane)) {
+        throw new Error(
+          "Origin and destination city/state are required for additional carriers."
+        );
+      }
 
-    const assignment = await tx.dispatchAssignment.findUniqueOrThrow({
-      where: { loadId }
-    });
+      await tx.dispatchAssignment.update({
+        where: { id: existing.id },
+        data: {
+          carrierId,
+          rateCents,
+          ...driverFields,
+          ...(existing.sequence > 0 || hasAssignmentOriginDestination(lane)
+            ? lane
+            : {
+                originFacilityName: null,
+                originCity: null,
+                originState: null,
+                originPostalCode: null,
+                destinationFacilityName: null,
+                destinationCity: null,
+                destinationState: null,
+                destinationPostalCode: null
+              })
+        }
+      });
+      targetId = existing.id;
+      await tx.carrierPayLine.deleteMany({ where: { assignmentId: targetId } });
+    } else if (isAdditional) {
+      const existing = await tx.dispatchAssignment.findMany({ where: { loadId } });
+      const nextSeq = existing.length === 0 ? 1 : nextAssignmentSequence(existing);
+
+      const created = await tx.dispatchAssignment.create({
+        data: {
+          loadId,
+          sequence: nextSeq,
+          carrierId,
+          rateCents,
+          ...driverFields,
+          ...lane
+        }
+      });
+      targetId = created.id;
+    } else {
+      const primary = await tx.dispatchAssignment.findFirst({
+        where: { loadId, sequence: 0 }
+      });
+      if (primary) {
+        await tx.dispatchAssignment.update({
+          where: { id: primary.id },
+          data: {
+            carrierId,
+            rateCents,
+            ...driverFields
+          }
+        });
+        targetId = primary.id;
+        await tx.carrierPayLine.deleteMany({ where: { assignmentId: targetId } });
+      } else {
+        const created = await tx.dispatchAssignment.create({
+          data: {
+            loadId,
+            sequence: 0,
+            carrierId,
+            rateCents,
+            ...driverFields
+          }
+        });
+        targetId = created.id;
+      }
+    }
 
     await tx.carrierPayLine.createMany({
       data: normalizedLines.map((line) => ({
         loadId,
-        assignmentId: assignment.id,
+        assignmentId: targetId,
         lineTypeId: line.lineTypeId,
         description: line.description,
         unitRateCents: line.unitRateCents,
@@ -1432,6 +1611,22 @@ export async function assignCarrier(formData: FormData) {
         amountCents: line.amountCents,
         sortOrder: line.sortOrder
       }))
+    });
+
+    const totalCost = await syncLoadCarrierCost(tx, loadId);
+
+    await tx.load.update({
+      where: { id: loadId },
+      data: {
+        status: "COVERED",
+        activities: {
+          create: {
+            userId: user.id,
+            action: "Carrier assigned",
+            details: `Carrier assignment updated with ${normalizedLines.length} pay line(s) totaling ${(rateCents / 100).toFixed(2)} (load carrier cost ${(totalCost / 100).toFixed(2)}).`
+          }
+        }
+      }
     });
   });
 
@@ -1447,8 +1642,15 @@ export async function unassignCarrier(formData: FormData) {
   const user = await requireWriteUser();
   const loadId = requiredString(formData, "loadId");
   const load = await requireCompanyLoad(loadId, user);
+  const assignmentId = optionalString(formData, "assignmentId");
 
-  const assignment = await prisma.dispatchAssignment.findUnique({ where: { loadId } });
+  const assignment = assignmentId
+    ? await prisma.dispatchAssignment.findFirst({ where: { id: assignmentId, loadId } })
+    : await prisma.dispatchAssignment.findFirst({
+        where: { loadId, sequence: 0 },
+        orderBy: { sequence: "asc" }
+      });
+
   if (!assignment) {
     redirect(`/loads/${loadId}?error=${encodeURIComponent("No carrier is assigned to this load.")}`);
   }
@@ -1460,49 +1662,58 @@ export async function unassignCarrier(formData: FormData) {
   }
 
   const hasFleet = Boolean(assignment.driverId || assignment.truckId || assignment.trailerId);
-  const nextStatus =
-    !hasFleet && (load.status === "COVERED" || load.status === "DISPATCHED")
-      ? "AVAILABLE"
-      : load.status;
+  const isPrimary = assignment.sequence === 0;
 
   await prisma.$transaction(async (tx) => {
-    await tx.carrierPayLine.deleteMany({ where: { loadId } });
+    await tx.carrierPayLine.deleteMany({ where: { assignmentId: assignment.id } });
 
-    if (hasFleet) {
+    if (isPrimary && hasFleet) {
       await tx.dispatchAssignment.update({
-        where: { loadId },
-        data: { carrierId: null, rateCents: 0 }
-      });
-      await tx.load.update({
-        where: { id: loadId },
+        where: { id: assignment.id },
         data: {
-          carrierCostCents: 0,
-          activities: {
-            create: {
-              userId: user.id,
-              action: "Carrier unassigned",
-              details: "External carrier removed; fleet assignment retained."
-            }
-          }
+          carrierId: null,
+          rateCents: 0,
+          originFacilityName: null,
+          originCity: null,
+          originState: null,
+          originPostalCode: null,
+          destinationFacilityName: null,
+          destinationCity: null,
+          destinationState: null,
+          destinationPostalCode: null
         }
       });
     } else {
-      await tx.dispatchAssignment.delete({ where: { loadId } });
-      await tx.load.update({
-        where: { id: loadId },
-        data: {
-          status: nextStatus,
-          carrierCostCents: 0,
-          activities: {
-            create: {
-              userId: user.id,
-              action: "Carrier unassigned",
-              details: "Carrier assignment and pay line items were removed."
-            }
+      await tx.dispatchAssignment.delete({ where: { id: assignment.id } });
+    }
+
+    const remaining = await tx.dispatchAssignment.findMany({ where: { loadId } });
+    const totalCost = await syncLoadCarrierCost(tx, loadId);
+    const stillCovered = remaining.some(
+      (row) =>
+        Boolean(row.carrierId) || Boolean(row.driverId || row.truckId || row.trailerId)
+    );
+    const nextStatus =
+      !stillCovered && (load.status === "COVERED" || load.status === "DISPATCHED")
+        ? "AVAILABLE"
+        : load.status;
+
+    await tx.load.update({
+      where: { id: loadId },
+      data: {
+        status: nextStatus,
+        activities: {
+          create: {
+            userId: user.id,
+            action: "Carrier unassigned",
+            details:
+              isPrimary && hasFleet
+                ? "External carrier removed; fleet assignment retained."
+                : `Carrier assignment removed. Load carrier cost now ${(totalCost / 100).toFixed(2)}.`
           }
         }
-      });
-    }
+      }
+    });
   });
 
   await recalculateLoadCommission(loadId);
@@ -1794,9 +2005,14 @@ export async function generateRateConfirmation(formData: FormData) {
   const user = await requireWriteUser();
   await assertPlanFeature(user.companyId, "generate_rate_con");
   const loadId = requiredString(formData, "loadId");
+  const assignmentId = optionalString(formData, "assignmentId");
   const load = await loadForDocument(loadId, user);
 
-  if (!load.dispatchAssignment?.carrierId) {
+  const assignment = assignmentId
+    ? load.dispatchAssignments.find((row) => row.id === assignmentId) ?? null
+    : primaryAssignment(load.dispatchAssignments.filter((row) => row.carrierId));
+
+  if (!assignment?.carrierId) {
     throw new Error("Assign a carrier before generating a rate confirmation.");
   }
 
@@ -1807,11 +2023,18 @@ export async function generateRateConfirmation(formData: FormData) {
     data: {
       companyId: user.companyId,
       loadId: load.id,
-      carrierId: load.dispatchAssignment.carrierId,
+      carrierId: assignment.carrierId,
+      assignmentId: assignment.id,
       type: "RATE_CONFIRMATION",
       name: documentTitle("RATE_CONFIRMATION", load.loadNumber),
       documentNumber,
-      generatedContent: plainTextForType("RATE_CONFIRMATION", load, documentNumber, company),
+      generatedContent: plainTextForType(
+        "RATE_CONFIRMATION",
+        load,
+        documentNumber,
+        company,
+        assignment.id
+      ),
       status: "PROCESSING",
       notes: "Generated carrier rate confirmation."
     }
@@ -1822,7 +2045,8 @@ export async function generateRateConfirmation(formData: FormData) {
     loadId: load.id,
     documentId: document.id,
     type: "RATE_CONFIRMATION",
-    documentNumber
+    documentNumber,
+    assignmentId: assignment.id
   });
 
   await prisma.loadActivity.create({
