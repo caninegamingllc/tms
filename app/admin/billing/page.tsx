@@ -8,39 +8,12 @@ import {
   refreshSeatSubscriptionFromStripe
 } from "@/lib/billing-actions";
 import { requireAdmin } from "@/lib/auth";
-import { formatPlanPrice, PLANS, type PlanId } from "@/lib/plans";
+import { PLAN_ORDER, planHighlights } from "@/lib/plan-marketing";
+import { formatPlanPrice, PLANS } from "@/lib/plans";
 import { getSeatSummary } from "@/lib/seats";
 import { isStripeConfigured } from "@/lib/stripe";
 import { ADMIN_BILLING_TILES } from "@/lib/tile-defaults";
 import { loadPageLayouts } from "@/lib/ui-preferences-load";
-
-const PLAN_ORDER: PlanId[] = ["FREE", "LITE", "PREMIUM"];
-
-function planHighlights(plan: PlanId): string[] {
-  switch (plan) {
-    case "FREE":
-      return [
-        "1 user only",
-        "Basic load board (25 loads/month)",
-        "Basic customers & carriers",
-        "No documents, accounting, or email"
-      ];
-    case "LITE":
-      return [
-        "Up to 5 seats",
-        "Dispatch, docs & invoice PDFs",
-        "AR/AP + aging + factoring",
-        "FMCSA lookup & QuickBooks IIF"
-      ];
-    case "PREMIUM":
-      return [
-        "Unlimited seats & branches",
-        "Customer portal & mailbox email",
-        "Commissions, QBO Online, maps",
-        "Late fees, bulk workflows, audit log"
-      ];
-  }
-}
 
 export default async function BillingPage({
   searchParams

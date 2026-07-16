@@ -316,6 +316,18 @@ textarea::placeholder {
   padding-left: 0.35rem;
 }
 
+.landing-plan-panel {
+  transition: transform 0.2s ease, box-shadow 0.2s ease, border-color 0.2s ease;
+}
+
+.landing-plan-panel:hover {
+  transform: translateY(-2px);
+}
+
+.shadow-lifted {
+  box-shadow: var(--shadow-lifted);
+}
+
 @media (prefers-reduced-motion: reduce) {
   .landing-hero-copy,
   .landing-nav,

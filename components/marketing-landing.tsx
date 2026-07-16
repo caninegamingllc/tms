@@ -1,13 +1,23 @@
 import Link from "next/link";
 import packageJson from "@/package.json";
+import {
+  PLAN_ORDER,
+  planHighlights,
+  planSeatLabel,
+  PREMIUM_ONLY_HIGHLIGHTS
+} from "@/lib/plan-marketing";
+import { formatPlanPrice, PLANS, type PlanId } from "@/lib/plans";
 
-const capabilities = [
-  { label: "Dispatch", detail: "Assign, cover, and track every load" },
-  { label: "Quoting", detail: "Price lanes with margin clarity" },
-  { label: "Cover", detail: "Match carriers without the spreadsheet chase" },
-  { label: "Settlements", detail: "Invoices, bills, and AR in one place" },
-  { label: "Customer portal", detail: "Give shippers live visibility" }
-];
+function planCtaLabel(planId: PlanId): string {
+  switch (planId) {
+    case "FREE":
+      return "Start free";
+    case "LITE":
+      return "Start with Lite";
+    case "PREMIUM":
+      return "Start with Premium";
+  }
+}
 
 export function MarketingLanding() {
   const year = new Date().getFullYear();
@@ -29,8 +39,14 @@ export function MarketingLanding() {
           </div>
           <div className="flex items-center gap-2">
             <Link
-              href="/portal/login"
+              href="/#plans"
               className="hidden rounded-md px-3 py-1.5 text-[13px] font-semibold text-white/80 transition hover:text-white sm:inline-flex"
+            >
+              Plans
+            </Link>
+            <Link
+              href="/portal/login"
+              className="hidden rounded-md px-3 py-1.5 text-[13px] font-semibold text-white/80 transition hover:text-white md:inline-flex"
             >
               Customer portal
             </Link>
@@ -79,17 +95,87 @@ export function MarketingLanding() {
               <span className="italic text-white/80">not a spreadsheet.</span>
             </h1>
             <p className="mt-6 max-w-lg text-[15px] leading-relaxed text-white/80 sm:text-[16px]">
-              Dispatch, quote, cover, and settle every load in one dense workspace built for brokers
-              who count every mile and every margin point.
+              Start free with one seat, or pick Lite / Premium when you need documents, accounting,
+              seats, and the full brokerage stack.
             </p>
             <div className="mt-9 flex flex-wrap items-center gap-3">
               <Link href="/register" className="landing-cta-primary">
                 Start workspace
               </Link>
-              <Link href="/login" className="landing-cta-secondary">
-                Sign in
+              <Link href="/#plans" className="landing-cta-secondary">
+                See plans
               </Link>
             </div>
+          </div>
+        </div>
+      </section>
+
+      <section id="plans" className="landing-section border-b border-border scroll-mt-8">
+        <div className="mx-auto max-w-6xl px-6 py-20 lg:px-10 lg:py-24">
+          <p className="text-[11px] font-semibold uppercase tracking-[0.22em] text-muted-foreground">
+            Pricing
+          </p>
+          <h2 className="font-display mt-3 max-w-2xl text-[clamp(1.75rem,4vw,2.75rem)] font-semibold tracking-[-0.02em] text-foreground">
+            Simple pricing for brokerages.
+          </h2>
+          <p className="mt-4 max-w-xl text-[15px] leading-relaxed text-muted-foreground">
+            Seat limits and features follow your organization plan. Upgrade anytime from Admin →
+            Billing after you create a workspace.
+          </p>
+
+          <div className="mt-12 grid gap-4 lg:grid-cols-3">
+            {PLAN_ORDER.map((planId) => {
+              const plan = PLANS[planId];
+              const recommended = planId === "LITE";
+              return (
+                <div
+                  key={planId}
+                  className={`landing-plan-panel flex flex-col rounded-lg border p-5 ${
+                    recommended
+                      ? "border-primary bg-lightprimary/50 shadow-lifted"
+                      : "border-border bg-card shadow-card"
+                  }`}
+                >
+                  <div className="flex items-baseline justify-between gap-3">
+                    <h3 className="font-display text-xl font-semibold text-foreground">{plan.name}</h3>
+                    {recommended ? (
+                      <span className="text-[10px] font-semibold uppercase tracking-[0.16em] text-primary">
+                        Most teams
+                      </span>
+                    ) : null}
+                  </div>
+                  <p className="mt-3 flex items-baseline gap-1">
+                    <span className="font-display text-[2.25rem] font-semibold tracking-tight text-foreground tabular">
+                      {formatPlanPrice(planId)}
+                    </span>
+                    {planId === "FREE" ? (
+                      <span className="text-[13px] text-muted-foreground">forever</span>
+                    ) : (
+                      <span className="text-[13px] text-muted-foreground">/mo</span>
+                    )}
+                  </p>
+                  <p className="mt-1 text-[13px] font-semibold text-primary">{planSeatLabel(planId)}</p>
+                  <ul className="mt-5 flex-1 space-y-2.5 text-[13px] leading-snug text-muted-foreground">
+                    {planHighlights(planId).map((line) => (
+                      <li key={line} className="flex gap-2">
+                        <span className="mt-1.5 h-1.5 w-1.5 shrink-0 rounded-full bg-secondary" aria-hidden />
+                        <span>{line}</span>
+                      </li>
+                    ))}
+                  </ul>
+                  <Link
+                    href="/register"
+                    className={`mt-6 inline-flex items-center justify-center rounded-md px-3 py-2 text-[13px] font-semibold transition ${
+                      recommended
+                        ? "bg-primary text-primary-foreground hover:opacity-90"
+                        : "border border-border bg-card text-foreground hover:bg-muted"
+                    }`}
+                  >
+                    {planCtaLabel(planId)}
+                  </Link>
+                </div>
+              );
+            })}
           </div>
         </div>
       </section>
@@ -97,34 +183,22 @@ export function MarketingLanding() {
       <section className="landing-section border-b border-border">
         <div className="mx-auto max-w-6xl px-6 py-20 lg:px-10 lg:py-24">
           <p className="text-[11px] font-semibold uppercase tracking-[0.22em] text-muted-foreground">
-            One workspace
+            Premium
           </p>
-          <h2 className="font-display mt-3 max-w-2xl text-[clamp(1.75rem,4vw,2.75rem)] font-semibold tracking-[-0.02em] text-foreground">
-            Loads, carriers, and settlements — together.
+          <h2 className="font-display mt-3 max-w-2xl text-[clamp(1.75rem,4vw,2.5rem)] font-semibold tracking-[-0.02em]">
+            Beyond Lite — when the desk scales.
           </h2>
           <p className="mt-4 max-w-xl text-[15px] leading-relaxed text-muted-foreground">
-            Simple Source TMS gives brokerage teams a clear freight brand and the ops density they
-            need — without bouncing between tabs, sheets, and inboxes.
+            Premium unlocks the modules most brokerages add after they outgrow a five-seat
+            operation.
           </p>
-        </div>
-      </section>
-
-      <section className="landing-section">
-        <div className="mx-auto max-w-6xl px-6 py-20 lg:px-10 lg:py-24">
-          <p className="text-[11px] font-semibold uppercase tracking-[0.22em] text-muted-foreground">
-            Capabilities
-          </p>
-          <h2 className="font-display mt-3 text-[clamp(1.75rem,4vw,2.5rem)] font-semibold tracking-[-0.02em]">
-            Built for the brokerage day.
-          </h2>
-          <ul className="mt-10 divide-y divide-border border-y border-border">
-            {capabilities.map((item) => (
+          <ul className="mt-10 grid gap-x-8 gap-y-3 sm:grid-cols-2">
+            {PREMIUM_ONLY_HIGHLIGHTS.map((item) => (
               <li
-                key={item.label}
-                className="landing-capability grid gap-1 py-5 sm:grid-cols-[10rem_1fr] sm:items-baseline sm:gap-8"
+                key={item}
+                className="landing-capability flex items-baseline gap-3 border-t border-border pt-3 text-[15px]"
               >
-                <span className="font-display text-[17px] font-semibold text-primary">{item.label}</span>
-                <span className="text-[15px] text-muted-foreground">{item.detail}</span>
+                <span className="font-display font-semibold text-primary">{item}</span>
               </li>
             ))}
           </ul>
@@ -136,10 +210,11 @@ export function MarketingLanding() {
         <div className="surface-grid absolute inset-0 opacity-[0.14] mix-blend-overlay" aria-hidden />
         <div className="relative z-10 mx-auto max-w-6xl px-6 py-20 text-white lg:px-10 lg:py-24">
           <h2 className="font-display max-w-xl text-[clamp(1.75rem,4vw,2.75rem)] font-semibold tracking-[-0.02em]">
-            Ready when your next load posts.
+            Start free. Upgrade when the freight picks up.
           </h2>
           <p className="mt-4 max-w-md text-[15px] leading-relaxed text-white/80">
-            Open a company workspace or sign in to the command center you already know.
+            New workspaces land on Free with one seat. Choose Lite or Premium in Billing when you
+            need the rest of the stack.
           </p>
           <div className="mt-8 flex flex-wrap gap-3">
             <Link href="/register" className="landing-cta-primary landing-cta-on-brand">
@@ -166,6 +241,9 @@ export function MarketingLanding() {
             </p>
           </div>
           <nav className="flex flex-wrap gap-x-5 gap-y-2 text-[13px] font-semibold text-muted-foreground">
+            <Link href="/#plans" className="transition hover:text-foreground">
+              Plans
+            </Link>
             <Link href="/portal/login" className="transition hover:text-foreground">
               Customer portal
             </Link>
