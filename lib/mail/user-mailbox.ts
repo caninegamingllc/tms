@@ -452,7 +452,22 @@ export async function syncMailboxThreadsForUser(userId: string, companyId: strin
       };
 
       let conversationId = thread.providerThreadId;
-      if (!conversationId && thread.load.loadNumber) {
+      let conversationFetched = false;
+
+      if (conversationId) {
+        try {
+          const remote = await listMicrosoftConversationMessages(accessToken, conversationId);
+          conversationFetched = true;
+          for (const message of remote.value) {
+            await importMicrosoftMessage(message);
+          }
+        } catch {
+          // Fall through to load-number search when Graph rejects the conversation filter.
+          conversationFetched = false;
+        }
+      }
+
+      if (!conversationFetched && thread.load.loadNumber) {
         const remote = await searchMicrosoftMessages(accessToken, thread.load.loadNumber);
         for (const message of remote.value) {
           if (message.conversationId && !conversationId) {
@@ -462,13 +477,10 @@ export async function syncMailboxThreadsForUser(userId: string, companyId: strin
               data: { providerThreadId: message.conversationId }
             });
           }
-          await importMicrosoftMessage(message);
-        }
-      }
-
-      if (conversationId) {
-        const remote = await listMicrosoftConversationMessages(accessToken, conversationId);
-        for (const message of remote.value) {
+          // Only attach messages that belong to this conversation once we know it.
+          if (conversationId && message.conversationId && message.conversationId !== conversationId) {
+            continue;
+          }
           await importMicrosoftMessage(message);
         }
       }

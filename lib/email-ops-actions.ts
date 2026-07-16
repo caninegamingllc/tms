@@ -777,8 +777,15 @@ export async function syncLoadEmails(formData: FormData) {
   const user = await requireWriteUser();
   const loadId = String(formData.get("loadId") ?? "").trim();
   await loadForEmail(loadId, user);
-  // Sync inline (same as Settings → Email) so replies appear on revalidate.
-  // Queuing alone looked like a no-op when the job worker was delayed or down.
-  await syncMailboxThreadsForUser(user.id, user.companyId);
+  try {
+    // Sync inline (same as Settings → Email) so replies appear on revalidate.
+    await syncMailboxThreadsForUser(user.id, user.companyId);
+  } catch (error) {
+    const message =
+      error instanceof Error && error.message
+        ? error.message.slice(0, 240)
+        : "Mailbox sync failed. Check Email settings and try again.";
+    redirect(`/loads/${loadId}?error=${encodeURIComponent(message)}`);
+  }
   revalidatePath(`/loads/${loadId}`);
 }

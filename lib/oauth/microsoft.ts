@@ -276,11 +276,12 @@ export async function listMicrosoftConversationMessages(
   accessToken: string,
   conversationId: string
 ) {
+  // Do not combine $filter(conversationId) with $orderby — Graph returns InefficientFilter.
+  // Sort client-side after fetch.
   const params = new URLSearchParams({
     $filter: `conversationId eq '${conversationId.replace(/'/g, "''")}'`,
     $top: "50",
-    $select: "id,subject,from,toRecipients,bodyPreview,receivedDateTime,sentDateTime,conversationId",
-    $orderby: "receivedDateTime asc"
+    $select: "id,subject,from,toRecipients,bodyPreview,receivedDateTime,sentDateTime,conversationId"
   });
 
   const response = await fetch(`https://graph.microsoft.com/v1.0/me/messages?${params.toString()}`, {
@@ -291,7 +292,7 @@ export async function listMicrosoftConversationMessages(
     throw new Error(`Microsoft conversation fetch failed: ${await response.text()}`);
   }
 
-  return (await response.json()) as {
+  const payload = (await response.json()) as {
     value: Array<{
       id: string;
       subject?: string;
@@ -303,6 +304,14 @@ export async function listMicrosoftConversationMessages(
       toRecipients?: Array<{ emailAddress?: { address?: string } }>;
     }>;
   };
+
+  payload.value.sort((a, b) => {
+    const aTime = a.receivedDateTime ? Date.parse(a.receivedDateTime) : 0;
+    const bTime = b.receivedDateTime ? Date.parse(b.receivedDateTime) : 0;
+    return aTime - bTime;
+  });
+
+  return payload;
 }
 
 export async function searchMicrosoftMessages(accessToken: string, search: string) {
