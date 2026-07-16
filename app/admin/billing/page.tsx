@@ -212,9 +212,14 @@ export default async function BillingPage({
                             placeholder={process.env.STRIPE_DEV_PROMO_CODE ?? "DEV100"}
                           />
                         </label>
+                      ) : isCurrent ? (
+                        <p className="text-xs text-muted-foreground">
+                          Updates seat count on your current plan (prorated on your card on file).
+                        </p>
                       ) : (
                         <p className="text-xs text-muted-foreground">
-                          Updates your existing subscription. Promo codes apply to new checkouts only.
+                          Switching plans opens Stripe Checkout so you can confirm payment for the
+                          new rate.
                         </p>
                       )}
                       <button className="btn" type="submit">

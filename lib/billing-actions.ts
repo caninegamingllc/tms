@@ -27,16 +27,54 @@ function redirectBillingError(message: string): never {
   redirect(`/admin/billing?error=${encodeURIComponent(message)}`);
 }
 
+function isStripeResourceMissing(error: unknown): boolean {
+  if (!error || typeof error !== "object") {
+    return false;
+  }
+
+  const code = "code" in error ? String((error as { code?: unknown }).code ?? "") : "";
+  if (code === "resource_missing") {
+    return true;
+  }
+
+  const message = error instanceof Error ? error.message : "";
+  return /No such (customer|subscription|price)/i.test(message);
+}
+
+async function clearStaleStripeIds(companyId: string) {
+  await prisma.seatSubscription.updateMany({
+    where: { companyId },
+    data: {
+      stripeCustomerId: null,
+      stripeSubscriptionId: null,
+      stripePriceId: null
+    }
+  });
+}
+
 async function ensureStripeCustomer(
   companyId: string,
   actor: { email: string; name: string },
   existingCustomerId: string | null | undefined
 ) {
+  const stripe = getStripe();
+
   if (existingCustomerId) {
-    return existingCustomerId;
+    try {
+      const existing = await stripe.customers.retrieve(existingCustomerId);
+      if (!("deleted" in existing && existing.deleted)) {
+        return existingCustomerId;
+      }
+    } catch (error) {
+      if (!isStripeResourceMissing(error)) {
+        throw error;
+      }
+      // Test→live switch or deleted customer: drop stale IDs and create a new one.
+    }
+
+    await clearStaleStripeIds(companyId);
   }
 
-  const stripe = getStripe();
   const customer = await stripe.customers.create({
     email: actor.email,
     name: actor.name,
@@ -192,8 +230,11 @@ export async function createPlanCheckoutSession(formData: FormData) {
       subscription.stripeCustomerId
     );
 
-    // Prefer updating an existing paid subscription instead of creating a second one.
-    // Promo codes only apply to new Checkout Sessions; ignore promo on plan/quantity updates.
+    // Same-plan seat quantity changes update in place. Plan tier changes go through
+    // Checkout so the customer confirms payment (and Lite promos cannot silently
+    // carry over onto Premium).
+    let replaceSubscriptionId: string | null = null;
+
     try {
       const existing = await findUpdatableSeatSubscription(
         stripe,
@@ -207,21 +248,28 @@ export async function createPlanCheckoutSession(formData: FormData) {
           redirectBillingError("Existing subscription has no billable items");
         }
 
-        const updated = await stripe.subscriptions.update(existing.id, {
-          items: [
-            {
-              id: item.id,
-              price: priceId,
-              quantity
-            }
-          ],
-          proration_behavior: "create_prorations",
-          metadata: { companyId: actor.companyId, plan }
-        });
+        const currentPriceId =
+          typeof item.price === "string" ? item.price : item.price?.id ?? null;
 
-        await syncSeatSubscriptionFromStripe(updated, actor.companyId);
-        await autoAssignOwnerOnPurchase(actor.companyId, actor.membershipId);
-        redirect("/admin/billing?success=1");
+        if (currentPriceId === priceId) {
+          const updated = await stripe.subscriptions.update(existing.id, {
+            items: [
+              {
+                id: item.id,
+                price: priceId,
+                quantity
+              }
+            ],
+            proration_behavior: "create_prorations",
+            metadata: { companyId: actor.companyId, plan }
+          });
+
+          await syncSeatSubscriptionFromStripe(updated, actor.companyId);
+          await autoAssignOwnerOnPurchase(actor.companyId, actor.membershipId);
+          redirect("/admin/billing?success=1");
+        }
+
+        replaceSubscriptionId = existing.id;
       }
     } catch (error) {
       if (error && typeof error === "object" && "digest" in error) {
@@ -239,7 +287,8 @@ export async function createPlanCheckoutSession(formData: FormData) {
       metadata: {
         companyId: actor.companyId,
         membershipId: actor.membershipId,
-        plan
+        plan,
+        ...(replaceSubscriptionId ? { replaceSubscriptionId } : {})
       },
       subscription_data: {
         metadata: { companyId: actor.companyId, plan }
@@ -338,6 +387,19 @@ export async function createBillingPortalSession() {
   try {
     const stripe = getStripe();
     const baseUrl = await publicBillingBaseUrl();
+
+    try {
+      await stripe.customers.retrieve(subscription.stripeCustomerId);
+    } catch (error) {
+      if (isStripeResourceMissing(error)) {
+        await clearStaleStripeIds(actor.companyId);
+        redirectBillingError(
+          "Your previous Stripe billing account is no longer valid (often after switching Test→Live). Confirm a plan below to create a new one."
+        );
+      }
+      throw error;
+    }
+
     const portalSession = await stripe.billingPortal.sessions.create({
       customer: subscription.stripeCustomerId,
       return_url: `${baseUrl}/admin/billing`
@@ -494,35 +556,46 @@ export async function syncSeatSubscriptionForCompany(companyId: string) {
   const stripe = getStripe();
   let subscription: Stripe.Subscription | null = null;
 
-  if (local.stripeCustomerId) {
-    subscription = await findUpdatableSeatSubscription(
-      stripe,
-      local.stripeCustomerId,
-      local.stripeSubscriptionId
-    );
-  } else if (local.stripeSubscriptionId) {
-    try {
-      const retrieved = await stripe.subscriptions.retrieve(local.stripeSubscriptionId, {
-        expand: ["items.data.price"]
-      });
-      if (UPDATABLE_SUBSCRIPTION_STATUSES.has(retrieved.status)) {
-        subscription = retrieved;
+  try {
+    if (local.stripeCustomerId) {
+      subscription = await findUpdatableSeatSubscription(
+        stripe,
+        local.stripeCustomerId,
+        local.stripeSubscriptionId
+      );
+    } else if (local.stripeSubscriptionId) {
+      try {
+        const retrieved = await stripe.subscriptions.retrieve(local.stripeSubscriptionId, {
+          expand: ["items.data.price"]
+        });
+        if (UPDATABLE_SUBSCRIPTION_STATUSES.has(retrieved.status)) {
+          subscription = retrieved;
+        }
+      } catch (error) {
+        if (!isStripeResourceMissing(error)) {
+          throw error;
+        }
+        // Subscription id may be stale after a new checkout.
       }
-    } catch {
-      // Subscription id may be stale after a new checkout.
     }
-  }
 
-  if (!subscription && local.stripeCustomerId) {
-    const subscriptions = await stripe.subscriptions.list({
-      customer: local.stripeCustomerId,
-      status: "all",
-      limit: 20,
-      expand: ["data.items.data.price"]
-    });
+    if (!subscription && local.stripeCustomerId) {
+      const subscriptions = await stripe.subscriptions.list({
+        customer: local.stripeCustomerId,
+        status: "all",
+        limit: 20,
+        expand: ["data.items.data.price"]
+      });
 
-    subscription =
-      subscriptions.data.sort((left, right) => right.created - left.created)[0] ?? null;
+      subscription =
+        subscriptions.data.sort((left, right) => right.created - left.created)[0] ?? null;
+    }
+  } catch (error) {
+    if (isStripeResourceMissing(error)) {
+      await clearStaleStripeIds(companyId);
+      return false;
+    }
+    throw error;
   }
 
   if (!subscription) {

@@ -48,6 +48,23 @@ export async function POST(request: Request) {
 
           const companyId = session.metadata?.companyId ?? subscription.metadata?.companyId;
           const membershipId = session.metadata?.membershipId;
+          const replaceSubscriptionId = session.metadata?.replaceSubscriptionId;
+
+          // Plan tier change: cancel the previous subscription after the new one is paid.
+          if (
+            replaceSubscriptionId &&
+            replaceSubscriptionId !== session.subscription
+          ) {
+            try {
+              await stripe.subscriptions.cancel(replaceSubscriptionId);
+            } catch (error) {
+              console.error(
+                "[stripe webhook] failed to cancel replaced subscription",
+                replaceSubscriptionId,
+                error
+              );
+            }
+          }
 
           if (companyId && membershipId) {
             await autoAssignOwnerOnPurchase(companyId, membershipId);
