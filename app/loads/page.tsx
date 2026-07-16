@@ -52,7 +52,7 @@ export default async function LoadsPage({
     pickupDate: load.pickupDate.toISOString(),
     equipmentType: load.equipmentType,
     commodity: load.commodity,
-    carrierName: load.dispatchAssignment?.carrier.name ?? "Uncovered",
+    carrierName: load.dispatchAssignment?.carrier?.name ?? "Uncovered",
     revenueCents: load.revenueCents,
     carrierCostCents: load.carrierCostCents,
     commission: load.commission

@@ -28,7 +28,7 @@ function redirectIfMissingFeature(
     return;
   }
 
-  const message = upgradePathMessage(feature, user.plan as "FREE" | "LITE" | "PREMIUM");
+  const message = upgradePathMessage(feature, user.plan as import("@/lib/plans").PlanId);
   if (canAccessAdmin(user.role)) {
     redirect(`/admin/billing?error=${encodeURIComponent(message)}`);
   }

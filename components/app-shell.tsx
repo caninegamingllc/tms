@@ -71,6 +71,21 @@ const navGroups: NavGroup[] = [
     ]
   },
   {
+    id: "fleet",
+    label: "Fleet",
+    icon: Truck,
+    items: [
+      { href: "/fleet/drivers", label: "Drivers", icon: ShieldCheck, feature: "fleet_assets" },
+      { href: "/fleet/trucks", label: "Trucks", icon: Truck, feature: "fleet_assets" },
+      { href: "/fleet/trailers", label: "Trailers", icon: Truck, feature: "fleet_assets" },
+      { href: "/fleet/compliance", label: "Compliance", icon: FileText, feature: "fleet_assets" },
+      { href: "/fleet/dvir", label: "DVIR", icon: FileText, feature: "fleet_assets" },
+      { href: "/fleet/safety", label: "Safety", icon: ShieldCheck, feature: "safety_records" },
+      { href: "/fleet/settlements", label: "Settlements", icon: Landmark, feature: "fleet_dispatch" },
+      { href: "/fleet/fuel-tax", label: "Fuel tax", icon: Landmark, feature: "fuel_tax_ifta" }
+    ]
+  },
+  {
     id: "network",
     label: "Network",
     icon: Building2,

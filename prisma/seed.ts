@@ -821,6 +821,27 @@ async function main() {
         displayName: "Tracking and Document Capture",
         status: "Not Connected",
         notes: "Future driver tracking and POD capture."
+      },
+      {
+        companyId: company.id,
+        provider: "SAMSARA",
+        displayName: "Samsara ELD",
+        status: "Not Connected",
+        notes: "Phase 2: GPS location, HOS, and asset visibility via Samsara API."
+      },
+      {
+        companyId: company.id,
+        provider: "MOTIVE",
+        displayName: "Motive ELD",
+        status: "Not Connected",
+        notes: "Phase 2: GPS location, HOS, and asset visibility via Motive API."
+      },
+      {
+        companyId: company.id,
+        provider: "GEOTAB",
+        displayName: "Geotab ELD",
+        status: "Not Connected",
+        notes: "Phase 2: GPS location, HOS, and asset visibility via Geotab API."
       }
     ]
   });

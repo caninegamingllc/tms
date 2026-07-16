@@ -156,8 +156,8 @@ export async function createPlanCheckoutSession(formData: FormData) {
   const promoCode = String(formData.get("promoCode") ?? "").trim();
   const quantity = Number(formData.get("quantity"));
 
-  if (planRaw !== "LITE" && planRaw !== "PREMIUM") {
-    redirectBillingError("Choose the Lite or Premium plan");
+  if (planRaw !== "LITE" && planRaw !== "PREMIUM" && planRaw !== "PREMIUM_TRUCKING") {
+    redirectBillingError("Choose the Lite, Premium, or Premium + Trucking plan");
   }
 
   const plan = planRaw as Exclude<PlanId, "FREE">;
@@ -270,7 +270,11 @@ export async function createSeatCheckoutSession(formData: FormData) {
   const quantity = Number(formData.get("quantity"));
   const planFromForm = String(formData.get("plan") ?? "").trim().toUpperCase();
 
-  if (planFromForm !== "LITE" && planFromForm !== "PREMIUM") {
+  if (
+    planFromForm !== "LITE" &&
+    planFromForm !== "PREMIUM" &&
+    planFromForm !== "PREMIUM_TRUCKING"
+  ) {
     formData.set(
       "plan",
       Number.isInteger(quantity) && quantity > 5 ? "PREMIUM" : "LITE"

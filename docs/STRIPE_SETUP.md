@@ -7,16 +7,18 @@ This TMS bills per organization for **subscription plans** with **per-seat quant
 | Free | $0 | 1 included seat (cannot buy more) |
 | Lite | $20 / seat / month | Purchase 1–5 seats |
 | Premium | $60 / seat / month | Purchase any number of seats |
+| Premium + Trucking | $100 / seat / month | Purchase any number of seats |
 
-Feature access is controlled by `SeatSubscription.plan` (`FREE` | `LITE` | `PREMIUM`). Purchased seats are stored on `SeatSubscription.seatQuantity` (from Stripe subscription item quantity). See `lib/plans.ts`.
+Feature access is controlled by `SeatSubscription.plan` (`FREE` | `LITE` | `PREMIUM` | `PREMIUM_TRUCKING`). Purchased seats are stored on `SeatSubscription.seatQuantity` (from Stripe subscription item quantity). See `lib/plans.ts`.
 
 ## Dashboard setup
 
-1. Create products **TMS Lite** and **TMS Premium**.
-2. Add recurring monthly **per-unit** Prices: **$20.00** (Lite) and **$60.00** (Premium). Quantity on the subscription = number of seats.
+1. Create products **TMS Lite**, **TMS Premium**, and **TMS Premium + Trucking**.
+2. Add recurring monthly **per-unit** Prices: **$20.00** (Lite), **$60.00** (Premium), and **$100.00** (Premium + Trucking). Quantity on the subscription = number of seats.
 3. Copy Price IDs into:
    - `STRIPE_LITE_PRICE_ID`
    - `STRIPE_PREMIUM_PRICE_ID`
+   - `STRIPE_PREMIUM_TRUCKING_PRICE_ID`
 4. (Optional) Keep a legacy per-seat Price as `STRIPE_SEAT_PRICE_ID` — existing subscriptions on that price map to Premium and keep their seat quantity.
 5. Create a **Coupon** with 100% off and a promotion code (e.g. `DEV100` / `tms100`).
 6. Add API keys to `.env`:
@@ -24,6 +26,7 @@ Feature access is controlled by `SeatSubscription.plan` (`FREE` | `LITE` | `PREM
    - `NEXT_PUBLIC_STRIPE_PUBLISHABLE_KEY`
    - `STRIPE_LITE_PRICE_ID`
    - `STRIPE_PREMIUM_PRICE_ID`
+   - `STRIPE_PREMIUM_TRUCKING_PRICE_ID`
    - `STRIPE_DEV_PROMO_CODE` (optional)
    - `STRIPE_WEBHOOK_SECRET`
 7. Configure a webhook endpoint:
@@ -38,12 +41,9 @@ stripe listen --forward-to localhost:3000/api/stripe/webhook
 
 Use the signing secret printed by the Stripe CLI in `STRIPE_WEBHOOK_SECRET` while developing locally.
 
-## Behavior
+## Behavior notes
 
-- New companies start on **Free** with one seat assigned to the owner.
-- Admins choose Lite or Premium from **Admin → Billing** and enter the **total** seats to purchase.
-- Lite rejects quantities above 5; Premium has no maximum.
-- The whole organization is billed on a single plan rate (never mix Lite and Premium seats).
-- Seat assignment and feature gates follow purchased quantity + plan features.
-- Canceling a paid Stripe subscription returns the org to Free (1 seat); excess seats are unassigned.
-- Admin and Billing remain available to owners/admins without a seat.
+- Admins choose Lite, Premium, or Premium + Trucking from **Admin → Billing** and enter the **total** seats to purchase.
+- Lite rejects quantities above 5; Premium and Premium + Trucking have no maximum.
+- The whole organization is billed on a single plan rate (never mix plan seats).
+- Premium + Trucking includes all Premium features plus fleet modules (drivers/trucks/trailers, DQF, safety, ELD/IFTA scaffolding).

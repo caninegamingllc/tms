@@ -143,7 +143,11 @@ export default async function PortalLoadDetailPage({
               <div className="mt-4 grid gap-3 text-sm">
                 <div>
                   <p className="label">Carrier</p>
-                  <p className="font-semibold">{load.dispatchAssignment.carrier.name}</p>
+                  <p className="font-semibold">
+                    {load.dispatchAssignment.carrier?.name ??
+                      load.dispatchAssignment.driverName ??
+                      "Assigned"}
+                  </p>
                 </div>
                 <div>
                   <p className="label">Driver</p>

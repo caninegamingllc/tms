@@ -248,9 +248,9 @@ export default async function AccountingPage({
   });
 
   const apLoadRows = loads
-    .filter((load) => load.dispatchAssignment?.carrier)
+    .filter((load) => load.dispatchAssignment?.carrier != null)
     .map((load) => {
-      const carrier = load.dispatchAssignment!.carrier;
+      const carrier = load.dispatchAssignment!.carrier!;
       const bill = load.carrierBills.find((entry) => entry.status !== "VOID") ?? null;
       const exportView =
         bill && activeExportMethod

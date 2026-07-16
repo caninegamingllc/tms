@@ -1,7 +1,8 @@
-export const PLAN_IDS = ["FREE", "LITE", "PREMIUM"] as const;
+export const PLAN_IDS = ["FREE", "LITE", "PREMIUM", "PREMIUM_TRUCKING"] as const;
 export type PlanId = (typeof PLAN_IDS)[number];
 
-export const PLAN_FEATURES = [
+/** Core brokerage features shared by Premium (and below as gated). */
+export const CORE_PLAN_FEATURES = [
   "dashboard_basic",
   "dashboard_fuel_index",
   "loads_create",
@@ -50,14 +51,27 @@ export const PLAN_FEATURES = [
   "delete_loads"
 ] as const;
 
+/** Trucking-only features — Premium + Trucking exclusively. */
+export const TRUCKING_PLAN_FEATURES = [
+  "fleet_assets",
+  "fleet_dispatch",
+  "driver_qualification",
+  "safety_records",
+  "eld_integrations",
+  "fuel_tax_ifta"
+] as const;
+
+export const PLAN_FEATURES = [...CORE_PLAN_FEATURES, ...TRUCKING_PLAN_FEATURES] as const;
+
 export type PlanFeature = (typeof PLAN_FEATURES)[number];
+export type TruckingPlanFeature = (typeof TRUCKING_PLAN_FEATURES)[number];
 
 export type PlanDefinition = {
   id: PlanId;
   name: string;
   /** Per-seat monthly price in cents (Free is $0). */
   priceMonthlyCents: number;
-  /** Max purchasable seats for the plan. null = no purchase cap (Premium). */
+  /** Max purchasable seats for the plan. null = no purchase cap. */
   maxSeats: number | null;
   /** Soft cap on loads created per calendar month (Free only). null = unlimited. */
   monthlyLoadCap: number | null;
@@ -102,7 +116,13 @@ const LITE_FEATURES = [
   "delete_loads"
 ] as const satisfies readonly PlanFeature[];
 
-const PREMIUM_FEATURES = [...PLAN_FEATURES] as const satisfies readonly PlanFeature[];
+/** All core features — explicitly not trucking. */
+const PREMIUM_FEATURES = [...CORE_PLAN_FEATURES] as const satisfies readonly PlanFeature[];
+
+const PREMIUM_TRUCKING_FEATURES = [
+  ...PREMIUM_FEATURES,
+  ...TRUCKING_PLAN_FEATURES
+] as const satisfies readonly PlanFeature[];
 
 export const PLANS: Record<PlanId, PlanDefinition> = {
   FREE: {
@@ -128,11 +148,24 @@ export const PLANS: Record<PlanId, PlanDefinition> = {
     maxSeats: null,
     monthlyLoadCap: null,
     features: PREMIUM_FEATURES
+  },
+  PREMIUM_TRUCKING: {
+    id: "PREMIUM_TRUCKING",
+    name: "Premium + Trucking",
+    priceMonthlyCents: 10000,
+    maxSeats: null,
+    monthlyLoadCap: null,
+    features: PREMIUM_TRUCKING_FEATURES
   }
 };
 
 export function isPlanId(value: string | null | undefined): value is PlanId {
-  return value === "FREE" || value === "LITE" || value === "PREMIUM";
+  return (
+    value === "FREE" ||
+    value === "LITE" ||
+    value === "PREMIUM" ||
+    value === "PREMIUM_TRUCKING"
+  );
 }
 
 export function normalizePlanId(value: string | null | undefined): PlanId {
@@ -148,6 +181,10 @@ export function planHasFeature(
   feature: PlanFeature
 ): boolean {
   return getPlan(plan).features.includes(feature);
+}
+
+export function isTruckingFeature(feature: PlanFeature): boolean {
+  return (TRUCKING_PLAN_FEATURES as readonly string[]).includes(feature);
 }
 
 /** Max seats that may be purchased on this plan. null = no cap. */
@@ -195,11 +232,24 @@ export const NAV_FEATURE_REQUIREMENTS: Record<string, PlanFeature> = {
   "/reports": "reports_summary",
   "/integrations": "marketplace_integrations",
   "/settings/email": "email_mailbox",
-  "/admin/accounting": "factoring_admin"
+  "/admin/accounting": "factoring_admin",
+  "/fleet/drivers": "fleet_assets",
+  "/fleet/trucks": "fleet_assets",
+  "/fleet/trailers": "fleet_assets",
+  "/fleet/compliance": "fleet_assets",
+  "/fleet/dvir": "fleet_assets",
+  "/fleet/safety": "safety_records",
+  "/fleet/settlements": "fleet_dispatch",
+  "/fleet/fuel-tax": "fuel_tax_ifta"
 };
 
 export function upgradePathMessage(feature: PlanFeature, currentPlan: PlanId): string {
-  const needsPremium = PLANS.PREMIUM.features.includes(feature) && !PLANS.LITE.features.includes(feature);
+  if (isTruckingFeature(feature)) {
+    return `This feature requires the Premium + Trucking plan (${formatPlanPrice("PREMIUM_TRUCKING")}/seat/mo). You are on ${PLANS[currentPlan].name}.`;
+  }
+
+  const needsPremium =
+    PLANS.PREMIUM.features.includes(feature) && !PLANS.LITE.features.includes(feature);
   const target = needsPremium ? "Premium" : "Lite";
   const price = needsPremium ? formatPlanPrice("PREMIUM") : formatPlanPrice("LITE");
   return `This feature requires the ${target} plan (${price}/seat/mo). You are on ${PLANS[currentPlan].name}.`;

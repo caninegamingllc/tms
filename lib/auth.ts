@@ -123,6 +123,26 @@ function buildSessionUser(
   };
 }
 
+/** Invalidate every TMS session for this user (other browsers / devices). */
+export async function revokeAllUserSessions(userId: string) {
+  await prisma.session.deleteMany({ where: { userId } });
+}
+
+async function setStaffSessionCookie(token: string, expiresAt: Date) {
+  const cookieStore = await cookies();
+  cookieStore.set(sessionCookieName, token, {
+    httpOnly: true,
+    sameSite: "lax",
+    secure: shouldUseSecureCookies(),
+    path: "/",
+    expires: expiresAt
+  });
+}
+
+/**
+ * Create the sole active session for a user.
+ * Any prior sessions (other browsers) are revoked so only this login remains valid.
+ */
 export async function createSession(userId: string, membershipId: string) {
   const membership = await prisma.companyMembership.findFirst({
     where: {
@@ -142,26 +162,19 @@ export async function createSession(userId: string, membershipId: string) {
   const expiresAt = new Date();
   expiresAt.setDate(expiresAt.getDate() + sessionDays);
 
-  // Single-session policy: a new login replaces any other browser sessions.
-  await prisma.session.deleteMany({ where: { userId } });
+  await prisma.$transaction([
+    prisma.session.deleteMany({ where: { userId } }),
+    prisma.session.create({
+      data: {
+        tokenHash: hashToken(token),
+        userId,
+        membershipId,
+        expiresAt
+      }
+    })
+  ]);
 
-  await prisma.session.create({
-    data: {
-      tokenHash: hashToken(token),
-      userId,
-      membershipId,
-      expiresAt
-    }
-  });
-
-  const cookieStore = await cookies();
-  cookieStore.set(sessionCookieName, token, {
-    httpOnly: true,
-    sameSite: "lax",
-    secure: shouldUseSecureCookies(),
-    path: "/",
-    expires: expiresAt
-  });
+  await setStaffSessionCookie(token, expiresAt);
 }
 
 export async function destroySession() {
@@ -290,24 +303,20 @@ export async function login(formData: FormData) {
     const expiresAt = new Date();
     expiresAt.setMinutes(expiresAt.getMinutes() + 15);
 
-    await prisma.session.deleteMany({ where: { userId: user.id } });
-    await prisma.session.create({
-      data: {
-        tokenHash: hashToken(token),
-        userId: user.id,
-        membershipId: memberships[0].id,
-        expiresAt
-      }
-    });
+    // Single-session: wipe other browsers before the org-picker interim session.
+    await prisma.$transaction([
+      prisma.session.deleteMany({ where: { userId: user.id } }),
+      prisma.session.create({
+        data: {
+          tokenHash: hashToken(token),
+          userId: user.id,
+          membershipId: memberships[0].id,
+          expiresAt
+        }
+      })
+    ]);
 
-    const cookieStore = await cookies();
-    cookieStore.set(sessionCookieName, token, {
-      httpOnly: true,
-      sameSite: "lax",
-      secure: shouldUseSecureCookies(),
-      path: "/",
-      expires: expiresAt
-    });
+    await setStaffSessionCookie(token, expiresAt);
 
     if (user.mustChangePassword) {
       redirect("/change-password");

@@ -179,6 +179,22 @@ export async function resolveCustomerLoadMapMarkers(input: {
   companyId: string;
   customerId: string;
 }): Promise<CustomerLoadMapMarker[]> {
+  // #region agent log
+  fetch("http://127.0.0.1:7764/ingest/14c39c80-17b4-4dcd-8347-dae6ec7f550a", {
+    method: "POST",
+    headers: { "Content-Type": "application/json", "X-Debug-Session-Id": "9554aa" },
+    body: JSON.stringify({
+      sessionId: "9554aa",
+      runId: "pre-fix",
+      hypothesisId: "C",
+      location: "lib/customer-load-map.ts:resolveCustomerLoadMapMarkers",
+      message: "map marker resolution start",
+      data: { hasGoogleKey: Boolean(process.env.GOOGLE_PLACES_API_KEY?.trim()) },
+      timestamp: Date.now()
+    })
+  }).catch(() => {});
+  // #endregion
+
   const loads = await prisma.load.findMany({
     where: {
       companyId: input.companyId,
@@ -224,6 +240,22 @@ export async function resolveCustomerLoadMapMarkers(input: {
     },
     orderBy: { pickupDate: "asc" }
   });
+
+  // #region agent log
+  fetch("http://127.0.0.1:7764/ingest/14c39c80-17b4-4dcd-8347-dae6ec7f550a", {
+    method: "POST",
+    headers: { "Content-Type": "application/json", "X-Debug-Session-Id": "9554aa" },
+    body: JSON.stringify({
+      sessionId: "9554aa",
+      runId: "pre-fix",
+      hypothesisId: "C",
+      location: "lib/customer-load-map.ts:loadsFetched",
+      message: "map loads fetched before geocode loop",
+      data: { loadCount: loads.length },
+      timestamp: Date.now()
+    })
+  }).catch(() => {});
+  // #endregion
 
   const markers: CustomerLoadMapMarker[] = [];
 

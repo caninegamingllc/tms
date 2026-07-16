@@ -42,8 +42,18 @@ export function getPremiumPriceId() {
   return priceId;
 }
 
+export function getPremiumTruckingPriceId() {
+  const priceId = process.env.STRIPE_PREMIUM_TRUCKING_PRICE_ID;
+  if (!priceId) {
+    throw new Error("STRIPE_PREMIUM_TRUCKING_PRICE_ID is not configured.");
+  }
+  return priceId;
+}
+
 export function getPlanPriceId(plan: Exclude<PlanId, "FREE">) {
-  return plan === "LITE" ? getLitePriceId() : getPremiumPriceId();
+  if (plan === "LITE") return getLitePriceId();
+  if (plan === "PREMIUM_TRUCKING") return getPremiumTruckingPriceId();
+  return getPremiumPriceId();
 }
 
 export function isStripeConfigured() {
@@ -51,6 +61,7 @@ export function isStripeConfigured() {
     process.env.STRIPE_SECRET_KEY &&
       (process.env.STRIPE_LITE_PRICE_ID ||
         process.env.STRIPE_PREMIUM_PRICE_ID ||
+        process.env.STRIPE_PREMIUM_TRUCKING_PRICE_ID ||
         process.env.STRIPE_SEAT_PRICE_ID)
   );
 }
@@ -64,6 +75,10 @@ export function resolvePlanFromStripePrice(
 
   if (priceId && priceId === process.env.STRIPE_LITE_PRICE_ID) {
     return { plan: "LITE", seatQuantity };
+  }
+
+  if (priceId && priceId === process.env.STRIPE_PREMIUM_TRUCKING_PRICE_ID) {
+    return { plan: "PREMIUM_TRUCKING", seatQuantity };
   }
 
   if (priceId && priceId === process.env.STRIPE_PREMIUM_PRICE_ID) {

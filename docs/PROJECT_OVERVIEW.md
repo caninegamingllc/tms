@@ -35,7 +35,7 @@ A multi-tenant freight brokerage TMS inspired by AscendTMS-style workflows. One 
 | Styling | Tailwind CSS |
 | ORM / DB | Prisma 6 + SQLite (`DATABASE_URL=file:./dev.db`) |
 | Auth | Cookie sessions (`tms_session`), scrypt password hashes, Google/Microsoft OAuth |
-| Billing | Stripe plans (Lite/Premium) billed per seat/month |
+| Billing | Stripe plans (Lite / Premium / Premium + Trucking) billed per seat/month |
 | Maps / Places | Google Places, Geocoding, Routes APIs + Leaflet map UI |
 | Carrier lookup | FMCSA QCMobile API |
 | Fuel index | EIA weekly on-highway diesel |
@@ -127,6 +127,7 @@ Enable Places API (New), Geocoding API, and Routes API on the Google Cloud proje
 | `NEXT_PUBLIC_STRIPE_PUBLISHABLE_KEY` | Client publishable key |
 | `STRIPE_LITE_PRICE_ID` | Lite per-seat monthly price |
 | `STRIPE_PREMIUM_PRICE_ID` | Premium per-seat monthly price |
+| `STRIPE_PREMIUM_TRUCKING_PRICE_ID` | Premium + Trucking per-seat monthly price |
 | `STRIPE_SEAT_PRICE_ID` | Optional legacy per-seat price |
 | `STRIPE_DEV_PROMO_CODE` | Optional checkout promo (e.g. `tms100`) |
 
@@ -229,18 +230,32 @@ Delegated scopes used: `openid`, `profile`, `email`, `User.Read`, `Mail.Send`, `
 
 ### Seat billing (Stripe)
 
-- Org picks **Free** (1 included seat), **Lite** ($20/seat/mo, max 5), or **Premium** ($60/seat/mo, no max)
+- Org picks **Free** (1 included seat), **Lite** ($20/seat/mo, max 5), **Premium** ($60/seat/mo, no max), or **Premium + Trucking** ($100/seat/mo, no max)
 - Purchased seat count is Stripe subscription quantity on `SeatSubscription.seatQuantity`
 - Admins assign/unassign seats in Admin
 - Operational pages require `seatAssignedAt`
 - Owners/admins can still reach Admin and Billing without a seat
 - Invite accept auto-assigns a seat when one is available
 - Webhook: `/api/stripe/webhook`
+- Premium + Trucking unlocks fleet modules (drivers/trucks/trailers, fleet load assignment, DQF, safety, ELD/IFTA scaffolding) — gated so they only appear on that plan
 
 ---
 
 ## Feature Catalog
 
+### Fleet (`/fleet/*`) — Premium + Trucking only
+
+- Drivers, trucks (power units), trailers with year/make/model/VIN/plate and expiration fields
+- Maintenance log per truck/trailer
+- Compliance dashboard (expiring credentials within 90 days)
+- Driver Qualification File checklist + audit packet export
+- Safety / accident register
+- **DVIR** pre/post-trip inspection reports
+- **Driver settlements** (draft → approved → paid) for company drivers / OO
+- **CSA BASIC percentiles** + HOS summary on driver profiles
+- **IFTA** quarters with jurisdiction miles, fuel purchases, worksheet math + text export; import miles from load route state breakdown
+- **ELD**: Samsara / Motive / Geotab tiles — API token connect, sync vehicles into Truck ELD fields (Geotab needs follow-up credentials)
+- Load detail: fleet assignment (driver/tractor/trailer) is primary; external carrier brokerage is secondary
 ### Dashboard (`/`)
 
 Configurable tile board with:

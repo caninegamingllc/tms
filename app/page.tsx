@@ -143,7 +143,11 @@ export default async function HomePage({
                     <p className="text-[13px] font-semibold text-foreground">
                       {call.assignment.load.loadNumber}
                     </p>
-                    <p className="text-[12px] text-muted-foreground">{call.assignment.carrier.name}</p>
+                    <p className="text-[12px] text-muted-foreground">
+                      {call.assignment.carrier?.name ??
+                        call.assignment.driverName ??
+                        "Fleet / uncovered"}
+                    </p>
                   </div>
                   <span className="text-[11px] text-muted-foreground tabular">
                     {formatDateTime(call.occurredAt)}

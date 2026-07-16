@@ -206,7 +206,7 @@ type DispatchBoardLoad = {
     truckNumber: string | null;
     trailerNumber: string | null;
     rateCents: number;
-    carrier: { name: string };
+    carrier: { name: string } | null;
     checkCalls: Array<{
       status: string;
       location: string;
@@ -239,7 +239,7 @@ export function serializeDispatchBoardRow(load: DispatchBoardLoad): DispatchBoar
     equipmentType: load.equipmentType,
     reeferTempF: load.reeferTempF,
     commodity: load.commodity,
-    carrierName: load.dispatchAssignment?.carrier.name ?? "Uncovered",
+    carrierName: load.dispatchAssignment?.carrier?.name ?? "Uncovered",
     driverName: load.dispatchAssignment?.driverName ?? null,
     driverPhone: load.dispatchAssignment?.driverPhone ?? null,
     truckNumber: load.dispatchAssignment?.truckNumber ?? null,

@@ -1,6 +1,6 @@
 import type { PlanId } from "@/lib/plans";
 
-export const PLAN_ORDER: PlanId[] = ["FREE", "LITE", "PREMIUM"];
+export const PLAN_ORDER: PlanId[] = ["FREE", "LITE", "PREMIUM", "PREMIUM_TRUCKING"];
 
 /** Short marketing bullets shared by Admin Billing and the public landing. */
 export function planHighlights(plan: PlanId): string[] {
@@ -26,6 +26,13 @@ export function planHighlights(plan: PlanId): string[] {
         "Commissions, QBO Online, maps",
         "Late fees, bulk workflows, audit log"
       ];
+    case "PREMIUM_TRUCKING":
+      return [
+        "Everything in Premium ($100/seat/mo)",
+        "Drivers, trucks & trailers with compliance",
+        "DQF, safety records & fleet dispatch",
+        "ELD + IFTA scaffolding for fleets"
+      ];
   }
 }
 
@@ -41,6 +48,16 @@ export const PREMIUM_ONLY_HIGHLIGHTS = [
   "Audit log"
 ] as const;
 
+/** Trucking tier differentiators vs Premium. */
+export const TRUCKING_ONLY_HIGHLIGHTS = [
+  "Driver / truck / trailer registry",
+  "Fleet assignment on loads",
+  "Driver Qualification File (DQF)",
+  "Safety & accident records",
+  "Compliance expiration dashboard",
+  "ELD & IFTA ready (Samsara, Motive, Geotab)"
+] as const;
+
 export function planSeatLabel(plan: PlanId): string {
   switch (plan) {
     case "FREE":
@@ -48,6 +65,8 @@ export function planSeatLabel(plan: PlanId): string {
     case "LITE":
       return "Buy up to 5 seats";
     case "PREMIUM":
+      return "Buy unlimited seats";
+    case "PREMIUM_TRUCKING":
       return "Buy unlimited seats";
   }
 }

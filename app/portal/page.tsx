@@ -9,22 +9,164 @@ import { loadCustomerPortalBoardRows } from "@/lib/portal-queries";
 import { prisma } from "@/lib/db";
 
 export default async function PortalOverviewPage() {
+  // #region agent log
+  fetch("http://127.0.0.1:7764/ingest/14c39c80-17b4-4dcd-8347-dae6ec7f550a", {
+    method: "POST",
+    headers: { "Content-Type": "application/json", "X-Debug-Session-Id": "9554aa" },
+    body: JSON.stringify({
+      sessionId: "9554aa",
+      runId: "pre-fix",
+      hypothesisId: "B",
+      location: "app/portal/page.tsx:entry",
+      message: "portal overview enter",
+      data: {},
+      timestamp: Date.now()
+    })
+  }).catch(() => {});
+  // #endregion
+
   const viewer = await requirePortalViewer();
-  const [rows, markers, invoiceSummary] = await Promise.all([
-    loadCustomerPortalBoardRows(viewer),
-    resolveCustomerLoadMapMarkers({
+  // #region agent log
+  fetch("http://127.0.0.1:7764/ingest/14c39c80-17b4-4dcd-8347-dae6ec7f550a", {
+    method: "POST",
+    headers: { "Content-Type": "application/json", "X-Debug-Session-Id": "9554aa" },
+    body: JSON.stringify({
+      sessionId: "9554aa",
+      runId: "pre-fix",
+      hypothesisId: "B",
+      location: "app/portal/page.tsx:viewer",
+      message: "portal viewer resolved",
+      data: {
+        accessMode: viewer.accessMode,
+        hasCompany: Boolean(viewer.companyId),
+        hasCustomer: Boolean(viewer.customerId)
+      },
+      timestamp: Date.now()
+    })
+  }).catch(() => {});
+  // #endregion
+
+  const startedAt = Date.now();
+  let rows;
+  let markers;
+  let invoiceSummary;
+  try {
+    const boardStarted = Date.now();
+    const boardPromise = loadCustomerPortalBoardRows(viewer).then((value) => {
+      // #region agent log
+      fetch("http://127.0.0.1:7764/ingest/14c39c80-17b4-4dcd-8347-dae6ec7f550a", {
+        method: "POST",
+        headers: { "Content-Type": "application/json", "X-Debug-Session-Id": "9554aa" },
+        body: JSON.stringify({
+          sessionId: "9554aa",
+          runId: "pre-fix",
+          hypothesisId: "B",
+          location: "app/portal/page.tsx:board",
+          message: "board rows loaded",
+          data: { ms: Date.now() - boardStarted, rowCount: value.length },
+          timestamp: Date.now()
+        })
+      }).catch(() => {});
+      // #endregion
+      return value;
+    });
+
+    const mapStarted = Date.now();
+    const mapPromise = resolveCustomerLoadMapMarkers({
       companyId: viewer.companyId,
       customerId: viewer.customerId
-    }),
-    prisma.invoice.findMany({
-      where: {
-        companyId: viewer.companyId,
-        customerId: viewer.customerId,
-        status: { not: "VOID" }
+    }).then((value) => {
+      // #region agent log
+      fetch("http://127.0.0.1:7764/ingest/14c39c80-17b4-4dcd-8347-dae6ec7f550a", {
+        method: "POST",
+        headers: { "Content-Type": "application/json", "X-Debug-Session-Id": "9554aa" },
+        body: JSON.stringify({
+          sessionId: "9554aa",
+          runId: "pre-fix",
+          hypothesisId: "C",
+          location: "app/portal/page.tsx:map",
+          message: "map markers loaded",
+          data: { ms: Date.now() - mapStarted, markerCount: value.length },
+          timestamp: Date.now()
+        })
+      }).catch(() => {});
+      // #endregion
+      return value;
+    });
+
+    const invoiceStarted = Date.now();
+    const invoicePromise = prisma.invoice
+      .findMany({
+        where: {
+          companyId: viewer.companyId,
+          customerId: viewer.customerId,
+          status: { not: "VOID" }
+        },
+        select: { status: true, balanceCents: true, totalCents: true }
+      })
+      .then((value) => {
+        // #region agent log
+        fetch("http://127.0.0.1:7764/ingest/14c39c80-17b4-4dcd-8347-dae6ec7f550a", {
+          method: "POST",
+          headers: { "Content-Type": "application/json", "X-Debug-Session-Id": "9554aa" },
+          body: JSON.stringify({
+            sessionId: "9554aa",
+            runId: "pre-fix",
+            hypothesisId: "B",
+            location: "app/portal/page.tsx:invoices",
+            message: "invoices loaded",
+            data: { ms: Date.now() - invoiceStarted, invoiceCount: value.length },
+            timestamp: Date.now()
+          })
+        }).catch(() => {});
+        // #endregion
+        return value;
+      });
+
+    [rows, markers, invoiceSummary] = await Promise.all([boardPromise, mapPromise, invoicePromise]);
+  } catch (error) {
+    // #region agent log
+    fetch("http://127.0.0.1:7764/ingest/14c39c80-17b4-4dcd-8347-dae6ec7f550a", {
+      method: "POST",
+      headers: { "Content-Type": "application/json", "X-Debug-Session-Id": "9554aa" },
+      body: JSON.stringify({
+        sessionId: "9554aa",
+        runId: "pre-fix",
+        hypothesisId: "B",
+        location: "app/portal/page.tsx:Promise.all",
+        message: "portal overview data load failed",
+        data: {
+          ms: Date.now() - startedAt,
+          errorName: error instanceof Error ? error.name : "unknown",
+          errorMessage: error instanceof Error ? error.message : String(error)
+        },
+        timestamp: Date.now()
+      })
+    }).catch(() => {});
+    // #endregion
+    throw error;
+  }
+
+  // #region agent log
+  fetch("http://127.0.0.1:7764/ingest/14c39c80-17b4-4dcd-8347-dae6ec7f550a", {
+    method: "POST",
+    headers: { "Content-Type": "application/json", "X-Debug-Session-Id": "9554aa" },
+    body: JSON.stringify({
+      sessionId: "9554aa",
+      runId: "pre-fix",
+      hypothesisId: "C",
+      location: "app/portal/page.tsx:success",
+      message: "portal overview data load success",
+      data: {
+        ms: Date.now() - startedAt,
+        rowCount: rows.length,
+        markerCount: markers.length,
+        invoiceCount: invoiceSummary.length
       },
-      select: { status: true, balanceCents: true, totalCents: true }
+      timestamp: Date.now()
     })
-  ]);
+  }).catch(() => {});
+  // #endregion
 
   const counts = countCustomerRowsByStage(rows);
   const openInvoices = invoiceSummary.filter(

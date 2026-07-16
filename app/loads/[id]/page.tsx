@@ -58,6 +58,9 @@ import {
   toExportStatusView
 } from "@/lib/quickbooks/exports";
 import type { AccountingExportMethod } from "@/lib/quickbooks/types";
+import { FleetAssignmentPanel } from "@/components/fleet-assignment-panel";
+import { driverDisplayName } from "@/lib/fleet-constants";
+import { planHasFeature } from "@/lib/plans";
 
 export default async function LoadDetailPage({
   params,
@@ -113,6 +116,9 @@ export default async function LoadDetailPage({
         dispatchAssignment: {
           include: {
             carrier: { include: { contacts: true } },
+            driver: true,
+            truck: true,
+            trailer: true,
             checkCalls: { orderBy: { occurredAt: "desc" } }
           }
         },
@@ -164,6 +170,24 @@ export default async function LoadDetailPage({
   if (!load || !(await canAccessRecord(user, load.branchId))) {
     notFound();
   }
+
+  const hasFleetDispatch = planHasFeature(user.plan, "fleet_dispatch");
+  const [fleetDrivers, fleetTrucks, fleetTrailers] = hasFleetDispatch
+    ? await Promise.all([
+        prisma.driver.findMany({
+          where: { companyId: user.companyId, status: "ACTIVE" },
+          orderBy: [{ lastName: "asc" }, { firstName: "asc" }]
+        }),
+        prisma.truck.findMany({
+          where: { companyId: user.companyId, status: "ACTIVE" },
+          orderBy: { unitNumber: "asc" }
+        }),
+        prisma.trailer.findMany({
+          where: { companyId: user.companyId, status: "ACTIVE" },
+          orderBy: { unitNumber: "asc" }
+        })
+      ])
+    : [[], [], []];
 
   const usedChargeTypeIds = new Set(
     load.charges.map((charge) => charge.lineTypeId).filter((id): id is string => Boolean(id))
@@ -678,7 +702,7 @@ export default async function LoadDetailPage({
             <DocumentUploadForm
               defaultLoadId={load.id}
               defaultCustomerId={load.customerId}
-              defaultCarrierId={load.dispatchAssignment?.carrierId}
+              defaultCarrierId={load.dispatchAssignment?.carrierId ?? undefined}
               showEntityPickers={false}
               submitLabel="Add Document"
             />
@@ -737,59 +761,126 @@ export default async function LoadDetailPage({
         ) : null}
 
         <Tile id="carrier">
-          <p className="muted">
-            Current carrier: {load.dispatchAssignment?.carrier.name ?? "Not covered"}
-          </p>
-          <form
-            key={load.dispatchAssignment?.id ?? "unassigned"}
-            action={assignCarrier}
-            className="mt-4 grid gap-3"
-          >
-            <input type="hidden" name="loadId" value={load.id} />
-            <SearchCombobox
-              name="carrierId"
-              label="Carrier"
-              placeholder="Search carriers"
-              options={carrierOptions}
-              defaultValue={load.dispatchAssignment?.carrierId ?? ""}
-              required
-            />
-            <div className="grid gap-2">
-              <span className="label">Payment line items</span>
-              <CarrierPayLinesEditor
-                lineTypes={payLineTypes.map((type) => ({
-                  id: type.id,
-                  name: type.name,
-                  calculationMethod: type.calculationMethod
+          {hasFleetDispatch ? (
+            <div className="mb-6">
+              <FleetAssignmentPanel
+                loadId={load.id}
+                drivers={fleetDrivers.map((driver) => ({
+                  id: driver.id,
+                  label: driverDisplayName(driver)
                 }))}
-                initialLines={load.carrierPayLines.map((line) => ({
-                  lineTypeId: line.lineTypeId,
-                  description: line.description,
-                  unitRateCents: line.unitRateCents,
-                  quantity: line.quantity,
-                  amountCents: line.amountCents
+                trucks={fleetTrucks.map((truck) => ({
+                  id: truck.id,
+                  label: truck.unitNumber
                 }))}
-                defaultMiles={load.routeTotalMiles}
+                trailers={fleetTrailers.map((trailer) => ({
+                  id: trailer.id,
+                  label: trailer.unitNumber
+                }))}
+                current={
+                  load.dispatchAssignment
+                    ? {
+                        driverId: load.dispatchAssignment.driverId,
+                        truckId: load.dispatchAssignment.truckId,
+                        trailerId: load.dispatchAssignment.trailerId,
+                        driverName: load.dispatchAssignment.driverName,
+                        truckNumber: load.dispatchAssignment.truckNumber,
+                        trailerNumber: load.dispatchAssignment.trailerNumber
+                      }
+                    : null
+                }
               />
             </div>
-            <input name="driverName" className="input" placeholder="Driver name" defaultValue={load.dispatchAssignment?.driverName ?? ""} />
-            <input name="driverPhone" className="input" placeholder="Driver phone" defaultValue={load.dispatchAssignment?.driverPhone ?? ""} />
-            <div className="grid gap-3 md:grid-cols-2">
-              <input name="truckNumber" className="input" placeholder="Truck #" defaultValue={load.dispatchAssignment?.truckNumber ?? ""} />
-              <input name="trailerNumber" className="input" placeholder="Trailer #" defaultValue={load.dispatchAssignment?.trailerNumber ?? ""} />
-            </div>
-            <button type="submit" className="btn">
-              Save Assignment
-            </button>
-          </form>
-          {load.dispatchAssignment && canWrite(user) && !["INVOICED", "PAID"].includes(load.status) ? (
-            <form action={unassignCarrier} className="mt-3">
-              <input type="hidden" name="loadId" value={load.id} />
-              <button type="submit" className="btn-secondary w-full">
-                Unassign Carrier
-              </button>
-            </form>
           ) : null}
+
+          <details className={hasFleetDispatch ? "rounded-2xl border border-border p-4" : undefined} open={!hasFleetDispatch}>
+            {hasFleetDispatch ? (
+              <summary className="cursor-pointer text-sm font-semibold text-foreground">
+                Broker to external carrier (secondary)
+              </summary>
+            ) : null}
+            <div className={hasFleetDispatch ? "mt-4" : undefined}>
+              <p className="muted">
+                Current carrier: {load.dispatchAssignment?.carrier?.name ?? "Not covered"}
+              </p>
+              <form
+                key={load.dispatchAssignment?.id ?? "unassigned"}
+                action={assignCarrier}
+                className="mt-4 grid gap-3"
+              >
+                <input type="hidden" name="loadId" value={load.id} />
+                <SearchCombobox
+                  name="carrierId"
+                  label="Carrier"
+                  placeholder="Search carriers"
+                  options={carrierOptions}
+                  defaultValue={load.dispatchAssignment?.carrierId ?? ""}
+                  required
+                />
+                <div className="grid gap-2">
+                  <span className="label">Payment line items</span>
+                  <CarrierPayLinesEditor
+                    lineTypes={payLineTypes.map((type) => ({
+                      id: type.id,
+                      name: type.name,
+                      calculationMethod: type.calculationMethod
+                    }))}
+                    initialLines={load.carrierPayLines.map((line) => ({
+                      lineTypeId: line.lineTypeId,
+                      description: line.description,
+                      unitRateCents: line.unitRateCents,
+                      quantity: line.quantity,
+                      amountCents: line.amountCents
+                    }))}
+                    defaultMiles={load.routeTotalMiles}
+                  />
+                </div>
+                {!hasFleetDispatch ? (
+                  <>
+                    <input
+                      name="driverName"
+                      className="input"
+                      placeholder="Driver name"
+                      defaultValue={load.dispatchAssignment?.driverName ?? ""}
+                    />
+                    <input
+                      name="driverPhone"
+                      className="input"
+                      placeholder="Driver phone"
+                      defaultValue={load.dispatchAssignment?.driverPhone ?? ""}
+                    />
+                    <div className="grid gap-3 md:grid-cols-2">
+                      <input
+                        name="truckNumber"
+                        className="input"
+                        placeholder="Truck #"
+                        defaultValue={load.dispatchAssignment?.truckNumber ?? ""}
+                      />
+                      <input
+                        name="trailerNumber"
+                        className="input"
+                        placeholder="Trailer #"
+                        defaultValue={load.dispatchAssignment?.trailerNumber ?? ""}
+                      />
+                    </div>
+                  </>
+                ) : null}
+                <button type="submit" className="btn">
+                  Save carrier assignment
+                </button>
+              </form>
+              {load.dispatchAssignment?.carrierId &&
+              canWrite(user) &&
+              !["INVOICED", "PAID"].includes(load.status) ? (
+                <form action={unassignCarrier} className="mt-3">
+                  <input type="hidden" name="loadId" value={load.id} />
+                  <button type="submit" className="btn-secondary w-full">
+                    Unassign Carrier
+                  </button>
+                </form>
+              ) : null}
+            </div>
+          </details>
         </Tile>
 
         {load.dispatchAssignment ? (

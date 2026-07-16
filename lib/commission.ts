@@ -133,21 +133,29 @@ export async function getDefaultCommissionProfile(companyId: string) {
   });
 }
 
+type CommissionProfileWithRule = {
+  id: string;
+  name: string;
+  rule: {
+    branchSharePercent: number;
+    companySharePercent: number;
+    companyMinimumExpensePercent: number;
+  } | null;
+};
+
+function profileHasRule<T extends CommissionProfileWithRule>(
+  profile: T | null | undefined
+): profile is T & { rule: NonNullable<T["rule"]> } {
+  return Boolean(profile?.rule);
+}
+
 export async function resolveCommissionProfileForLoad(load: {
   companyId: string;
   commissionProfileId: string | null;
   branchId: string | null;
   branch?: {
     commissionProfileId: string | null;
-    commissionProfile?: {
-      id: string;
-      name: string;
-      rule: {
-        branchSharePercent: number;
-        companySharePercent: number;
-        companyMinimumExpensePercent: number;
-      } | null;
-    } | null;
+    commissionProfile?: CommissionProfileWithRule | null;
   } | null;
 }) {
   if (load.commissionProfileId) {
@@ -155,32 +163,54 @@ export async function resolveCommissionProfileForLoad(load: {
       where: { id: load.commissionProfileId, companyId: load.companyId },
       include: { rule: true }
     });
-    if (profile) {
+    // Skip overrides that point at a profile with no rule; fall through to branch/default.
+    if (profileHasRule(profile)) {
       return profile;
     }
   }
 
-  if (load.branch?.commissionProfile) {
-    return load.branch.commissionProfile;
+  const embeddedBranchProfile = load.branch?.commissionProfile;
+  if (profileHasRule(embeddedBranchProfile)) {
+    return embeddedBranchProfile;
   }
 
-  if (load.branchId && !load.branch?.commissionProfile) {
+  if (load.branchId && !profileHasRule(embeddedBranchProfile)) {
     const branch = await prisma.branch.findUnique({
       where: { id: load.branchId },
       include: { commissionProfile: { include: { rule: true } } }
     });
-    if (branch?.commissionProfile) {
-      return branch.commissionProfile;
+    const branchProfile = branch?.commissionProfile;
+    if (profileHasRule(branchProfile)) {
+      return branchProfile;
     }
   }
 
   return getDefaultCommissionProfile(load.companyId);
 }
 
+const DEFAULT_COMMISSION_RULE = {
+  branchSharePercent: 60,
+  companySharePercent: 40,
+  companyMinimumExpensePercent: 10
+} as const;
+
 export async function ensureDefaultCommissionProfile(companyId: string) {
   const existing = await getDefaultCommissionProfile(companyId);
-  if (existing) {
+  if (existing?.rule) {
     return existing;
+  }
+
+  if (existing && !existing.rule) {
+    // Heal a default profile that lost its rule (e.g. incomplete migration/import).
+    return prisma.commissionProfile.update({
+      where: { id: existing.id },
+      data: {
+        rule: {
+          create: { ...DEFAULT_COMMISSION_RULE }
+        }
+      },
+      include: { rule: true }
+    });
   }
 
   return prisma.commissionProfile.create({
@@ -189,11 +219,7 @@ export async function ensureDefaultCommissionProfile(companyId: string) {
       name: "Standard 60/40",
       isDefault: true,
       rule: {
-        create: {
-          branchSharePercent: 60,
-          companySharePercent: 40,
-          companyMinimumExpensePercent: 10
-        }
+        create: { ...DEFAULT_COMMISSION_RULE }
       }
     },
     include: { rule: true }
@@ -216,10 +242,14 @@ export async function recalculateLoadCommission(loadId: string) {
     }
   });
 
-  await ensureDefaultCommissionProfile(load.companyId);
+  const defaultProfile = await ensureDefaultCommissionProfile(load.companyId);
 
-  const profile = await resolveCommissionProfileForLoad(load);
-  if (!profile?.rule) {
+  let profile = await resolveCommissionProfileForLoad(load);
+  if (!profileHasRule(profile)) {
+    // Prefer the healed default over failing the caller (assign/unassign already committed).
+    profile = defaultProfile;
+  }
+  if (!profileHasRule(profile)) {
     throw new Error("No commission profile rule found for load.");
   }
 

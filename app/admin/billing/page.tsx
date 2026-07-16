@@ -41,7 +41,7 @@ export default async function BillingPage({
     <>
       <PageHeader
         title="Billing & Plans"
-        description="Choose Free ($0), Lite ($20/seat/mo, max 5), or Premium ($60/seat/mo, buy as many as you need)."
+        description="Choose Free ($0), Lite ($20/seat/mo, max 5), Premium ($60/seat/mo), or Premium + Trucking ($100/seat/mo)."
       />
 
       {params.welcome === "1" ? (
@@ -84,7 +84,8 @@ export default async function BillingPage({
       {currentPlan === "FREE" && params.welcome !== "1" ? (
         <div className="card mb-6 border-amber-200 bg-amber-50 text-sm text-amber-800">
           Free allows only one active user (usually the owner). Upgrade to <strong>Lite</strong> (buy up
-          to 5 seats) or <strong>Premium</strong> (buy as many seats as you need) for teammates.
+          to 5 seats), <strong>Premium</strong>, or <strong>Premium + Trucking</strong> for teammates
+          and fleet tools.
         </div>
       ) : null}
 
@@ -178,8 +179,8 @@ export default async function BillingPage({
                     )
                   ) : !stripeReady ? (
                     <p className="mt-4 rounded-xl bg-amber-50 px-4 py-3 text-sm text-amber-800">
-                      Stripe is not configured. Set STRIPE_SECRET_KEY, STRIPE_LITE_PRICE_ID, and
-                      STRIPE_PREMIUM_PRICE_ID.
+                      Stripe is not configured. Set STRIPE_SECRET_KEY, STRIPE_LITE_PRICE_ID,
+                      STRIPE_PREMIUM_PRICE_ID, and STRIPE_PREMIUM_TRUCKING_PRICE_ID.
                     </p>
                   ) : (
                     <form action={createPlanCheckoutSession} className="mt-4 grid gap-3">
@@ -200,7 +201,7 @@ export default async function BillingPage({
                       <p className="text-xs text-muted-foreground">
                         {planId === "LITE"
                           ? "Lite allows at most 5 seats for the organization."
-                          : "Premium has no seat maximum — purchase as many as you need."}
+                          : `${plan.name} has no seat maximum — purchase as many as you need.`}
                       </p>
                       {currentPlan === "FREE" ? (
                         <label className="grid gap-2">
@@ -243,8 +244,8 @@ export default async function BillingPage({
             <Link href="/admin" className="font-semibold text-primary underline">
               Admin console
             </Link>
-            . Free allows one user. Lite is capped at five purchased seats. Premium lets you buy as many
-            seats as you need.
+            . Free allows one user. Lite is capped at five purchased seats. Premium and Premium +
+            Trucking let you buy as many seats as you need.
           </p>
         </Tile>
       </TileBoard>

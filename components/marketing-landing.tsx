@@ -10,7 +10,8 @@ import {
   PLAN_ORDER,
   planHighlights,
   planSeatLabel,
-  PREMIUM_ONLY_HIGHLIGHTS
+  PREMIUM_ONLY_HIGHLIGHTS,
+  TRUCKING_ONLY_HIGHLIGHTS
 } from "@/lib/plan-marketing";
 import { formatPlanPrice, PLANS, type PlanId } from "@/lib/plans";
 
@@ -22,6 +23,8 @@ function planCtaLabel(planId: PlanId): string {
       return "Start with Lite";
     case "PREMIUM":
       return "Start with Premium";
+    case "PREMIUM_TRUCKING":
+      return "Start with Trucking";
   }
 }
 
@@ -113,8 +116,8 @@ export function MarketingLanding() {
               <span className="italic text-white/80">not a spreadsheet.</span>
             </h1>
             <p className="mt-6 max-w-lg text-[15px] leading-relaxed text-white/80 sm:text-[16px]">
-              Start free with one seat, or pick Lite / Premium when you need documents, accounting,
-              seats, and the full brokerage stack.
+              Start free with one seat, or pick Lite / Premium / Premium + Trucking when you need
+              documents, accounting, seats, fleet tools, and the full brokerage stack.
             </p>
             <div className="mt-9 flex flex-wrap items-center gap-3">
               <Link href="/register" className="landing-cta-primary">
@@ -134,14 +137,14 @@ export function MarketingLanding() {
             Pricing
           </p>
           <h2 className="font-display mt-3 max-w-2xl text-[clamp(1.75rem,4vw,2.75rem)] font-semibold tracking-[-0.02em] text-foreground">
-            Simple pricing for brokerages.
+            Simple pricing for brokerages and fleets.
           </h2>
           <p className="mt-4 max-w-xl text-[15px] leading-relaxed text-muted-foreground">
             Seat limits and features follow your organization plan. Upgrade anytime from Admin →
             Billing after you create a workspace.
           </p>
 
-          <div className="mt-12 grid gap-4 lg:grid-cols-3">
+          <div className="mt-12 grid gap-4 sm:grid-cols-2 xl:grid-cols-4">
             {PLAN_ORDER.map((planId) => {
               const plan = PLANS[planId];
               const recommended = planId === "LITE";
@@ -226,6 +229,31 @@ export function MarketingLanding() {
           </p>
           <ul className="mt-10 grid gap-x-8 gap-y-3 sm:grid-cols-2">
             {PREMIUM_ONLY_HIGHLIGHTS.map((item) => (
+              <li
+                key={item}
+                className="landing-capability flex items-baseline gap-3 border-t border-border pt-3 text-[15px]"
+              >
+                <span className="font-display font-semibold text-primary">{item}</span>
+              </li>
+            ))}
+          </ul>
+        </div>
+      </section>
+
+      <section className="landing-section border-b border-border">
+        <div className="mx-auto max-w-6xl px-6 py-20 lg:px-10 lg:py-24">
+          <p className="text-[11px] font-semibold uppercase tracking-[0.22em] text-muted-foreground">
+            Premium + Trucking
+          </p>
+          <h2 className="font-display mt-3 max-w-2xl text-[clamp(1.75rem,4vw,2.5rem)] font-semibold tracking-[-0.02em]">
+            Asset fleets — drivers, equipment, and DOT-ready files.
+          </h2>
+          <p className="mt-4 max-w-xl text-[15px] leading-relaxed text-muted-foreground">
+            When you run your own trucks, Premium + Trucking adds fleet registry, qualification
+            files, safety records, and ELD/IFTA scaffolding on top of the full brokerage stack.
+          </p>
+          <ul className="mt-10 grid gap-x-8 gap-y-3 sm:grid-cols-2">
+            {TRUCKING_ONLY_HIGHLIGHTS.map((item) => (
               <li
                 key={item}
                 className="landing-capability flex items-baseline gap-3 border-t border-border pt-3 text-[15px]"

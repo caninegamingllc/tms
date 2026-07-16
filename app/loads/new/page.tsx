@@ -196,7 +196,7 @@ export default async function NewLoadPage({
           <>
             <input type="hidden" name="cloneFromLoadId" value={cloneSource!.id} />
             {keepNotes ? <input type="hidden" name="keepNotes" value="1" /> : null}
-            {shouldCloneCarrier && assignment ? (
+            {shouldCloneCarrier && assignment?.carrierId ? (
               <>
                 <input type="hidden" name="cloneCarrierId" value={assignment.carrierId} />
                 <input type="hidden" name="cloneDriverName" value={assignment.driverName ?? ""} />

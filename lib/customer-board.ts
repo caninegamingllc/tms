@@ -75,7 +75,7 @@ type CustomerBoardLoad = {
     driverPhone: string | null;
     truckNumber: string | null;
     trailerNumber: string | null;
-    carrier: { name: string };
+    carrier: { name: string } | null;
     checkCalls: Array<{
       status: string;
       location: string;
@@ -105,7 +105,7 @@ export function serializeCustomerBoardRow(load: CustomerBoardLoad): CustomerBoar
     deliveryDate: load.deliveryDate.toISOString(),
     equipmentType: load.equipmentType,
     commodity: load.commodity,
-    carrierName: load.dispatchAssignment?.carrier.name ?? "Uncovered",
+    carrierName: load.dispatchAssignment?.carrier?.name ?? "Uncovered",
     driverName: load.dispatchAssignment?.driverName ?? null,
     driverPhone: load.dispatchAssignment?.driverPhone ?? null,
     truckNumber: load.dispatchAssignment?.truckNumber ?? null,

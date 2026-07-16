@@ -1459,26 +1459,50 @@ export async function unassignCarrier(formData: FormData) {
     );
   }
 
-  const nextStatus = load.status === "COVERED" || load.status === "DISPATCHED" ? "AVAILABLE" : load.status;
+  const hasFleet = Boolean(assignment.driverId || assignment.truckId || assignment.trailerId);
+  const nextStatus =
+    !hasFleet && (load.status === "COVERED" || load.status === "DISPATCHED")
+      ? "AVAILABLE"
+      : load.status;
 
   await prisma.$transaction(async (tx) => {
     await tx.carrierPayLine.deleteMany({ where: { loadId } });
-    await tx.dispatchAssignment.delete({ where: { loadId } });
 
-    await tx.load.update({
-      where: { id: loadId },
-      data: {
-        status: nextStatus,
-        carrierCostCents: 0,
-        activities: {
-          create: {
-            userId: user.id,
-            action: "Carrier unassigned",
-            details: "Carrier assignment and pay line items were removed."
+    if (hasFleet) {
+      await tx.dispatchAssignment.update({
+        where: { loadId },
+        data: { carrierId: null, rateCents: 0 }
+      });
+      await tx.load.update({
+        where: { id: loadId },
+        data: {
+          carrierCostCents: 0,
+          activities: {
+            create: {
+              userId: user.id,
+              action: "Carrier unassigned",
+              details: "External carrier removed; fleet assignment retained."
+            }
           }
         }
-      }
-    });
+      });
+    } else {
+      await tx.dispatchAssignment.delete({ where: { loadId } });
+      await tx.load.update({
+        where: { id: loadId },
+        data: {
+          status: nextStatus,
+          carrierCostCents: 0,
+          activities: {
+            create: {
+              userId: user.id,
+              action: "Carrier unassigned",
+              details: "Carrier assignment and pay line items were removed."
+            }
+          }
+        }
+      });
+    }
   });
 
   await recalculateLoadCommission(loadId);
@@ -1757,7 +1781,7 @@ export async function generateRateConfirmation(formData: FormData) {
   const loadId = requiredString(formData, "loadId");
   const load = await loadForDocument(loadId, user);
 
-  if (!load.dispatchAssignment) {
+  if (!load.dispatchAssignment?.carrierId) {
     throw new Error("Assign a carrier before generating a rate confirmation.");
   }
 

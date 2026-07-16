@@ -52,6 +52,14 @@ model Company {
   customerChargeTypes   CustomerChargeType[]
   portalUsers           CustomerPortalUser[]
   portalLinks           CustomerPortalLink[]
+  drivers               Driver[]
+  trucks                Truck[]
+  trailers              Trailer[]
+  equipmentMaintenanceLogs EquipmentMaintenanceLog[]
+  safetyEvents          SafetyEvent[]
+  iftaQuarters          IftaQuarter[]
+  dvirReports           DvirReport[]
+  driverSettlements     DriverSettlement[]
   createdAt             DateTime               @default(now())
   updatedAt             DateTime               @updatedAt
 }
@@ -285,7 +293,7 @@ model SeatSubscription {
   stripeCustomerId     String?   @unique
   stripeSubscriptionId String?   @unique
   stripePriceId        String?
-  /// FREE | LITE | PREMIUM — feature package for this organization
+  /// FREE | LITE | PREMIUM | PREMIUM_TRUCKING — feature package for this organization
   plan                 String    @default("FREE")
   seatQuantity         Int       @default(0)
   status               String    @default("NONE")
@@ -636,6 +644,9 @@ model Load {
   carrierBills         CarrierBill[]
   commission           LoadCommission?
   emailThreads         EmailThread[]
+  safetyEvents         SafetyEvent[]
+  iftaTrips            IftaTrip[]
+  driverSettlements    DriverSettlement[]
   routeTotalMiles      Float?
   routeStateMiles      Json?
   routePolyline        String?
@@ -770,8 +781,16 @@ model DispatchAssignment {
   id             String           @id @default(cuid())
   loadId         String           @unique
   load           Load             @relation(fields: [loadId], references: [id], onDelete: Cascade)
-  carrierId      String
-  carrier        Carrier          @relation(fields: [carrierId], references: [id])
+  /// Optional when covering with own fleet (Premium + Trucking)
+  carrierId      String?
+  carrier        Carrier?         @relation(fields: [carrierId], references: [id])
+  driverId       String?
+  driver         Driver?          @relation(fields: [driverId], references: [id], onDelete: SetNull)
+  truckId        String?
+  truck          Truck?           @relation(fields: [truckId], references: [id], onDelete: SetNull)
+  trailerId      String?
+  trailer        Trailer?         @relation(fields: [trailerId], references: [id], onDelete: SetNull)
+  /// Denormalized snapshots for PDFs / historical rate cons
   driverName     String?
   driverPhone    String?
   truckNumber    String?
@@ -780,6 +799,11 @@ model DispatchAssignment {
   assignedAt     DateTime         @default(now())
   checkCalls     CheckCall[]
   payLines       CarrierPayLine[]
+
+  @@index([carrierId])
+  @@index([driverId])
+  @@index([truckId])
+  @@index([trailerId])
 }
 
 model CarrierPayLine {
@@ -1048,4 +1072,311 @@ model BackgroundJob {
 
   @@index([status, availableAt])
   @@index([type, status])
+}
+
+// --- Premium + Trucking fleet models ---
+
+model Driver {
+  id                String                     @id @default(cuid())
+  companyId         String
+  company           Company                    @relation(fields: [companyId], references: [id], onDelete: Cascade)
+  firstName         String
+  lastName          String
+  phone             String?
+  email             String?
+  employeeNumber    String?
+  /// ACTIVE | INACTIVE | TERMINATED
+  status            String                     @default("ACTIVE")
+  hireDate          DateTime?
+  terminationDate   DateTime?
+  dateOfBirth       DateTime?
+  cdlNumber         String?
+  cdlClass          String?
+  cdlState          String?
+  cdlEndorsements   String?
+  cdlExpiresAt      DateTime?
+  medicalExpiresAt  DateTime?
+  notes             String?
+  /// CSA BASIC percentile scores (0-100, higher = worse typically); optional Phase 2 fields
+  csaUnsafeDriving  Float?
+  csaHosCompliance  Float?
+  csaVehicleMaint   Float?
+  csaControlledSub  Float?
+  csaDriverFitness  Float?
+  csaCrashIndicator Float?
+  /// Last imported HOS / ELD summary snapshot (free text or JSON)
+  hosStatusSummary  String?
+  hosLastSyncedAt   DateTime?
+  qualificationItems DriverQualificationItem[]
+  assignments       DispatchAssignment[]
+  safetyEvents      SafetyEvent[]
+  dvirReports       DvirReport[]
+  settlements       DriverSettlement[]
+  iftaTrips         IftaTrip[]
+  createdAt         DateTime                   @default(now())
+  updatedAt         DateTime                   @updatedAt
+
+  @@index([companyId])
+  @@index([companyId, status])
+  @@unique([companyId, employeeNumber])
+}
+
+model Truck {
+  id                         String                     @id @default(cuid())
+  companyId                  String
+  company                    Company                    @relation(fields: [companyId], references: [id], onDelete: Cascade)
+  unitNumber                 String
+  year                       Int?
+  make                       String?
+  model                      String?
+  vin                        String?
+  licensePlate               String?
+  licenseState               String?
+  /// ACTIVE | INACTIVE | OUT_OF_SERVICE | SHOP
+  status                     String                     @default("ACTIVE")
+  /// COMPANY | OWNER_OPERATOR
+  ownership                  String                     @default("COMPANY")
+  registrationExpiresAt      DateTime?
+  annualInspectionExpiresAt  DateTime?
+  irpExpiresAt               DateTime?
+  insuranceExpiresAt         DateTime?
+  notes                      String?
+  /// External ELD asset id when linked
+  eldAssetId                 String?
+  eldProvider                String?
+  eldLastLocation            String?
+  eldLastPingAt              DateTime?
+  assignments                DispatchAssignment[]
+  safetyEvents               SafetyEvent[]
+  dvirReports                DvirReport[]
+  iftaTrips                  IftaTrip[]
+  createdAt                  DateTime                   @default(now())
+  updatedAt                  DateTime                   @updatedAt
+
+  @@index([companyId])
+  @@index([companyId, status])
+  @@unique([companyId, unitNumber])
+}
+
+model Trailer {
+  id                         String                     @id @default(cuid())
+  companyId                  String
+  company                    Company                    @relation(fields: [companyId], references: [id], onDelete: Cascade)
+  unitNumber                 String
+  year                       Int?
+  make                       String?
+  model                      String?
+  vin                        String?
+  licensePlate               String?
+  licenseState               String?
+  /// Dry Van | Reefer | Flatbed | Step Deck | etc.
+  trailerType                String                     @default("Dry Van")
+  /// ACTIVE | INACTIVE | OUT_OF_SERVICE | SHOP
+  status                     String                     @default("ACTIVE")
+  registrationExpiresAt      DateTime?
+  annualInspectionExpiresAt  DateTime?
+  insuranceExpiresAt         DateTime?
+  notes                      String?
+  assignments                DispatchAssignment[]
+  safetyEvents               SafetyEvent[]
+  dvirReports                DvirReport[]
+  createdAt                  DateTime                   @default(now())
+  updatedAt                  DateTime                   @updatedAt
+
+  @@index([companyId])
+  @@index([companyId, status])
+  @@unique([companyId, unitNumber])
+}
+
+model EquipmentMaintenanceLog {
+  id          String   @id @default(cuid())
+  companyId   String
+  company     Company  @relation(fields: [companyId], references: [id], onDelete: Cascade)
+  /// TRUCK | TRAILER
+  assetType   String
+  assetId     String
+  performedAt DateTime @default(now())
+  /// PM | REPAIR | INSPECTION | OTHER
+  workType    String   @default("PM")
+  odometer    Int?
+  costCents   Int      @default(0)
+  vendor      String?
+  notes       String?
+  createdAt   DateTime @default(now())
+  updatedAt   DateTime @updatedAt
+
+  @@index([companyId])
+  @@index([companyId, assetType, assetId])
+}
+
+model DriverQualificationItem {
+  id               String    @id @default(cuid())
+  driverId         String
+  driver           Driver    @relation(fields: [driverId], references: [id], onDelete: Cascade)
+  /// APPLICATION | MVR | ROAD_TEST | MEDICAL_CARD | CDL_COPY | CLEARINGHOUSE | PRIOR_EMPLOYER | ANNUAL_VIOLATIONS | TRAINING | OTHER
+  category         String
+  title            String
+  issuedAt         DateTime?
+  expiresAt        DateTime?
+  /// CURRENT | EXPIRED | MISSING | PENDING
+  status           String    @default("PENDING")
+  notes            String?
+  filePath         String?
+  originalFileName String?
+  mimeType         String?
+  fileSizeBytes    Int?
+  createdAt        DateTime  @default(now())
+  updatedAt        DateTime  @updatedAt
+
+  @@index([driverId])
+  @@index([driverId, category])
+}
+
+model SafetyEvent {
+  id              String    @id @default(cuid())
+  companyId       String
+  company         Company   @relation(fields: [companyId], references: [id], onDelete: Cascade)
+  driverId        String?
+  driver          Driver?   @relation(fields: [driverId], references: [id], onDelete: SetNull)
+  truckId         String?
+  truck           Truck?    @relation(fields: [truckId], references: [id], onDelete: SetNull)
+  trailerId       String?
+  trailer         Trailer?  @relation(fields: [trailerId], references: [id], onDelete: SetNull)
+  loadId          String?
+  load            Load?     @relation(fields: [loadId], references: [id], onDelete: SetNull)
+  /// ACCIDENT | INCIDENT | ROADSIDE | VIOLATION | OTHER
+  eventType       String    @default("ACCIDENT")
+  occurredAt      DateTime  @default(now())
+  severity        String?
+  location        String?
+  description     String
+  dotRecordable   Boolean   @default(false)
+  claimNumber     String?
+  resolutionNotes String?
+  createdAt       DateTime  @default(now())
+  updatedAt       DateTime  @updatedAt
+
+  @@index([companyId])
+  @@index([companyId, occurredAt])
+  @@index([driverId])
+}
+
+model IftaQuarter {
+  id            String          @id @default(cuid())
+  companyId     String
+  company       Company         @relation(fields: [companyId], references: [id], onDelete: Cascade)
+  year          Int
+  /// 1 | 2 | 3 | 4
+  quarter       Int
+  /// OPEN | IN_PROGRESS | FILED
+  status        String          @default("OPEN")
+  notes         String?
+  filedAt       DateTime?
+  trips         IftaTrip[]
+  fuelPurchases IftaFuelPurchase[]
+  createdAt     DateTime        @default(now())
+  updatedAt     DateTime        @updatedAt
+
+  @@unique([companyId, year, quarter])
+  @@index([companyId])
+}
+
+model IftaTrip {
+  id          String      @id @default(cuid())
+  quarterId   String
+  quarter     IftaQuarter @relation(fields: [quarterId], references: [id], onDelete: Cascade)
+  truckId     String?
+  truck       Truck?      @relation(fields: [truckId], references: [id], onDelete: SetNull)
+  driverId    String?
+  driver      Driver?     @relation(fields: [driverId], references: [id], onDelete: SetNull)
+  loadId      String?
+  load        Load?       @relation(fields: [loadId], references: [id], onDelete: SetNull)
+  startAt     DateTime
+  endAt       DateTime?
+  /// Two-letter jurisdiction (state/province), e.g. TX
+  jurisdiction String
+  miles       Float       @default(0)
+  notes       String?
+  createdAt   DateTime    @default(now())
+  updatedAt   DateTime    @updatedAt
+
+  @@index([quarterId])
+  @@index([quarterId, jurisdiction])
+  @@index([truckId])
+}
+
+model IftaFuelPurchase {
+  id           String      @id @default(cuid())
+  quarterId    String
+  quarter      IftaQuarter @relation(fields: [quarterId], references: [id], onDelete: Cascade)
+  purchasedAt  DateTime
+  jurisdiction String
+  gallons      Float       @default(0)
+  costCents    Int         @default(0)
+  vendor       String?
+  truckId      String?
+  notes        String?
+  createdAt    DateTime    @default(now())
+  updatedAt    DateTime    @updatedAt
+
+  @@index([quarterId])
+  @@index([quarterId, jurisdiction])
+}
+
+model DvirReport {
+  id            String    @id @default(cuid())
+  companyId     String
+  company       Company   @relation(fields: [companyId], references: [id], onDelete: Cascade)
+  driverId      String?
+  driver        Driver?   @relation(fields: [driverId], references: [id], onDelete: SetNull)
+  truckId       String?
+  truck         Truck?    @relation(fields: [truckId], references: [id], onDelete: SetNull)
+  trailerId     String?
+  trailer       Trailer?  @relation(fields: [trailerId], references: [id], onDelete: SetNull)
+  inspectedAt   DateTime  @default(now())
+  /// PRE_TRIP | POST_TRIP | OTHER
+  inspectionType String   @default("PRE_TRIP")
+  /// SATISFACTORY | DEFECTS_CORRECTED | UNSATISFACTORY
+  result        String    @default("SATISFACTORY")
+  odometer      Int?
+  defectsJson   String?
+  remarks       String?
+  certifiedSafe Boolean   @default(true)
+  createdAt     DateTime  @default(now())
+  updatedAt     DateTime  @updatedAt
+
+  @@index([companyId])
+  @@index([companyId, inspectedAt])
+  @@index([truckId])
+  @@index([driverId])
+}
+
+model DriverSettlement {
+  id              String    @id @default(cuid())
+  companyId       String
+  company         Company   @relation(fields: [companyId], references: [id], onDelete: Cascade)
+  driverId        String
+  driver          Driver    @relation(fields: [driverId], references: [id], onDelete: Cascade)
+  loadId          String?
+  load            Load?     @relation(fields: [loadId], references: [id], onDelete: SetNull)
+  periodStart     DateTime?
+  periodEnd       DateTime?
+  /// FLAT | PER_MILE | PERCENT_REVENUE | OTHER
+  payMethod       String    @default("FLAT")
+  miles           Float     @default(0)
+  revenueCents    Int       @default(0)
+  payCents        Int       @default(0)
+  deductionsCents Int       @default(0)
+  netCents        Int       @default(0)
+  /// DRAFT | APPROVED | PAID | VOID
+  status          String    @default("DRAFT")
+  paidAt          DateTime?
+  notes           String?
+  createdAt       DateTime  @default(now())
+  updatedAt       DateTime  @updatedAt
+
+  @@index([companyId])
+  @@index([companyId, status])
+  @@index([driverId])
+  @@index([loadId])
 }

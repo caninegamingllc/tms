@@ -442,7 +442,7 @@ export function serializeSearchLoads(loads: SearchLoadResult[]) {
     pickupDate: load.pickupDate.toISOString(),
     equipmentType: load.equipmentType,
     commodity: load.commodity,
-    carrier: load.dispatchAssignment?.carrier.name ?? "Uncovered",
+    carrier: load.dispatchAssignment?.carrier?.name ?? "Uncovered",
     revenueCents: load.revenueCents,
     carrierCostCents: load.carrierCostCents,
     marginCents: load.revenueCents - load.carrierCostCents

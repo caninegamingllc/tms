@@ -44,10 +44,6 @@ export async function GET(
   );
 
   const response = portalRedirect(request, "/portal");
-  response.cookies.set(
-    portalSessionCookieName,
-    session.token,
-    portalSessionCookieOptions(session.expiresAt)
-  );
+  response.cookies.set(portalSessionCookieName, session.token, portalSessionCookieOptions());
   return response;
 }
