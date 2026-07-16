@@ -246,6 +246,23 @@ textarea::placeholder {
   animation: landing-rise 0.85s cubic-bezier(0.22, 1, 0.36, 1) both;
 }
 
+@keyframes landing-photo-ken {
+  from {
+    transform: scale(1);
+  }
+  to {
+    transform: scale(1.06);
+  }
+}
+
+.landing-photo {
+  transform-origin: center center;
+}
+
+.landing-photo-ken {
+  animation: landing-photo-ken 22s ease-in-out infinite alternate;
+}
+
 .landing-nav {
   animation: landing-rise 0.6s cubic-bezier(0.22, 1, 0.36, 1) both;
 }
@@ -336,7 +353,8 @@ textarea::placeholder {
   .landing-section,
   .landing-cta-primary,
   .landing-cta-secondary,
-  .landing-capability {
+  .landing-capability,
+  .landing-photo-ken {
     animation: none !important;
     transition: none !important;
   }

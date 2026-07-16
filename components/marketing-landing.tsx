@@ -1,5 +1,11 @@
+import Image from "next/image";
 import Link from "next/link";
 import packageJson from "@/package.json";
+import {
+  LANDING_BAND_PHOTO,
+  LANDING_CTA_PHOTO,
+  LANDING_HERO_PHOTO
+} from "@/lib/landing-photos";
 import {
   PLAN_ORDER,
   planHighlights,
@@ -61,15 +67,27 @@ export function MarketingLanding() {
       </header>
 
       <section className="landing-hero relative isolate flex min-h-[100svh] flex-col justify-end overflow-hidden pb-16 pt-28 text-white lg:justify-center lg:pb-24 lg:pt-24">
-        <div className="absolute inset-0 brand-gradient" />
-        <div className="surface-grid absolute inset-0 opacity-[0.18] mix-blend-overlay" aria-hidden />
+        <Image
+          src={LANDING_HERO_PHOTO.src}
+          alt={LANDING_HERO_PHOTO.alt}
+          fill
+          priority
+          sizes="100vw"
+          className="landing-photo landing-photo-ken absolute inset-0 object-cover"
+        />
+        <div className="absolute inset-0 brand-gradient opacity-[0.72]" />
         <div
-          className="landing-glow absolute -bottom-40 -left-40 h-[720px] w-[720px] rounded-full opacity-40 blur-3xl"
+          className="absolute inset-0 bg-gradient-to-r from-[#0f2438]/88] via-[#0f2438]/45 to-transparent"
+          aria-hidden
+        />
+        <div className="surface-grid absolute inset-0 opacity-[0.12] mix-blend-overlay" aria-hidden />
+        <div
+          className="landing-glow absolute -bottom-40 -left-40 h-[720px] w-[720px] rounded-full opacity-30 blur-3xl"
           style={{ background: "radial-gradient(circle, rgba(61,155,168,0.85) 0%, transparent 70%)" }}
           aria-hidden
         />
         <div
-          className="landing-glow landing-glow-delay absolute -top-32 right-[-10%] h-[560px] w-[560px] rounded-full opacity-30 blur-3xl"
+          className="landing-glow landing-glow-delay absolute -top-32 right-[-10%] h-[560px] w-[560px] rounded-full opacity-20 blur-3xl"
           style={{ background: "radial-gradient(circle, rgba(229,168,75,0.55) 0%, transparent 70%)" }}
           aria-hidden
         />
@@ -180,6 +198,20 @@ export function MarketingLanding() {
         </div>
       </section>
 
+      <section
+        className="landing-photo-band relative isolate h-[42vh] min-h-[220px] max-h-[420px] overflow-hidden lg:h-[52vh]"
+        aria-label={LANDING_BAND_PHOTO.alt}
+      >
+        <Image
+          src={LANDING_BAND_PHOTO.src}
+          alt=""
+          fill
+          sizes="100vw"
+          className="absolute inset-0 object-cover"
+        />
+        <div className="absolute inset-0 bg-[#0f2438]/25" aria-hidden />
+      </section>
+
       <section className="landing-section border-b border-border">
         <div className="mx-auto max-w-6xl px-6 py-20 lg:px-10 lg:py-24">
           <p className="text-[11px] font-semibold uppercase tracking-[0.22em] text-muted-foreground">
@@ -206,8 +238,19 @@ export function MarketingLanding() {
       </section>
 
       <section className="landing-section relative isolate overflow-hidden">
-        <div className="absolute inset-0 brand-gradient opacity-95" />
-        <div className="surface-grid absolute inset-0 opacity-[0.14] mix-blend-overlay" aria-hidden />
+        <Image
+          src={LANDING_CTA_PHOTO.src}
+          alt={LANDING_CTA_PHOTO.alt}
+          fill
+          sizes="100vw"
+          className="absolute inset-0 object-cover"
+        />
+        <div className="absolute inset-0 brand-gradient opacity-[0.78]" />
+        <div
+          className="absolute inset-0 bg-gradient-to-r from-[#0f2438]/80 via-[#0f2438]/40 to-transparent"
+          aria-hidden
+        />
+        <div className="surface-grid absolute inset-0 opacity-[0.1] mix-blend-overlay" aria-hidden />
         <div className="relative z-10 mx-auto max-w-6xl px-6 py-20 text-white lg:px-10 lg:py-24">
           <h2 className="font-display max-w-xl text-[clamp(1.75rem,4vw,2.75rem)] font-semibold tracking-[-0.02em]">
             Start free. Upgrade when the freight picks up.

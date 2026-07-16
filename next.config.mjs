@@ -6,6 +6,15 @@ const nextConfig = {
       bodySizeLimit: "26mb"
     }
   },
+  images: {
+    remotePatterns: [
+      {
+        protocol: "https",
+        hostname: "images.unsplash.com",
+        pathname: "/**"
+      }
+    ]
+  },
   async headers() {
     return [
       {
