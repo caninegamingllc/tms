@@ -37,6 +37,7 @@ import { canManageUsers } from "@/lib/scope";
 import { canAccessAdmin } from "@/lib/seats";
 import { OrgSwitcher } from "@/components/org-switcher";
 import { BranchSwitcher } from "@/components/branch-switcher";
+import { CarrierQuickSearch } from "@/components/carrier-quick-search";
 import type { BranchSwitcherData } from "@/lib/branch-filter";
 
 const SESSION_HEARTBEAT_MS = 30_000;
@@ -674,6 +675,12 @@ export function AppShell({
               {activeGroup?.label ?? "Operations"}
             </span>
           </div>
+
+          {planHasFeature(currentUser.plan, "fmcsa_lookup") ? (
+            <div className="ml-4 hidden md:block">
+              <CarrierQuickSearch />
+            </div>
+          ) : null}
 
           <div className="ml-auto flex items-center gap-3">
             <div className="hidden items-center gap-2 text-[12px] text-muted-foreground xl:flex">

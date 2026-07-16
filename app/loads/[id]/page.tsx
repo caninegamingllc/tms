@@ -904,6 +904,16 @@ export default async function LoadDetailPage({
                   <p className="muted">{call.location}</p>
                   <p className="text-xs text-muted-foreground">{formatDateTime(call.occurredAt)}</p>
                   {call.notes ? <p className="mt-2 text-sm text-slate-700">{call.notes}</p> : null}
+                  {call.nextCheckAt ? (
+                    <div className="mt-3 rounded-xl border border-primary/20 bg-lightprimary/50 p-3 text-sm">
+                      <p className="font-semibold text-primary">
+                        Next check call: {formatDateTime(call.nextCheckAt)}
+                      </p>
+                      {call.nextCheckNotes ? (
+                        <p className="mt-1 text-slate-700">{call.nextCheckNotes}</p>
+                      ) : null}
+                    </div>
+                  ) : null}
                 </div>
               ))}
             </div>

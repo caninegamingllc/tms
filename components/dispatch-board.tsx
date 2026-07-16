@@ -20,7 +20,7 @@ import {
   mergeVisibleColumnIds,
   type DispatchBoardColumnId,
   type DispatchBoardRow,
-  type DispatchBoardStageFilter
+  type DispatchBoardStage
 } from "@/lib/dispatch-board";
 import { formatDate, formatDateTime, formatMoney, humanize, marginPercent } from "@/lib/format";
 
@@ -178,9 +178,17 @@ function buildColumns(visibleColumnIds: Set<DispatchBoardColumnId>): SortableCol
     },
     {
       id: "nextCheck",
-      label: "Next Check",
+      label: "Next Check Call",
       sortValue: (row) => row.nextCheckAt ?? "",
-      render: (row) => (row.nextCheckAt ? formatDateTime(row.nextCheckAt) : "Not scheduled")
+      render: (row) =>
+        row.nextCheckAt ? (
+          <>
+            <p className="font-semibold">{formatDateTime(row.nextCheckAt)}</p>
+            {row.nextCheckNotes ? <p className="muted">{row.nextCheckNotes}</p> : null}
+          </>
+        ) : (
+          "Not scheduled"
+        )
     }
   ];
 
@@ -224,10 +232,10 @@ function persistDispatchColumns(columnIds: DispatchBoardColumnId[]) {
 
 export function DispatchBoard({
   rows,
-  activeStage
+  activeStages
 }: {
   rows: DispatchBoardRow[];
-  activeStage: DispatchBoardStageFilter;
+  activeStages: DispatchBoardStage[];
 }) {
   const router = useRouter();
   const [showColumnPicker, setShowColumnPicker] = useState(false);
@@ -242,13 +250,24 @@ export function DispatchBoard({
   );
 
   const stageCounts = useMemo(() => countRowsByStage(rows), [rows]);
-  const filteredRows = useMemo(() => filterRowsByStage(rows, activeStage), [rows, activeStage]);
+  const activeStageSet = useMemo(() => new Set(activeStages), [activeStages]);
+  const filteredRows = useMemo(() => filterRowsByStage(rows, activeStages), [rows, activeStages]);
   const visibleColumnSet = useMemo(() => new Set(visibleColumnIds), [visibleColumnIds]);
   const columns = useMemo(() => buildColumns(visibleColumnSet), [visibleColumnSet]);
 
-  function handleStageChange(stage: DispatchBoardStageFilter) {
-    const query = buildDispatchBoardQueryString(stage);
+  function navigateToStages(stages: DispatchBoardStage[]) {
+    const query = buildDispatchBoardQueryString(stages);
     router.push(query ? `/dispatch?${query}` : "/dispatch");
+  }
+
+  function toggleStage(stage: DispatchBoardStage) {
+    const next = new Set(activeStageSet);
+    if (next.has(stage)) {
+      next.delete(stage);
+    } else {
+      next.add(stage);
+    }
+    navigateToStages(dispatchBoardStages.filter((value) => next.has(value)));
   }
 
   function toggleColumn(columnId: DispatchBoardColumnId) {
@@ -282,7 +301,7 @@ export function DispatchBoard({
           <div>
             <h2 className="section-title">Dispatch Board</h2>
             <p className="muted">
-              Filter by workflow stage and customize visible columns for your dispatch workflow.
+              Filter by one or more workflow stages and customize visible columns for your dispatch workflow.
             </p>
           </div>
 
@@ -328,33 +347,37 @@ export function DispatchBoard({
             type="button"
             className={clsx(
               "shrink-0 rounded-full border px-4 py-2 text-sm font-semibold transition",
-              activeStage === "all"
+              activeStages.length === 0
                 ? "border-primary bg-lightprimary text-primary"
                 : "border-border bg-card text-foreground hover:bg-muted"
             )}
-            onClick={() => handleStageChange("all")}
+            onClick={() => navigateToStages([])}
           >
             All
             <span className="ml-2 text-muted-foreground">{stageCounts.all}</span>
           </button>
 
-          {dispatchBoardStages.map((stage) => (
-            <button
-              key={stage}
-              type="button"
-              title={dispatchBoardStageDescriptions[stage]}
-              className={clsx(
-                "shrink-0 rounded-full border px-4 py-2 text-sm font-semibold transition",
-                activeStage === stage
-                  ? "border-primary bg-lightprimary text-primary"
-                  : "border-border bg-card text-foreground hover:bg-muted"
-              )}
-              onClick={() => handleStageChange(stage)}
-            >
-              {dispatchBoardStageLabels[stage]}
-              <span className="ml-2 text-muted-foreground">{stageCounts[stage]}</span>
-            </button>
-          ))}
+          {dispatchBoardStages.map((stage) => {
+            const isActive = activeStageSet.has(stage);
+            return (
+              <button
+                key={stage}
+                type="button"
+                title={dispatchBoardStageDescriptions[stage]}
+                aria-pressed={isActive}
+                className={clsx(
+                  "shrink-0 rounded-full border px-4 py-2 text-sm font-semibold transition",
+                  isActive
+                    ? "border-primary bg-lightprimary text-primary"
+                    : "border-border bg-card text-foreground hover:bg-muted"
+                )}
+                onClick={() => toggleStage(stage)}
+              >
+                {dispatchBoardStageLabels[stage]}
+                <span className="ml-2 text-muted-foreground">{stageCounts[stage]}</span>
+              </button>
+            );
+          })}
         </div>
       </div>
 
@@ -366,9 +389,9 @@ export function DispatchBoard({
           keyExtractor={(row) => row.id}
           defaultSort={{ columnId: "pickup", direction: "asc" }}
           emptyMessage={
-            activeStage === "all"
+            activeStages.length === 0
               ? "No loads on the dispatch board."
-              : `No ${dispatchBoardStageLabels[activeStage as keyof typeof dispatchBoardStageLabels] ?? humanize(activeStage)} loads right now.`
+              : `No ${activeStages.map((stage) => dispatchBoardStageLabels[stage]).join(", ")} loads right now.`
           }
         />
       </div>

@@ -210,6 +210,7 @@ function CheckCallLocationInput({
 
 export function CheckCallForm({ action, assignmentId, loadId }: CheckCallFormProps) {
   const [selectedLocation, setSelectedLocation] = useState<SelectedLocation | null>(null);
+  const [scheduleNextCheckCall, setScheduleNextCheckCall] = useState(false);
 
   return (
     <form action={action} className="mt-4 grid gap-3 rounded-2xl bg-muted p-4">
@@ -221,7 +222,32 @@ export function CheckCallForm({ action, assignmentId, loadId }: CheckCallFormPro
       />
       <input name="status" className="input" placeholder="Status update" required />
       <textarea name="notes" className="textarea" placeholder="Notes" rows={3} />
-      <input name="nextCheckAt" className="input" type="datetime-local" />
+      <label className="flex items-center gap-2 rounded-xl border border-border bg-card px-3 py-2 text-sm font-semibold text-foreground">
+        <input
+          type="checkbox"
+          className="h-4 w-4 rounded border-border accent-primary"
+          checked={scheduleNextCheckCall}
+          onChange={(event) => setScheduleNextCheckCall(event.target.checked)}
+        />
+        Set Next Check Call
+      </label>
+      {scheduleNextCheckCall ? (
+        <div className="grid gap-3 rounded-xl border border-border bg-card p-3">
+          <label className="grid gap-2">
+            <span className="label">Next check call date/time</span>
+            <input name="nextCheckAt" className="input" type="datetime-local" required />
+          </label>
+          <label className="grid gap-2">
+            <span className="label">Next check notes</span>
+            <textarea
+              name="nextCheckNotes"
+              className="textarea"
+              placeholder="What this check call is for"
+              rows={2}
+            />
+          </label>
+        </div>
+      ) : null}
       <button className="btn" type="submit" disabled={!selectedLocation}>
         Add Check Call
       </button>

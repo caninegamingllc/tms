@@ -13,7 +13,7 @@ export default async function DispatchPage({
   const user = await requirePlanFeature("dispatch");
   const loadScope = await getBranchScope(user);
   const params = await searchParams;
-  const { stage } = parseDispatchBoardParams(params);
+  const { stages } = parseDispatchBoardParams(params);
 
   const loads = await prisma.load.findMany({
     where: {
@@ -43,7 +43,7 @@ export default async function DispatchPage({
         description="Track freight through pending coverage, active dispatch, en route movement, delivery, invoicing, and payment."
       />
 
-      <DispatchBoard rows={rows} activeStage={stage} />
+      <DispatchBoard rows={rows} activeStages={stages} />
     </>
   );
 }

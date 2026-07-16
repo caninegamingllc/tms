@@ -30,7 +30,7 @@ export default async function CarriersPage({
   searchParams: Promise<Record<string, string | string[] | undefined>>;
 }) {
   const params = await searchParams;
-  const { error, saved, ...filterParams } = params;
+  const { error, saved, name: prefillName, mc: prefillMc, dot: prefillDot, ...filterParams } = params;
   const user = await requireTmsAccess();
   const filters = parseCarrierSearchParams(filterParams);
   const pagination = parsePaginationParams(params);
@@ -116,7 +116,13 @@ export default async function CarriersPage({
         </Tile>
 
         <Tile id="add">
-          <CarrierLookupForm action={createCarrier} factoringCompanies={factoringCompanies} />
+          <CarrierLookupForm
+            action={createCarrier}
+            factoringCompanies={factoringCompanies}
+            initialName={typeof prefillName === "string" ? prefillName : ""}
+            initialMcNumber={typeof prefillMc === "string" ? prefillMc : ""}
+            initialDotNumber={typeof prefillDot === "string" ? prefillDot : ""}
+          />
         </Tile>
       </TileBoard>
     </>

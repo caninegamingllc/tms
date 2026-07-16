@@ -7,6 +7,9 @@ import type { CarrierLookupResult } from "@/lib/carrier-lookup";
 type CarrierLookupFormProps = {
   action: (formData: FormData) => void | Promise<void>;
   factoringCompanies?: { id: string; name: string; nameOnCheck: string }[];
+  initialName?: string;
+  initialMcNumber?: string;
+  initialDotNumber?: string;
 };
 
 type ActiveField = "mc" | "dot" | null;
@@ -15,10 +18,16 @@ function resultLabel(result: CarrierLookupResult) {
   return result.source === "local" ? "Existing carrier in TMS" : "FMCSA match";
 }
 
-export function CarrierLookupForm({ action, factoringCompanies = [] }: CarrierLookupFormProps) {
-  const [name, setName] = useState("");
-  const [mcNumber, setMcNumber] = useState("");
-  const [dotNumber, setDotNumber] = useState("");
+export function CarrierLookupForm({
+  action,
+  factoringCompanies = [],
+  initialName = "",
+  initialMcNumber = "",
+  initialDotNumber = ""
+}: CarrierLookupFormProps) {
+  const [name, setName] = useState(initialName);
+  const [mcNumber, setMcNumber] = useState(initialMcNumber);
+  const [dotNumber, setDotNumber] = useState(initialDotNumber);
   const [phone, setPhone] = useState("");
   const [email, setEmail] = useState("");
   const [address, setAddress] = useState("");

@@ -1,0 +1,1 @@
+ALTER TABLE "CheckCall" ADD COLUMN IF NOT EXISTS "nextCheckNotes" TEXT;

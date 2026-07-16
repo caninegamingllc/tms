@@ -54,7 +54,7 @@ export const dispatchBoardColumnOptions = [
   { id: "carrierRate", label: "Carrier Rate", defaultVisible: true },
   { id: "financials", label: "Revenue / Margin", defaultVisible: false },
   { id: "lastCheckCall", label: "Last Check Call", defaultVisible: true },
-  { id: "nextCheck", label: "Next Check", defaultVisible: false }
+  { id: "nextCheck", label: "Next Check Call", defaultVisible: true }
 ] as const;
 
 export type DispatchBoardColumnId = (typeof dispatchBoardColumnOptions)[number]["id"];
@@ -86,6 +86,7 @@ export type DispatchBoardRow = {
   lastCheckCallLocation: string | null;
   lastCheckCallAt: string | null;
   nextCheckAt: string | null;
+  nextCheckNotes: string | null;
 };
 
 type BoardStageInput = {
@@ -122,22 +123,37 @@ export function getLoadBoardStage(load: BoardStageInput): DispatchBoardStage | n
 }
 
 export function parseDispatchBoardParams(searchParams: Record<string, string | string[] | undefined>) {
-  const stage =
-    typeof searchParams.stage === "string" && searchParams.stage
-      ? searchParams.stage
-      : "all";
+  const raw = searchParams.stage;
+  const rawValues: string[] = [];
+
+  if (typeof raw === "string") {
+    rawValues.push(...raw.split(","));
+  } else if (Array.isArray(raw)) {
+    for (const value of raw) {
+      rawValues.push(...value.split(","));
+    }
+  }
+
+  const validStages = new Set<DispatchBoardStage>(dispatchBoardStages);
+  const selected = new Set(
+    rawValues
+      .map((value) => value.trim())
+      .filter((value): value is DispatchBoardStage => validStages.has(value as DispatchBoardStage))
+  );
 
   return {
-    stage: dispatchBoardStageFilterSchema.parse(stage)
+    stages: dispatchBoardStages.filter((stage) => selected.has(stage))
   };
 }
 
-export function buildDispatchBoardQueryString(stage: DispatchBoardStageFilter) {
-  if (stage === "all") {
+export function buildDispatchBoardQueryString(stages: DispatchBoardStage[]) {
+  if (!stages.length) {
     return "";
   }
 
-  return `stage=${stage}`;
+  const ordered = dispatchBoardStages.filter((stage) => stages.includes(stage));
+
+  return `stage=${ordered.join(",")}`;
 }
 
 export function getDefaultVisibleColumnIds(): DispatchBoardColumnId[] {
@@ -176,12 +192,14 @@ export function countRowsByStage(rows: DispatchBoardRow[]) {
   return counts;
 }
 
-export function filterRowsByStage(rows: DispatchBoardRow[], stage: DispatchBoardStageFilter) {
-  if (stage === "all") {
+export function filterRowsByStage(rows: DispatchBoardRow[], stages: DispatchBoardStage[]) {
+  if (!stages.length) {
     return rows;
   }
 
-  return rows.filter((row) => row.boardStage === stage);
+  const selected = new Set(stages);
+
+  return rows.filter((row) => selected.has(row.boardStage));
 }
 
 type DispatchBoardLoad = {
@@ -212,6 +230,7 @@ type DispatchBoardLoad = {
       location: string;
       occurredAt: Date;
       nextCheckAt: Date | null;
+      nextCheckNotes: string | null;
     }>;
   } | null;
 };
@@ -250,6 +269,7 @@ export function serializeDispatchBoardRow(load: DispatchBoardLoad): DispatchBoar
     lastCheckCallStatus: latestCheckCall?.status ?? null,
     lastCheckCallLocation: latestCheckCall?.location ?? null,
     lastCheckCallAt: latestCheckCall?.occurredAt.toISOString() ?? null,
-    nextCheckAt: latestCheckCall?.nextCheckAt?.toISOString() ?? null
+    nextCheckAt: latestCheckCall?.nextCheckAt?.toISOString() ?? null,
+    nextCheckNotes: latestCheckCall?.nextCheckNotes ?? null
   };
 }

@@ -28,7 +28,7 @@ export const DASHBOARD_TILES: TileDefinition[] = [
   { id: "metrics", title: "Metrics", minW: 4, minH: 4, default: { x: 0, y: 0, w: 12, h: 5 } },
   { id: "fuel-index", title: "Current Fuel Index", minW: 4, minH: 4, default: { x: 0, y: 5, w: 12, h: 8 } },
   { id: "load-board", title: "Load board snapshot", minW: 4, minH: 6, default: { x: 0, y: 13, w: 8, h: 12 } },
-  { id: "check-calls", title: "Recent check calls", minW: 3, minH: 6, default: { x: 8, y: 13, w: 4, h: 12 } }
+  { id: "check-calls", title: "Check Calls", minW: 3, minH: 6, default: { x: 8, y: 13, w: 4, h: 12 } }
 ];
 
 export const LOAD_DETAIL_TILES: TileDefinition[] = [

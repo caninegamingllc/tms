@@ -828,17 +828,18 @@ model CarrierPayLine {
 }
 
 model CheckCall {
-  id           String             @id @default(cuid())
-  assignmentId String
-  assignment   DispatchAssignment @relation(fields: [assignmentId], references: [id], onDelete: Cascade)
-  location     String
-  status       String
-  notes        String?
-  occurredAt   DateTime           @default(now())
-  nextCheckAt  DateTime?
-  latitude     Float?
-  longitude    Float?
-  geocodedAt   DateTime?
+  id             String             @id @default(cuid())
+  assignmentId   String
+  assignment     DispatchAssignment @relation(fields: [assignmentId], references: [id], onDelete: Cascade)
+  location       String
+  status         String
+  notes          String?
+  occurredAt     DateTime           @default(now())
+  nextCheckAt    DateTime?
+  nextCheckNotes String?
+  latitude       Float?
+  longitude      Float?
+  geocodedAt     DateTime?
 }
 
 model LoadDocument {

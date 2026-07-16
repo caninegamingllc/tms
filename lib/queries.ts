@@ -6,8 +6,16 @@ export async function getDashboardData() {
   const user = await requireTmsAccess();
   const loadScope = await getBranchScope(user);
   const customerScope = loadScope;
+  const checkCallInclude = {
+    assignment: {
+      include: {
+        load: true,
+        carrier: true
+      }
+    }
+  } as const;
 
-  const [loads, customers, carriers, openArAgg, openApAgg, checkCalls, financialAgg] =
+  const [loads, customers, carriers, openArAgg, openApAgg, recentCheckCalls, nextCheckCalls, financialAgg] =
     await Promise.all([
       prisma.load.findMany({
         where: loadScope,
@@ -43,21 +51,48 @@ export async function getDashboardData() {
           }
         },
         orderBy: { occurredAt: "desc" },
-        include: {
+        include: checkCallInclude,
+        take: 25
+      }),
+      prisma.checkCall.findMany({
+        where: {
+          nextCheckAt: { not: null },
           assignment: {
-            include: {
-              load: true,
-              carrier: true
-            }
+            load: loadScope
           }
         },
-        take: 5
+        orderBy: { nextCheckAt: "asc" },
+        include: checkCallInclude,
+        take: 25
       }),
       prisma.load.aggregate({
         where: loadScope,
         _sum: { revenueCents: true, carrierCostCents: true }
       })
     ]);
+  const checkCalls = [
+    ...nextCheckCalls.map((call) => ({
+      ...call,
+      dashboardKind: "next" as const,
+      dashboardAt: call.nextCheckAt ?? call.occurredAt
+    })),
+    ...recentCheckCalls.map((call) => ({
+      ...call,
+      dashboardKind: "recent" as const,
+      dashboardAt: call.occurredAt
+    }))
+  ]
+    .sort((a, b) => {
+      if (a.dashboardKind !== b.dashboardKind) {
+        return a.dashboardKind === "next" ? -1 : 1;
+      }
+
+      const aTime = a.dashboardAt.getTime();
+      const bTime = b.dashboardAt.getTime();
+
+      return a.dashboardKind === "next" ? aTime - bTime : bTime - aTime;
+    })
+    .slice(0, 25);
 
   const activeLoads = loads.filter((load) =>
     ["AVAILABLE", "COVERED", "DISPATCHED", "PICKED_UP"].includes(load.status)

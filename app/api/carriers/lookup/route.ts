@@ -20,8 +20,8 @@ export async function GET(request: NextRequest) {
   const typeParam = request.nextUrl.searchParams.get("type");
   const query = request.nextUrl.searchParams.get("q")?.trim() ?? "";
 
-  if (typeParam !== "mc" && typeParam !== "dot") {
-    return NextResponse.json({ error: "Lookup type must be mc or dot." }, { status: 400 });
+  if (typeParam !== "mc" && typeParam !== "dot" && typeParam !== "auto") {
+    return NextResponse.json({ error: "Lookup type must be mc, dot, or auto." }, { status: 400 });
   }
 
   if (query.length < 3) {

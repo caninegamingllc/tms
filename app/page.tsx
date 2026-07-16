@@ -134,30 +134,62 @@ export default async function HomePage({
         </Tile>
 
         <Tile id="check-calls">
-          <p className="muted">Latest driver and carrier updates.</p>
+          <p className="muted">Recent updates and scheduled next check calls.</p>
           <div className="mt-3 grid gap-2">
-            {data.checkCalls.map((call) => (
-              <div key={call.id} className="rounded-md border border-border bg-muted/40 px-3 py-2.5">
-                <div className="flex items-start justify-between gap-3">
-                  <div>
-                    <p className="text-[13px] font-semibold text-foreground">
-                      {call.assignment.load.loadNumber}
-                    </p>
-                    <p className="text-[12px] text-muted-foreground">
-                      {call.assignment.carrier?.name ??
-                        call.assignment.driverName ??
-                        "Fleet / uncovered"}
-                    </p>
+            {data.checkCalls.map((call) => {
+              const isNextCheck = call.dashboardKind === "next";
+              const carrierLabel =
+                call.assignment.carrier?.name ?? call.assignment.driverName ?? "Fleet / uncovered";
+
+              return (
+                <Link
+                  key={`${call.dashboardKind}-${call.id}`}
+                  href={`/loads/${call.assignment.load.id}`}
+                  className={
+                    isNextCheck
+                      ? "rounded-md border border-primary/30 bg-lightprimary/60 px-3 py-2.5 transition hover:bg-lightprimary"
+                      : "rounded-md border border-border bg-muted/40 px-3 py-2.5 transition hover:bg-muted"
+                  }
+                >
+                  <div className="flex items-start justify-between gap-3">
+                    <div>
+                      <div className="flex flex-wrap items-center gap-2">
+                        <p className="text-[13px] font-semibold text-foreground">
+                          {call.assignment.load.loadNumber}
+                        </p>
+                        <span
+                          className={
+                            isNextCheck
+                              ? "rounded-full bg-primary/10 px-2 py-0.5 text-[10px] font-semibold uppercase tracking-[0.1em] text-primary"
+                              : "rounded-full bg-slate-100 px-2 py-0.5 text-[10px] font-semibold uppercase tracking-[0.1em] text-slate-600"
+                          }
+                        >
+                          {isNextCheck ? "Next check" : "Check call"}
+                        </span>
+                      </div>
+                      <p className="text-[12px] text-muted-foreground">{carrierLabel}</p>
+                    </div>
+                    <span className="text-[11px] text-muted-foreground tabular">
+                      {formatDateTime(call.dashboardAt)}
+                    </span>
                   </div>
-                  <span className="text-[11px] text-muted-foreground tabular">
-                    {formatDateTime(call.occurredAt)}
-                  </span>
-                </div>
-                <p className="mt-1.5 text-[13px] font-semibold text-foreground">{call.status}</p>
-                <p className="text-[12px] text-muted-foreground">{call.location}</p>
-                {call.notes ? <p className="mt-1 text-[12px] text-slate-600">{call.notes}</p> : null}
-              </div>
-            ))}
+                  <p className="mt-1.5 text-[13px] font-semibold text-foreground">
+                    {isNextCheck ? call.nextCheckNotes ?? "Scheduled check call" : call.status}
+                  </p>
+                  <p className="text-[12px] text-muted-foreground">
+                    {isNextCheck ? `Last check: ${call.location}` : call.location}
+                  </p>
+                  {!isNextCheck && call.notes ? (
+                    <p className="mt-1 text-[12px] text-slate-600">{call.notes}</p>
+                  ) : null}
+                </Link>
+              );
+            })}
+            {data.checkCalls.length === 0 ? (
+              <p className="rounded-md border border-dashed border-border px-3 py-4 text-sm text-muted-foreground">
+                No check calls yet.
+              </p>
+            ) : null}
           </div>
         </Tile>
       </TileBoard>

@@ -168,21 +168,28 @@ function extractFmcsaCarriers(payload: FmcsaResponse) {
 
 export async function searchLocalCarriers(
   companyId: string,
-  type: "mc" | "dot",
+  type: "mc" | "dot" | "auto",
   query: string
 ): Promise<CarrierLookupResult[]> {
-  const candidates = localLookupCandidates(type, query).filter((value) => value.length >= 3);
-  if (!candidates.length) {
+  const fields: ("mc" | "dot")[] = type === "auto" ? ["mc", "dot"] : [type];
+  const orClauses: Record<string, { startsWith: string }>[] = [];
+
+  for (const field of fields) {
+    const column = field === "mc" ? "mcNumberNormalized" : "dotNumberNormalized";
+    const candidates = localLookupCandidates(field, query).filter((value) => value.length >= 3);
+    for (const candidate of candidates) {
+      orClauses.push({ [column]: { startsWith: candidate } });
+    }
+  }
+
+  if (!orClauses.length) {
     return [];
   }
 
-  const field = type === "mc" ? "mcNumberNormalized" : "dotNumberNormalized";
   const carriers = await prisma.carrier.findMany({
     where: {
       companyId,
-      OR: candidates.map((candidate) => ({
-        [field]: { startsWith: candidate }
-      }))
+      OR: orClauses
     },
     orderBy: { name: "asc" },
     take: SEARCH_LIMIT,
@@ -262,9 +269,29 @@ async function fetchFmcsaCarriers(type: "mc" | "dot", query: string) {
   return results;
 }
 
+async function fetchFmcsaForType(type: "mc" | "dot" | "auto", query: string) {
+  if (type !== "auto") {
+    return fetchFmcsaCarriers(type, query);
+  }
+
+  // MC dockets are typically <= 6 digits; USDOT numbers run longer. Prefer the
+  // more likely authority first, then fall back to the other once.
+  const digits = query.replace(/\D/g, "");
+  const order: ("dot" | "mc")[] = digits.length >= 7 ? ["dot", "mc"] : ["mc", "dot"];
+
+  for (const candidate of order) {
+    const results = await fetchFmcsaCarriers(candidate, query);
+    if (results.length > 0) {
+      return results;
+    }
+  }
+
+  return [];
+}
+
 export async function lookupCarriers(
   companyId: string,
-  type: "mc" | "dot",
+  type: "mc" | "dot" | "auto",
   query: string
 ): Promise<{ results: CarrierLookupResult[]; fmcsaAvailable: boolean }> {
   const localResults = await searchLocalCarriers(companyId, type, query);
@@ -277,7 +304,7 @@ export async function lookupCarriers(
   }
 
   try {
-    const fmcsaResults = await fetchFmcsaCarriers(type, query);
+    const fmcsaResults = await fetchFmcsaForType(type, query);
     return { results: fmcsaResults, fmcsaAvailable: true };
   } catch (error) {
     const message = error instanceof Error ? error.message : "FMCSA lookup failed.";

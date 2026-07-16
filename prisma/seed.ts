@@ -519,7 +519,8 @@ async function main() {
                 status: "On schedule",
                 notes: "Driver checked in by phone. Reefer temp holding.",
                 occurredAt: daysFromNow(0),
-                nextCheckAt: daysFromNow(1)
+                nextCheckAt: daysFromNow(1),
+                nextCheckNotes: "Confirm pickup appointment and reefer temperature."
               }
             ]
           }
