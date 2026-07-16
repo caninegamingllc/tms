@@ -253,7 +253,8 @@ export default async function CarrierDetailPage({
             Track coverage type, insurer, policy number, limits, effective dates, and expiration dates.
           </p>
           <p className="mt-2 text-xs text-muted-foreground">
-            Refresh pulls active/pending federal filings from FMCSA Motus Insur. Manual coverages are kept;
+            Refresh pulls active/pending federal filings from FMCSA Motus Insur, falling back to
+            ActPendInsur when Motus has none (legacy snapshot may be stale). Manual coverages are kept;
             previously synced FMCSA rows are replaced.
           </p>
 
@@ -267,7 +268,7 @@ export default async function CarrierDetailPage({
                 title={
                   !carrier.dotNumber && !carrier.mcNumber
                     ? "Add a DOT or MC number before refreshing FMCSA insurance"
-                    : "Refresh insurance from FMCSA Motus Insur"
+                    : "Refresh insurance from FMCSA Motus Insur (ActPendInsur backup if empty)"
                 }
               >
                 Refresh from FMCSA

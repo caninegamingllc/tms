@@ -221,11 +221,15 @@ async function importFmcsaInsuranceCoverages(
     mcNumber: input.mcNumber ?? undefined
   });
 
-  // Only replace when Motus returns filings. An empty miss must not wipe
+  // Only replace when a source returns filings. An empty miss must not wipe
   // previously imported rows (Motus/Socrata can fail open as []).
   if (!coverages.length) {
-    return 0;
+    return { count: 0, usedLegacyBackup: false };
   }
+
+  const usedLegacyBackup = coverages.some((coverage) =>
+    coverage.notes.includes(FMCSA_INSURANCE_NOTE_LEGACY)
+  );
 
   await prisma.carrierInsuranceCoverage.deleteMany({
     where: {
@@ -252,7 +256,7 @@ async function importFmcsaInsuranceCoverages(
   });
 
   await syncCarrierInsuranceSummary(carrierId);
-  return coverages.length;
+  return { count: coverages.length, usedLegacyBackup };
 }
 
 async function requireCompanyCustomer(customerId: string, user: SessionUser) {
@@ -581,10 +585,11 @@ export async function createCarrier(formData: FormData) {
     try {
       const plan = await getCompanyPlan(user.companyId);
       if (planHasFeature(plan, "fmcsa_lookup")) {
-        importedCount = await importFmcsaInsuranceCoverages(carrier.id, {
+        const result = await importFmcsaInsuranceCoverages(carrier.id, {
           dotNumber,
           mcNumber
         });
+        importedCount = result.count;
       }
     } catch {
       importedCount = 0;
@@ -821,11 +826,14 @@ export async function refreshCarrierInsuranceFromFmcsa(formData: FormData) {
   }
 
   let importedCount = 0;
+  let usedLegacyBackup = false;
   try {
-    importedCount = await importFmcsaInsuranceCoverages(carrierId, {
+    const result = await importFmcsaInsuranceCoverages(carrierId, {
       dotNumber: carrier.dotNumber,
       mcNumber: carrier.mcNumber
     });
+    importedCount = result.count;
+    usedLegacyBackup = result.usedLegacyBackup;
   } catch (error) {
     const message = error instanceof Error ? error.message : "FMCSA insurance refresh failed.";
     redirect(`/carriers/${carrierId}?error=${encodeURIComponent(message)}`);
@@ -838,8 +846,10 @@ export async function refreshCarrierInsuranceFromFmcsa(formData: FormData) {
       action: "FMCSA insurance refreshed",
       details:
         importedCount > 0
-          ? `Imported ${importedCount} active/pending federal insurance filing${importedCount === 1 ? "" : "s"} from Motus Insur.`
-          : "No Motus Insur filings found for this DOT/MC (existing FMCSA coverages left unchanged). Try again in a minute, or confirm the DOT/MC on SAFER."
+          ? usedLegacyBackup
+            ? `Imported ${importedCount} federal insurance filing${importedCount === 1 ? "" : "s"} from ActPendInsur backup (Motus had none; legacy snapshot may be stale).`
+            : `Imported ${importedCount} active/pending federal insurance filing${importedCount === 1 ? "" : "s"} from Motus Insur.`
+          : "No Motus or ActPendInsur filings found for this DOT/MC (existing FMCSA coverages left unchanged). Try again in a minute, or confirm the DOT/MC on SAFER."
     }
   });
 
