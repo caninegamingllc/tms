@@ -110,7 +110,7 @@ export function CarrierQuickSearch() {
           setAutocompleteLoading(false);
         }
       }
-    }, 450);
+    }, 550);
 
     return () => {
       window.clearTimeout(timeout);
@@ -224,7 +224,7 @@ export function CarrierQuickSearch() {
           ) : results.length > 0 ? (
             <ul className="grid gap-3">
               {results.map((result) => {
-                const isLocal = result.source === "local";
+                const isLocal = Boolean(result.carrierId) || result.source === "local";
                 const locationLine = [result.city, result.state].filter(Boolean).join(", ");
                 return (
                   <li
@@ -379,7 +379,9 @@ export function CarrierQuickSearch() {
                     </span>
                   ) : null}
                   <span className="mt-1 block text-[11px] font-semibold uppercase tracking-wide text-primary">
-                    {result.source === "local" ? "Existing carrier in TMS" : "FMCSA match"}
+                    {result.carrierId || result.source === "local"
+                      ? "Existing carrier in TMS"
+                      : "FMCSA match"}
                   </span>
                 </button>
               ))

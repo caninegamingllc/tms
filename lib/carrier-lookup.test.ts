@@ -1,6 +1,7 @@
 import assert from "node:assert/strict";
 import { describe, it } from "node:test";
 import {
+  authorityDigits,
   carrierLookupNumberCandidates,
   localLookupCandidates,
   mergeLookupResults,
@@ -36,9 +37,21 @@ describe("carrierLookupNumberCandidates", () => {
   });
 });
 
+describe("authorityDigits", () => {
+  it("strips DOT/MC prefixes and leading zeros", () => {
+    assert.equal(authorityDigits("DOT-2418890"), "2418890");
+    assert.equal(authorityDigits("MC-001234"), "1234");
+    assert.equal(authorityDigits("2418890"), "2418890");
+  });
+});
+
 describe("localLookupCandidates", () => {
   it("prefers stripped MC candidates while keeping zero-padded fallbacks", () => {
     assert.deepEqual(localLookupCandidates("mc", "MC-001234"), ["1234", "MC1234", "001234", "MC001234"]);
+  });
+
+  it("includes DOT-prefixed candidates for digit DOT searches", () => {
+    assert.deepEqual(localLookupCandidates("dot", "2418890"), ["2418890", "DOT2418890"]);
   });
 });
 
@@ -64,6 +77,26 @@ describe("mergeLookupResults", () => {
     assert.equal(results[0].mcNumber, "MC-806611");
     assert.equal(results[0].insuranceHint, "2 federal filings · BIPD $1,000,000");
     assert.match(results[0].description, /Existing carrier in TMS/);
+  });
+
+  it("promotes when local DOT is prefixed and FMCSA DOT is digits-only", () => {
+    const local = localResult({
+      name: "Blue Ridge Transport",
+      carrierId: "blue-ridge",
+      mcNumber: "MC-784512",
+      dotNumber: "DOT-2418890"
+    });
+    const fmcsa = fmcsaResult({
+      name: "BLUE RIDGE TRANSPORT",
+      mcNumber: "MC-784512",
+      dotNumber: "2418890"
+    });
+
+    const results = mergeLookupResults([local], [fmcsa]);
+
+    assert.equal(results.length, 1);
+    assert.equal(results[0].source, "local");
+    assert.equal(results[0].carrierId, "blue-ridge");
   });
 
   it("promotes an FMCSA hit to the existing TMS carrier when MC matches", () => {
