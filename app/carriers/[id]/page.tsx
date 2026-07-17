@@ -101,50 +101,6 @@ export default async function CarrierDetailPage({
         </div>
       ) : null}
 
-      {carrierIsDnu ? (
-        <div className="mb-6 rounded-2xl border border-rose-300 bg-rose-50 p-4 text-sm text-rose-900">
-          <p className="font-semibold">Do Not Use (DNU)</p>
-          <p className="mt-1">
-            This carrier cannot be assigned to loads.
-            {carrier.dnuMarkedBy ? (
-              <>
-                {" "}
-                Marked by {carrier.dnuMarkedBy.name} on {formatDateTime(carrier.dnuAt)}.
-              </>
-            ) : carrier.dnuAt ? (
-              <> Marked on {formatDateTime(carrier.dnuAt)}.</>
-            ) : null}
-          </p>
-          {writable && canClearDnu ? (
-            <form action={clearCarrierDnu} className="mt-3">
-              <input type="hidden" name="carrierId" value={carrier.id} />
-              <button className="btn-secondary" type="submit">
-                Clear Do Not Use
-              </button>
-            </form>
-          ) : writable ? (
-            <p className="mt-2 text-xs text-rose-800">
-              Only {carrier.dnuMarkedBy?.name ?? "the user who marked DNU"}
-              {isAdminRole(user.role) ? "" : " or an admin"} can clear this status.
-            </p>
-          ) : null}
-        </div>
-      ) : writable ? (
-        <div className="mb-6 rounded-2xl border border-amber-200 bg-amber-50 p-4 text-sm text-amber-900">
-          <p className="font-semibold">Carrier compliance</p>
-          <p className="mt-1">
-            Mark this carrier Do Not Use to block load assignments. Only you or an admin can clear it
-            later.
-          </p>
-          <form action={markCarrierDnu} className="mt-3">
-            <input type="hidden" name="carrierId" value={carrier.id} />
-            <button className="btn-secondary border-rose-300 text-rose-800 hover:bg-rose-100" type="submit">
-              Mark Do Not Use
-            </button>
-          </form>
-        </div>
-      ) : null}
-
       <TileBoard pageId="carrier-detail" tiles={carrierTiles} initialLayouts={layouts}>
         <Tile id="profile">
           {writable ? (
@@ -432,6 +388,50 @@ export default async function CarrierDetailPage({
         </Tile>
         ) : null}
       </TileBoard>
+
+      {carrierIsDnu ? (
+        <div className="mt-6 rounded-2xl border border-rose-300 bg-rose-50 p-4 text-sm text-rose-900">
+          <p className="font-semibold">Do Not Use (DNU)</p>
+          <p className="mt-1">
+            This carrier cannot be assigned to loads.
+            {carrier.dnuMarkedBy ? (
+              <>
+                {" "}
+                Marked by {carrier.dnuMarkedBy.name} on {formatDateTime(carrier.dnuAt)}.
+              </>
+            ) : carrier.dnuAt ? (
+              <> Marked on {formatDateTime(carrier.dnuAt)}.</>
+            ) : null}
+          </p>
+          {writable && canClearDnu ? (
+            <form action={clearCarrierDnu} className="mt-3">
+              <input type="hidden" name="carrierId" value={carrier.id} />
+              <button className="btn-secondary" type="submit">
+                Clear Do Not Use
+              </button>
+            </form>
+          ) : writable ? (
+            <p className="mt-2 text-xs text-rose-800">
+              Only {carrier.dnuMarkedBy?.name ?? "the user who marked DNU"}
+              {isAdminRole(user.role) ? "" : " or an admin"} can clear this status.
+            </p>
+          ) : null}
+        </div>
+      ) : writable ? (
+        <div className="mt-6 rounded-2xl border border-amber-200 bg-amber-50 p-4 text-sm text-amber-900">
+          <p className="font-semibold">Carrier compliance</p>
+          <p className="mt-1">
+            Mark this carrier Do Not Use to block load assignments. Only you or an admin can clear it
+            later.
+          </p>
+          <form action={markCarrierDnu} className="mt-3">
+            <input type="hidden" name="carrierId" value={carrier.id} />
+            <button className="btn-secondary border-rose-300 text-rose-800 hover:bg-rose-100" type="submit">
+              Mark Do Not Use
+            </button>
+          </form>
+        </div>
+      ) : null}
     </>
   );
 }

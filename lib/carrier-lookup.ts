@@ -51,8 +51,12 @@ type FmcsaResponse = {
 const FMCSA_BASE_URL = "https://mobile.fmcsa.dot.gov/qc/services";
 const SEARCH_LIMIT = 8;
 const CACHE_TTL_MS = 5 * 60 * 1000;
-/** Cap remote FMCSA waits so quick search never hangs on a slow federal API. */
-export const FMCSA_LOOKUP_TIMEOUT_MS = 1_200;
+/**
+ * Cap remote FMCSA waits so a hung federal API can't stall lookups forever.
+ * FMCSA is routinely slow (tens of seconds), so this must stay generous —
+ * local results already render first, so this wait never blocks the UI.
+ */
+export const FMCSA_LOOKUP_TIMEOUT_MS = 30_000;
 const fmcsaCache = new Map<string, { expiresAt: number; results: CarrierLookupResult[] }>();
 
 export type CarrierLookupOptions = {
@@ -266,8 +270,8 @@ export async function searchLocalCarriers(
   const fields: ("mc" | "dot")[] = type === "auto" ? ["mc", "dot"] : [type];
   const orClauses: {
     name?: { contains: string; mode: "insensitive" };
-    mcNumberNormalized?: { startsWith: string };
-    dotNumberNormalized?: { startsWith: string };
+    mcNumberNormalized?: { startsWith: string } | { endsWith: string };
+    dotNumberNormalized?: { startsWith: string } | { endsWith: string };
   }[] = [];
 
   if (type === "auto" && trimmed.length >= 3) {
@@ -276,13 +280,18 @@ export async function searchLocalCarriers(
 
   for (const field of fields) {
     const column = field === "mc" ? "mcNumberNormalized" : "dotNumberNormalized";
-    // Indexed prefix matches only. Require a digit so name queries like "Homeland"
+    // Indexed prefix matches. Require a digit so name queries like "Homeland"
     // do not scan authority columns via letter-only normalized candidates.
     const candidates = localLookupCandidates(field, query).filter(
       (value) => value.length >= 3 && /\d/.test(value)
     );
     for (const candidate of candidates) {
       orClauses.push({ [column]: { startsWith: candidate } });
+    }
+
+    // Match zero-padded authorities: stored "MC00806611" when the user typed "806611".
+    for (const digits of carrierLookupNumberCandidates(query).filter((value) => value.length >= 3)) {
+      orClauses.push({ [column]: { endsWith: digits } });
     }
   }
 
@@ -493,11 +502,27 @@ export async function findLocalCarriersByAuthorities(
     }
   }
 
-  // Exact matches on indexed normalized columns only — no endsWith/contains scans.
-  const orClauses: ({ mcNumberNormalized: string } | { dotNumberNormalized: string })[] = [
+  const orClauses: (
+    | { mcNumberNormalized: string }
+    | { dotNumberNormalized: string }
+    | { mcNumberNormalized: { endsWith: string } }
+    | { dotNumberNormalized: { endsWith: string } }
+  )[] = [
     ...[...mcValues].map((value) => ({ mcNumberNormalized: value })),
     ...[...dotValues].map((value) => ({ dotNumberNormalized: value }))
   ];
+
+  for (const authority of authorities) {
+    const mcDigits = authorityDigits(authority.mcNumber);
+    if (mcDigits && mcDigits.length >= 3) {
+      orClauses.push({ mcNumberNormalized: { endsWith: mcDigits } });
+    }
+
+    const dotDigits = authorityDigits(authority.dotNumber);
+    if (dotDigits && dotDigits.length >= 3) {
+      orClauses.push({ dotNumberNormalized: { endsWith: dotDigits } });
+    }
+  }
 
   if (!orClauses.length) {
     return [];

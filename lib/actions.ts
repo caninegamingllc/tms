@@ -2120,11 +2120,23 @@ export async function generateRateConfirmation(formData: FormData) {
     : primaryAssignment(load.dispatchAssignments.filter((row) => row.carrierId));
 
   if (!assignment?.carrierId) {
-    throw new Error("Assign a carrier before generating a rate confirmation.");
+    redirect(
+      `/loads/${loadId}?error=${encodeURIComponent(
+        "Assign a carrier before generating a rate confirmation."
+      )}`
+    );
   }
 
   const carrier = await requireCompanyCarrier(assignment.carrierId, user.companyId);
-  await assertCarrierDocumentInsuranceForId(carrier.id, carrier.name);
+  try {
+    await assertCarrierDocumentInsuranceForId(carrier.id, carrier.name);
+  } catch (error) {
+    const message =
+      error instanceof Error
+        ? error.message
+        : "Carrier insurance could not be validated.";
+    redirect(`/loads/${loadId}?error=${encodeURIComponent(message)}`);
+  }
 
   const documentNumber = await nextDocumentNumber(user.companyId, "RC");
   const company = await getCompanyBranding(user.companyId);
