@@ -1,13 +1,17 @@
 "use client";
 
 import Link from "next/link";
-import { useEffect, useState } from "react";
+import { useEffect, useRef, useState } from "react";
 import { createPortal } from "react-dom";
 import { ExternalLink, Search, X } from "lucide-react";
 import type { CarrierLookupResult } from "@/lib/carrier-lookup";
 
 /** Match the app's other portal dialogs so map/chrome stay underneath. */
 const QUICK_SEARCH_Z_INDEX = 10000;
+/** Local TMS matches appear quickly while typing. */
+const LOCAL_AUTOCOMPLETE_DEBOUNCE_MS = 200;
+/** Wait for typing to settle before hitting the slow FMCSA API. */
+const FMCSA_AUTOCOMPLETE_IDLE_MS = 1_500;
 
 function complianceBadgeClass(status?: string) {
   switch (status) {
@@ -36,10 +40,30 @@ function addCarrierHref(result: CarrierLookupResult) {
   return `/carriers?${params.toString()}`;
 }
 
+async function fetchCarrierLookup(
+  term: string,
+  scope: "local" | "all",
+  signal?: AbortSignal
+) {
+  const params = new URLSearchParams({ type: "auto", q: term, scope });
+  const response = await fetch(`/api/carriers/lookup?${params.toString()}`, { signal });
+
+  if (!response.ok) {
+    const payload = (await response.json().catch(() => null)) as { error?: string } | null;
+    throw new Error(payload?.error ?? "Carrier lookup is unavailable.");
+  }
+
+  return (await response.json()) as {
+    results?: CarrierLookupResult[];
+    fmcsaAvailable?: boolean;
+  };
+}
+
 export function CarrierQuickSearch() {
   const [query, setQuery] = useState("");
   const [open, setOpen] = useState(false);
   const [loading, setLoading] = useState(false);
+  const [enriching, setEnriching] = useState(false);
   const [autocompleteLoading, setAutocompleteLoading] = useState(false);
   const [error, setError] = useState("");
   const [results, setResults] = useState<CarrierLookupResult[]>([]);
@@ -50,6 +74,7 @@ export function CarrierQuickSearch() {
   const [autocompleteError, setAutocompleteError] = useState("");
   const [hasAutocompleteSearched, setHasAutocompleteSearched] = useState(false);
   const [inputFocused, setInputFocused] = useState(false);
+  const searchGeneration = useRef(0);
 
   useEffect(() => {
     if (!open) {
@@ -77,53 +102,66 @@ export function CarrierQuickSearch() {
       return;
     }
 
-    const controller = new AbortController();
-    const timeout = window.setTimeout(async () => {
+    const localController = new AbortController();
+    const fmcsaController = new AbortController();
+
+    // Fast local autocomplete while typing.
+    const localTimeout = window.setTimeout(async () => {
       try {
         setAutocompleteLoading(true);
         setAutocompleteError("");
-        const params = new URLSearchParams({ type: "auto", q: term });
-        const response = await fetch(`/api/carriers/lookup?${params.toString()}`, {
-          signal: controller.signal
-        });
-
-        if (!response.ok) {
-          const payload = (await response.json().catch(() => null)) as { error?: string } | null;
-          setAutocompleteError(payload?.error ?? "Carrier lookup is unavailable.");
-          setAutocompleteResults([]);
-          return;
-        }
-
-        const payload = (await response.json()) as {
-          results?: CarrierLookupResult[];
-          fmcsaAvailable?: boolean;
-        };
+        const payload = await fetchCarrierLookup(term, "local", localController.signal);
         setAutocompleteResults(payload.results ?? []);
         setFmcsaAvailable(payload.fmcsaAvailable ?? true);
         setHasAutocompleteSearched(true);
-      } catch {
-        if (!controller.signal.aborted) {
+      } catch (lookupError) {
+        if (!localController.signal.aborted) {
           setAutocompleteResults([]);
+          if (lookupError instanceof Error && lookupError.name !== "AbortError") {
+            setAutocompleteError(lookupError.message);
+          }
         }
       } finally {
-        if (!controller.signal.aborted) {
+        if (!localController.signal.aborted) {
           setAutocompleteLoading(false);
         }
       }
-    }, 550);
+    }, LOCAL_AUTOCOMPLETE_DEBOUNCE_MS);
+
+    // FMCSA only after typing has been idle for 1.5s.
+    const fmcsaTimeout = window.setTimeout(async () => {
+      const digits = term.replace(/\D/g, "");
+      if (digits.length < 3) {
+        return;
+      }
+
+      try {
+        const payload = await fetchCarrierLookup(term, "all", fmcsaController.signal);
+        setAutocompleteResults(payload.results ?? []);
+        setFmcsaAvailable(payload.fmcsaAvailable ?? true);
+        setHasAutocompleteSearched(true);
+        setAutocompleteError("");
+      } catch {
+        // Keep local autocomplete results if FMCSA fails or is aborted.
+      }
+    }, FMCSA_AUTOCOMPLETE_IDLE_MS);
 
     return () => {
-      window.clearTimeout(timeout);
-      controller.abort();
+      window.clearTimeout(localTimeout);
+      window.clearTimeout(fmcsaTimeout);
+      localController.abort();
+      fmcsaController.abort();
     };
   }, [inputFocused, open, query]);
 
   async function runSearch(event: React.FormEvent) {
     event.preventDefault();
     const term = query.trim();
+    const generation = ++searchGeneration.current;
 
     setOpen(true);
     setSearchedTerm(term);
+    setEnriching(false);
 
     if (term.length < 3) {
       setError("Enter at least 3 characters of a carrier name, MC, or DOT number.");
@@ -138,28 +176,42 @@ export function CarrierQuickSearch() {
     setHasSearched(false);
 
     try {
-      const params = new URLSearchParams({ type: "auto", q: term });
-      const response = await fetch(`/api/carriers/lookup?${params.toString()}`);
+      // Show TMS matches immediately, then enrich with FMCSA in the background.
+      const localPromise = fetchCarrierLookup(term, "local");
+      const fullPromise = fetchCarrierLookup(term, "all").catch(() => null);
 
-      if (!response.ok) {
-        const payload = (await response.json().catch(() => null)) as { error?: string } | null;
-        setError(payload?.error ?? "Carrier lookup is unavailable.");
-        setResults([]);
+      const localPayload = await localPromise;
+      if (generation !== searchGeneration.current) {
         return;
       }
 
-      const payload = (await response.json()) as {
-        results?: CarrierLookupResult[];
-        fmcsaAvailable?: boolean;
-      };
-      setResults(payload.results ?? []);
-      setFmcsaAvailable(payload.fmcsaAvailable ?? true);
+      setResults(localPayload.results ?? []);
+      setFmcsaAvailable(localPayload.fmcsaAvailable ?? true);
       setHasSearched(true);
-    } catch {
-      setError("Carrier lookup is unavailable.");
+      setLoading(false);
+      setEnriching(true);
+
+      const fullPayload = await fullPromise;
+      if (generation !== searchGeneration.current) {
+        return;
+      }
+
+      if (fullPayload) {
+        setResults(fullPayload.results ?? []);
+        setFmcsaAvailable(fullPayload.fmcsaAvailable ?? true);
+      }
+    } catch (lookupError) {
+      if (generation !== searchGeneration.current) {
+        return;
+      }
+
+      setError(lookupError instanceof Error ? lookupError.message : "Carrier lookup is unavailable.");
       setResults([]);
     } finally {
-      setLoading(false);
+      if (generation === searchGeneration.current) {
+        setLoading(false);
+        setEnriching(false);
+      }
     }
   }
 
@@ -203,6 +255,7 @@ export function CarrierQuickSearch() {
             {searchedTerm ? (
               <p className="mt-0.5 truncate text-sm text-muted-foreground">
                 Results for &ldquo;{searchedTerm}&rdquo;
+                {enriching ? " · Checking FMCSA…" : ""}
               </p>
             ) : null}
           </div>
@@ -317,12 +370,18 @@ export function CarrierQuickSearch() {
             </ul>
           ) : hasSearched ? (
             <div className="py-6 text-center">
-              <p className="text-sm text-foreground">No carrier found for &ldquo;{searchedTerm}&rdquo;.</p>
-              <p className="mt-1 text-xs text-muted-foreground">
-                {fmcsaAvailable
-                  ? "Checked your carrier network and FMCSA."
-                  : "Checked your carrier network. Add FMCSA_WEB_KEY to enable federal search."}
+              <p className="text-sm text-foreground">
+                {enriching
+                  ? "No local matches yet — checking FMCSA…"
+                  : <>No carrier found for &ldquo;{searchedTerm}&rdquo;.</>}
               </p>
+              {!enriching ? (
+                <p className="mt-1 text-xs text-muted-foreground">
+                  {fmcsaAvailable
+                    ? "Checked your carrier network and FMCSA."
+                    : "Checked your carrier network. Add FMCSA_WEB_KEY to enable federal search."}
+                </p>
+              ) : null}
             </div>
           ) : null}
         </div>

@@ -51,7 +51,16 @@ type FmcsaResponse = {
 const FMCSA_BASE_URL = "https://mobile.fmcsa.dot.gov/qc/services";
 const SEARCH_LIMIT = 8;
 const CACHE_TTL_MS = 5 * 60 * 1000;
+/** Cap remote FMCSA waits so quick search never hangs on a slow federal API. */
+export const FMCSA_LOOKUP_TIMEOUT_MS = 1_200;
 const fmcsaCache = new Map<string, { expiresAt: number; results: CarrierLookupResult[] }>();
+
+export type CarrierLookupOptions = {
+  /** When false, skip FMCSA and return local TMS matches only. */
+  includeFmcsa?: boolean;
+  /** Abort FMCSA after this many ms; local results are still returned. */
+  fmcsaTimeoutMs?: number;
+};
 
 export function isFmcsaConfigured() {
   return Boolean(process.env.FMCSA_WEB_KEY?.trim());
@@ -257,10 +266,8 @@ export async function searchLocalCarriers(
   const fields: ("mc" | "dot")[] = type === "auto" ? ["mc", "dot"] : [type];
   const orClauses: {
     name?: { contains: string; mode: "insensitive" };
-    mcNumberNormalized?: { startsWith?: string; endsWith?: string };
-    dotNumberNormalized?: { startsWith?: string; endsWith?: string };
-    mcNumber?: { contains: string; mode: "insensitive" };
-    dotNumber?: { contains: string; mode: "insensitive" };
+    mcNumberNormalized?: { startsWith: string };
+    dotNumberNormalized?: { startsWith: string };
   }[] = [];
 
   if (type === "auto" && trimmed.length >= 3) {
@@ -269,16 +276,13 @@ export async function searchLocalCarriers(
 
   for (const field of fields) {
     const column = field === "mc" ? "mcNumberNormalized" : "dotNumberNormalized";
-    const rawColumn = field === "mc" ? "mcNumber" : "dotNumber";
-    const candidates = localLookupCandidates(field, query).filter((value) => value.length >= 3);
+    // Indexed prefix matches only. Require a digit so name queries like "Homeland"
+    // do not scan authority columns via letter-only normalized candidates.
+    const candidates = localLookupCandidates(field, query).filter(
+      (value) => value.length >= 3 && /\d/.test(value)
+    );
     for (const candidate of candidates) {
       orClauses.push({ [column]: { startsWith: candidate } });
-    }
-
-    // Match "DOT2418890" / "MC784512" when the user typed digits only.
-    for (const digits of carrierLookupNumberCandidates(query).filter((value) => value.length >= 3)) {
-      orClauses.push({ [column]: { endsWith: digits } });
-      orClauses.push({ [rawColumn]: { contains: digits, mode: "insensitive" } });
     }
   }
 
@@ -299,13 +303,20 @@ export async function searchLocalCarriers(
   return carriers.map(mapLocalCarrier);
 }
 
-async function fetchFmcsaCarriers(type: "mc" | "dot", query: string) {
+async function fetchFmcsaCarriers(type: "mc" | "dot", query: string, timeoutMs = FMCSA_LOOKUP_TIMEOUT_MS) {
   const lookupNumbers = carrierLookupNumberCandidates(query).filter((value) => value.length >= 3);
   if (!lookupNumbers.length) {
     return [];
   }
 
+  const deadline = Date.now() + timeoutMs;
+
   for (const lookupNumber of lookupNumbers) {
+    const remainingMs = deadline - Date.now();
+    if (remainingMs <= 0) {
+      break;
+    }
+
     const cacheKey = `fmcsa:${type}:${lookupNumber}`;
     const now = Date.now();
     const cached = fmcsaCache.get(cacheKey);
@@ -324,7 +335,17 @@ async function fetchFmcsaCarriers(type: "mc" | "dot", query: string) {
         : `carriers/docket-number/${encodeURIComponent(lookupNumber)}`;
     const url = `${FMCSA_BASE_URL}/${path}?webKey=${encodeURIComponent(webKey)}`;
 
-    const response = await fetch(url, { cache: "no-store" });
+    let response: Response;
+    try {
+      response = await fetch(url, {
+        cache: "no-store",
+        signal: AbortSignal.timeout(remainingMs)
+      });
+    } catch {
+      // Timeout / network — try next candidate or give up without blocking the UI.
+      continue;
+    }
+
     if (!response.ok) {
       if (response.status === 404) {
         fmcsaCache.set(cacheKey, { results: [], expiresAt: now + CACHE_TTL_MS });
@@ -353,9 +374,13 @@ async function fetchFmcsaCarriers(type: "mc" | "dot", query: string) {
   return [];
 }
 
-async function fetchFmcsaForType(type: "mc" | "dot" | "auto", query: string) {
+async function fetchFmcsaForType(
+  type: "mc" | "dot" | "auto",
+  query: string,
+  timeoutMs = FMCSA_LOOKUP_TIMEOUT_MS
+) {
   if (type !== "auto") {
-    return fetchFmcsaCarriers(type, query);
+    return fetchFmcsaCarriers(type, query, timeoutMs);
   }
 
   // FMCSA only supports MC/DOT number lookups. Skip federal search for name queries.
@@ -367,8 +392,8 @@ async function fetchFmcsaForType(type: "mc" | "dot" | "auto", query: string) {
   // An MC docket of one carrier can equal the USDOT of another. Always query
   // both authorities and keep every distinct hit.
   const [mcResults, dotResults] = await Promise.all([
-    fetchFmcsaCarriers("mc", query),
-    fetchFmcsaCarriers("dot", query)
+    fetchFmcsaCarriers("mc", query, timeoutMs),
+    fetchFmcsaCarriers("dot", query, timeoutMs)
   ]);
 
   return mergeLookupResults([], [...mcResults, ...dotResults]);
@@ -468,31 +493,11 @@ export async function findLocalCarriersByAuthorities(
     }
   }
 
-  const orClauses: (
-    | { mcNumberNormalized: string }
-    | { dotNumberNormalized: string }
-    | { mcNumberNormalized: { endsWith: string } }
-    | { dotNumberNormalized: { endsWith: string } }
-    | { mcNumber: { contains: string; mode: "insensitive" } }
-    | { dotNumber: { contains: string; mode: "insensitive" } }
-  )[] = [
+  // Exact matches on indexed normalized columns only — no endsWith/contains scans.
+  const orClauses: ({ mcNumberNormalized: string } | { dotNumberNormalized: string })[] = [
     ...[...mcValues].map((value) => ({ mcNumberNormalized: value })),
     ...[...dotValues].map((value) => ({ dotNumberNormalized: value }))
   ];
-
-  for (const authority of authorities) {
-    const mcDigits = authorityDigits(authority.mcNumber);
-    if (mcDigits && mcDigits.length >= 3) {
-      orClauses.push({ mcNumberNormalized: { endsWith: mcDigits } });
-      orClauses.push({ mcNumber: { contains: mcDigits, mode: "insensitive" } });
-    }
-
-    const dotDigits = authorityDigits(authority.dotNumber);
-    if (dotDigits && dotDigits.length >= 3) {
-      orClauses.push({ dotNumberNormalized: { endsWith: dotDigits } });
-      orClauses.push({ dotNumber: { contains: dotDigits, mode: "insensitive" } });
-    }
-  }
 
   if (!orClauses.length) {
     return [];
@@ -514,20 +519,24 @@ export async function findLocalCarriersByAuthorities(
 export async function lookupCarriers(
   companyId: string,
   type: "mc" | "dot" | "auto",
-  query: string
+  query: string,
+  options: CarrierLookupOptions = {}
 ): Promise<{ results: CarrierLookupResult[]; fmcsaAvailable: boolean }> {
+  const includeFmcsa = options.includeFmcsa !== false;
+  const fmcsaTimeoutMs = options.fmcsaTimeoutMs ?? FMCSA_LOOKUP_TIMEOUT_MS;
   const fmcsaAvailable = isFmcsaConfigured();
 
   let fmcsaResults: CarrierLookupResult[] = [];
   let fmcsaError: Error | null = null;
 
   const localPromise = searchLocalCarriers(companyId, type, query);
-  const fmcsaPromise = fmcsaAvailable
-    ? fetchFmcsaForType(type, query).catch((error) => {
-        fmcsaError = error instanceof Error ? error : new Error("FMCSA lookup failed.");
-        return [] as CarrierLookupResult[];
-      })
-    : Promise.resolve([] as CarrierLookupResult[]);
+  const fmcsaPromise =
+    includeFmcsa && fmcsaAvailable
+      ? fetchFmcsaForType(type, query, fmcsaTimeoutMs).catch((error) => {
+          fmcsaError = error instanceof Error ? error : new Error("FMCSA lookup failed.");
+          return [] as CarrierLookupResult[];
+        })
+      : Promise.resolve([] as CarrierLookupResult[]);
 
   const [localResults, remoteResults] = await Promise.all([localPromise, fmcsaPromise]);
   fmcsaResults = remoteResults;

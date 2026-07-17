@@ -19,6 +19,7 @@ export async function GET(request: NextRequest) {
 
   const typeParam = request.nextUrl.searchParams.get("type");
   const query = request.nextUrl.searchParams.get("q")?.trim() ?? "";
+  const scope = request.nextUrl.searchParams.get("scope");
 
   if (typeParam !== "mc" && typeParam !== "dot" && typeParam !== "auto") {
     return NextResponse.json({ error: "Lookup type must be mc, dot, or auto." }, { status: 400 });
@@ -33,7 +34,9 @@ export async function GET(request: NextRequest) {
   }
 
   try {
-    const payload = await lookupCarriers(user.companyId, typeParam, query);
+    const payload = await lookupCarriers(user.companyId, typeParam, query, {
+      includeFmcsa: scope !== "local"
+    });
     return NextResponse.json(payload);
   } catch (error) {
     const message = error instanceof Error ? error.message : "Carrier lookup is unavailable.";
