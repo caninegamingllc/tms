@@ -120,19 +120,33 @@ function mapFmcsaCarrier(carrier: FmcsaCarrierRecord, index: number): CarrierLoo
   };
 }
 
-function fmcsaLookupNumber(type: "mc" | "dot", query: string) {
+export function carrierLookupNumberCandidates(query: string) {
   const digits = query.replace(/\D/g, "");
-  if (type === "dot") {
-    return digits;
+  const withoutLeadingZeros = digits.replace(/^0+/, "");
+  const candidates = new Set<string>();
+
+  if (withoutLeadingZeros) {
+    candidates.add(withoutLeadingZeros);
   }
 
-  return digits;
+  if (digits) {
+    candidates.add(digits);
+  }
+
+  return [...candidates];
 }
 
-function localLookupCandidates(type: "mc" | "dot", query: string) {
+export function localLookupCandidates(type: "mc" | "dot", query: string) {
   const normalized = normalizeCarrierNumber(query);
   const digits = query.replace(/\D/g, "");
   const candidates = new Set<string>();
+
+  for (const candidate of carrierLookupNumberCandidates(query)) {
+    candidates.add(candidate);
+    if (type === "mc") {
+      candidates.add(`MC${candidate}`);
+    }
+  }
 
   if (normalized) {
     candidates.add(normalized);
@@ -271,44 +285,55 @@ export async function searchLocalCarriers(
 }
 
 async function fetchFmcsaCarriers(type: "mc" | "dot", query: string) {
-  const lookupNumber = fmcsaLookupNumber(type, query);
-  if (!lookupNumber || lookupNumber.length < 3) {
+  const lookupNumbers = carrierLookupNumberCandidates(query).filter((value) => value.length >= 3);
+  if (!lookupNumbers.length) {
     return [];
   }
 
-  const cacheKey = `fmcsa:${type}:${lookupNumber}`;
-  const now = Date.now();
-  const cached = fmcsaCache.get(cacheKey);
-  if (cached && cached.expiresAt > now) {
-    return cached.results;
-  }
+  for (const lookupNumber of lookupNumbers) {
+    const cacheKey = `fmcsa:${type}:${lookupNumber}`;
+    const now = Date.now();
+    const cached = fmcsaCache.get(cacheKey);
+    if (cached && cached.expiresAt > now) {
+      if (cached.results.length > 0) {
+        return cached.results;
+      }
 
-  const webKey = getFmcsaWebKey();
-  const path =
-    type === "dot"
-      ? `carriers/${encodeURIComponent(lookupNumber)}`
-      : `carriers/docket-number/${encodeURIComponent(lookupNumber)}`;
-  const url = `${FMCSA_BASE_URL}/${path}?webKey=${encodeURIComponent(webKey)}`;
-
-  const response = await fetch(url, { cache: "no-store" });
-  if (!response.ok) {
-    if (response.status === 404) {
-      return [];
+      continue;
     }
 
-    throw new Error(`FMCSA lookup failed with status ${response.status}.`);
+    const webKey = getFmcsaWebKey();
+    const path =
+      type === "dot"
+        ? `carriers/${encodeURIComponent(lookupNumber)}`
+        : `carriers/docket-number/${encodeURIComponent(lookupNumber)}`;
+    const url = `${FMCSA_BASE_URL}/${path}?webKey=${encodeURIComponent(webKey)}`;
+
+    const response = await fetch(url, { cache: "no-store" });
+    if (!response.ok) {
+      if (response.status === 404) {
+        fmcsaCache.set(cacheKey, { results: [], expiresAt: now + CACHE_TTL_MS });
+        continue;
+      }
+
+      throw new Error(`FMCSA lookup failed with status ${response.status}.`);
+    }
+
+    const payload = (await response.json()) as FmcsaResponse;
+    const baseResults = extractFmcsaCarriers(payload)
+      .map((carrier, index) => mapFmcsaCarrier(carrier, index))
+      .filter((result): result is CarrierLookupResult => Boolean(result))
+      .slice(0, SEARCH_LIMIT);
+
+    const results = await Promise.all(baseResults.map((result) => attachFmcsaInsurance(result)));
+
+    fmcsaCache.set(cacheKey, { results, expiresAt: now + CACHE_TTL_MS });
+    if (results.length > 0) {
+      return results;
+    }
   }
 
-  const payload = (await response.json()) as FmcsaResponse;
-  const baseResults = extractFmcsaCarriers(payload)
-    .map((carrier, index) => mapFmcsaCarrier(carrier, index))
-    .filter((result): result is CarrierLookupResult => Boolean(result))
-    .slice(0, SEARCH_LIMIT);
-
-  const results = await Promise.all(baseResults.map((result) => attachFmcsaInsurance(result)));
-
-  fmcsaCache.set(cacheKey, { results, expiresAt: now + CACHE_TTL_MS });
-  return results;
+  return [];
 }
 
 async function attachFmcsaInsurance(result: CarrierLookupResult): Promise<CarrierLookupResult> {

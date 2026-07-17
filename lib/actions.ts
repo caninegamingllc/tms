@@ -18,6 +18,13 @@ import {
 import { enqueueJob } from "@/lib/jobs";
 import { normalizeCarrierNumber } from "@/lib/carrier-numbers";
 import {
+  canClearCarrierDnu,
+  carrierDnuAssignmentErrorMessage,
+  assertCarrierDocumentInsuranceReady,
+  isCarrierDnu
+} from "@/lib/carrier-compliance";
+import { isAdminRole } from "@/lib/scope";
+import {
   FMCSA_INSURANCE_NOTE,
   FMCSA_INSURANCE_NOTE_LEGACY,
   fetchFmcsaInsuranceCoverages
@@ -153,6 +160,25 @@ async function requireCompanyLoad(loadId: string, user: SessionUser) {
 
 async function requireCompanyCarrier(carrierId: string, companyId: string) {
   return prisma.carrier.findUniqueOrThrow({ where: { id: carrierId, companyId } });
+}
+
+async function assertCarrierAssignable(carrier: { id: string; name: string; dnuAt: Date | null }) {
+  if (isCarrierDnu(carrier)) {
+    throw new Error(carrierDnuAssignmentErrorMessage(carrier.name));
+  }
+}
+
+async function assertCarrierDocumentInsuranceForId(carrierId: string, carrierName: string) {
+  const coverages = await prisma.carrierInsuranceCoverage.findMany({
+    where: { carrierId },
+    select: {
+      coverageType: true,
+      insurerName: true,
+      policyNumber: true,
+      expiresAt: true
+    }
+  });
+  assertCarrierDocumentInsuranceReady(carrierName, coverages);
 }
 
 async function duplicateCarrierAuthority(
@@ -644,7 +670,9 @@ export async function updateCarrier(formData: FormData) {
 
   const next = {
     name: requiredString(formData, "name"),
-    status: requiredString(formData, "status"),
+    status: isCarrierDnu(existing)
+      ? "Do Not Use"
+      : requiredString(formData, "status"),
     mcNumber: mcNumber ?? null,
     mcNumberNormalized: mcNumberNormalized ?? null,
     dotNumber: dotNumber ?? null,
@@ -729,6 +757,73 @@ export async function updateCarrier(formData: FormData) {
           userId: user.id,
           action: "Carrier updated",
           details
+        }
+      }
+    }
+  });
+
+  revalidatePath("/carriers");
+  revalidatePath(`/carriers/${carrierId}`);
+  redirect(`/carriers/${carrierId}?saved=1`);
+}
+
+export async function markCarrierDnu(formData: FormData) {
+  const user = await requireWriteUser();
+  const carrierId = requiredString(formData, "carrierId");
+  const carrier = await requireCompanyCarrier(carrierId, user.companyId);
+
+  if (isCarrierDnu(carrier)) {
+    redirect(`/carriers/${carrierId}?error=${encodeURIComponent("Carrier is already marked Do Not Use.")}`);
+  }
+
+  await prisma.carrier.update({
+    where: { id: carrierId },
+    data: {
+      dnuAt: new Date(),
+      dnuMarkedByUserId: user.id,
+      status: "Do Not Use",
+      activities: {
+        create: {
+          userId: user.id,
+          action: "Marked Do Not Use",
+          details: "Carrier cannot be assigned to loads until DNU is cleared."
+        }
+      }
+    }
+  });
+
+  revalidatePath("/carriers");
+  revalidatePath(`/carriers/${carrierId}`);
+  redirect(`/carriers/${carrierId}?saved=1`);
+}
+
+export async function clearCarrierDnu(formData: FormData) {
+  const user = await requireWriteUser();
+  const carrierId = requiredString(formData, "carrierId");
+  const carrier = await requireCompanyCarrier(carrierId, user.companyId);
+
+  if (!isCarrierDnu(carrier)) {
+    redirect(`/carriers/${carrierId}?error=${encodeURIComponent("Carrier is not marked Do Not Use.")}`);
+  }
+
+  if (!canClearCarrierDnu(user, carrier)) {
+    redirect(
+      `/carriers/${carrierId}?error=${encodeURIComponent("Only the user who marked this carrier DNU or an admin can clear it.")}`
+    );
+  }
+
+  await prisma.carrier.update({
+    where: { id: carrierId },
+    data: {
+      dnuAt: null,
+      dnuMarkedByUserId: null,
+      activities: {
+        create: {
+          userId: user.id,
+          action: "Cleared Do Not Use",
+          details: isAdminRole(user.role)
+            ? "DNU cleared by admin."
+            : "DNU cleared by the user who originally marked it."
         }
       }
     }
@@ -1444,7 +1539,8 @@ export async function assignCarrier(formData: FormData) {
   const assignmentId = optionalString(formData, "assignmentId");
   const isAdditional = String(formData.get("isAdditional") ?? "") === "1";
   await requireCompanyLoad(loadId, user);
-  await requireCompanyCarrier(carrierId, user.companyId);
+  const carrier = await requireCompanyCarrier(carrierId, user.companyId);
+  await assertCarrierAssignable(carrier);
   await ensureCompanyCatalogs(user.companyId);
 
   const lane = parseAssignmentLaneFields(formData);
@@ -2027,6 +2123,9 @@ export async function generateRateConfirmation(formData: FormData) {
     throw new Error("Assign a carrier before generating a rate confirmation.");
   }
 
+  const carrier = await requireCompanyCarrier(assignment.carrierId, user.companyId);
+  await assertCarrierDocumentInsuranceForId(carrier.id, carrier.name);
+
   const documentNumber = await nextDocumentNumber(user.companyId, "RC");
   const company = await getCompanyBranding(user.companyId);
 
@@ -2079,6 +2178,13 @@ export async function generateBillOfLading(formData: FormData) {
   await assertPlanFeature(user.companyId, "generate_bol");
   const loadId = requiredString(formData, "loadId");
   const load = await loadForDocument(loadId, user);
+
+  const assignedCarriers = load.dispatchAssignments.filter((row) => row.carrierId);
+  for (const assignment of assignedCarriers) {
+    const carrier = await requireCompanyCarrier(assignment.carrierId!, user.companyId);
+    await assertCarrierDocumentInsuranceForId(carrier.id, carrier.name);
+  }
+
   const documentNumber = `BOL-${load.loadNumber}`;
   const company = await getCompanyBranding(user.companyId);
 

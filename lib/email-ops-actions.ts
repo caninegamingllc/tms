@@ -36,6 +36,7 @@ import {
   dispatchAssignmentsDocumentInclude,
   primaryAssignment
 } from "@/lib/dispatch-assignment";
+import { assertCarrierDocumentInsuranceReady } from "@/lib/carrier-compliance";
 
 export type EmailPurpose =
   | "CARRIER_RATE_CONFIRMATION"
@@ -225,6 +226,47 @@ async function ensurePrimaryDocument(
       : load.documents.find((item) => item.type === docType);
 
   if (!document) {
+    if (docType === "RATE_CONFIRMATION" && assignment?.carrierId) {
+      const carrier = await prisma.carrier.findUniqueOrThrow({
+        where: { id: assignment.carrierId, companyId: user.companyId },
+        include: {
+          insuranceCoverages: {
+            select: {
+              coverageType: true,
+              insurerName: true,
+              policyNumber: true,
+              expiresAt: true
+            }
+          }
+        }
+      });
+      assertCarrierDocumentInsuranceReady(carrier.name, carrier.insuranceCoverages);
+    }
+
+    if (docType === "BOL") {
+      const carrierIds = [
+        ...new Set(
+          load.dispatchAssignments.map((row) => row.carrierId).filter(Boolean) as string[]
+        )
+      ];
+      for (const carrierId of carrierIds) {
+        const carrier = await prisma.carrier.findUniqueOrThrow({
+          where: { id: carrierId, companyId: user.companyId },
+          include: {
+            insuranceCoverages: {
+              select: {
+                coverageType: true,
+                insurerName: true,
+                policyNumber: true,
+                expiresAt: true
+              }
+            }
+          }
+        });
+        assertCarrierDocumentInsuranceReady(carrier.name, carrier.insuranceCoverages);
+      }
+    }
+
     const documentNumber =
       docType === "INVOICE"
         ? load.invoices[0]?.invoiceNo ?? (await nextInvoiceNumber(user.companyId))

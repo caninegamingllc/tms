@@ -130,7 +130,7 @@ export default async function LoadDetailPage({
         carrierBills: { include: { carrier: true } }
       }
     }),
-    prisma.carrier.findMany({ where: scope, orderBy: { name: "asc" } }),
+    prisma.carrier.findMany({ where: { ...scope, dnuAt: null }, orderBy: { name: "asc" } }),
     canManageUsers(user)
       ? prisma.commissionProfile.findMany({
           where: { companyId: user.companyId },

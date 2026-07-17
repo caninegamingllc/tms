@@ -1,6 +1,11 @@
 import assert from "node:assert/strict";
 import { describe, it } from "node:test";
-import { mergeLookupResults, type CarrierLookupResult } from "@/lib/carrier-lookup";
+import {
+  carrierLookupNumberCandidates,
+  localLookupCandidates,
+  mergeLookupResults,
+  type CarrierLookupResult
+} from "@/lib/carrier-lookup";
 
 function localResult(overrides: Partial<CarrierLookupResult> & Pick<CarrierLookupResult, "name">): CarrierLookupResult {
   return {
@@ -20,6 +25,22 @@ function fmcsaResult(overrides: Partial<CarrierLookupResult> & Pick<CarrierLooku
     ...overrides
   };
 }
+
+describe("carrierLookupNumberCandidates", () => {
+  it("tries the number without leading zeros before the original digits", () => {
+    assert.deepEqual(carrierLookupNumberCandidates("MC-001234"), ["1234", "001234"]);
+  });
+
+  it("does not duplicate a number that has no leading zeros", () => {
+    assert.deepEqual(carrierLookupNumberCandidates("MC-1234"), ["1234"]);
+  });
+});
+
+describe("localLookupCandidates", () => {
+  it("prefers stripped MC candidates while keeping zero-padded fallbacks", () => {
+    assert.deepEqual(localLookupCandidates("mc", "MC-001234"), ["1234", "MC1234", "001234", "MC001234"]);
+  });
+});
 
 describe("mergeLookupResults", () => {
   it("promotes an FMCSA hit to the existing TMS carrier when DOT matches", () => {
