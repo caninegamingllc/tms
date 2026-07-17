@@ -28,6 +28,12 @@ export type SortableColumn<T> = {
   sortable?: boolean;
   /** When false, the column cannot be dragged to a new position. Default true. */
   reorderable?: boolean;
+  /** Initial and allowed widths for user-resizable columns, in pixels. */
+  width?: number;
+  minWidth?: number;
+  maxWidth?: number;
+  /** When false, the column width cannot be adjusted. Default true when tableId is set. */
+  resizable?: boolean;
   sortValue?: (row: T) => string | number | Date | boolean | null | undefined;
   render: (row: T) => React.ReactNode;
   className?: string;
@@ -58,6 +64,10 @@ const INTERACTIVE_SELECTOR = "a, button, input, select, textarea, label, [role='
 
 function columnOrderStorageKey(tableId: string) {
   return `tms.table.columnOrder.${tableId}`;
+}
+
+function columnWidthsStorageKey(tableId: string) {
+  return `tms.table.columnWidths.${tableId}`;
 }
 
 export function mergeColumnOrder(defaultIds: string[], saved: string[] | null | undefined): string[] {
@@ -177,6 +187,75 @@ export function useColumnOrder(tableId: string | undefined, columnIds: string[])
   return { order, setOrder, moveColumn, resetOrder, isCustomized, hydrated };
 }
 
+export function useColumnWidths(tableId: string | undefined, columnIds: string[]) {
+  const defaultsKey = columnIds.join("|");
+  const [widths, setWidths] = useState<Record<string, number>>({});
+  const [hydrated, setHydrated] = useState(!tableId);
+
+  useEffect(() => {
+    if (!tableId) {
+      setWidths({});
+      setHydrated(true);
+      return;
+    }
+
+    try {
+      const raw = window.localStorage.getItem(columnWidthsStorageKey(tableId));
+      const saved = raw ? (JSON.parse(raw) as unknown) : null;
+      if (saved && typeof saved === "object" && !Array.isArray(saved)) {
+        const known = new Set(columnIds);
+        const valid = Object.fromEntries(
+          Object.entries(saved).filter(
+            ([id, width]) => known.has(id) && typeof width === "number" && Number.isFinite(width)
+          )
+        ) as Record<string, number>;
+        setWidths(valid);
+      } else {
+        setWidths({});
+      }
+    } catch {
+      setWidths({});
+    }
+    setHydrated(true);
+  }, [tableId, defaultsKey]); // eslint-disable-line react-hooks/exhaustive-deps -- columnIds via defaultsKey
+
+  const setColumnWidth = useCallback(
+    (columnId: string, width: number) => {
+      setWidths((current) => {
+        const next = { ...current, [columnId]: Math.round(width) };
+        if (tableId) {
+          try {
+            window.localStorage.setItem(columnWidthsStorageKey(tableId), JSON.stringify(next));
+          } catch {
+            // ignore quota / private mode
+          }
+        }
+        return next;
+      });
+    },
+    [tableId]
+  );
+
+  const resetWidths = useCallback(() => {
+    setWidths({});
+    if (tableId) {
+      try {
+        window.localStorage.removeItem(columnWidthsStorageKey(tableId));
+      } catch {
+        // ignore
+      }
+    }
+  }, [tableId]);
+
+  return {
+    widths,
+    setColumnWidth,
+    resetWidths,
+    isCustomized: hydrated && Object.keys(widths).length > 0,
+    hydrated
+  };
+}
+
 export function navigateFromRowClick(
   event: MouseEvent<HTMLElement>,
   href: string,
@@ -262,7 +341,10 @@ function ColumnHeaderCell<T>({
   onDragOver,
   onDragLeave,
   onDrop,
-  onDragEnd
+  onDragEnd,
+  width,
+  resizeEnabled,
+  onResize
 }: {
   column: SortableColumn<T>;
   isSortable: boolean;
@@ -276,8 +358,41 @@ function ColumnHeaderCell<T>({
   onDragLeave: (columnId: string) => void;
   onDrop: (columnId: string, event: DragEvent<HTMLElement>) => void;
   onDragEnd: () => void;
+  width?: number;
+  resizeEnabled: boolean;
+  onResize?: (columnId: string, width: number) => void;
 }) {
   const canReorder = reorderEnabled && column.reorderable !== false;
+  const canResize = resizeEnabled && column.resizable !== false && Boolean(onResize);
+
+  function startResize(event: MouseEvent<HTMLSpanElement>) {
+    if (!canResize || !onResize) {
+      return;
+    }
+
+    event.preventDefault();
+    event.stopPropagation();
+    const header = event.currentTarget.closest("th");
+    const startWidth = header?.getBoundingClientRect().width ?? width ?? column.width ?? 120;
+    const startX = event.clientX;
+    const minWidth = column.minWidth ?? 72;
+    const maxWidth = column.maxWidth ?? 640;
+
+    function handleMouseMove(moveEvent: globalThis.MouseEvent) {
+      const nextWidth = Math.min(maxWidth, Math.max(minWidth, startWidth + moveEvent.clientX - startX));
+      onResize?.(column.id, nextWidth);
+    }
+
+    function handleMouseUp() {
+      window.removeEventListener("mousemove", handleMouseMove);
+      window.removeEventListener("mouseup", handleMouseUp);
+      document.body.classList.remove("table-column-resizing");
+    }
+
+    document.body.classList.add("table-column-resizing");
+    window.addEventListener("mousemove", handleMouseMove);
+    window.addEventListener("mouseup", handleMouseUp);
+  }
 
   return (
     <th
@@ -289,6 +404,7 @@ function ColumnHeaderCell<T>({
       )}
       data-active={isActive || undefined}
       data-column-id={column.id}
+      style={width ? { width } : column.width ? { width: column.width } : undefined}
       aria-sort={
         isSortable
           ? isActive
@@ -338,6 +454,17 @@ function ColumnHeaderCell<T>({
           <span className="truncate">{column.label}</span>
         )}
       </div>
+      {canResize ? (
+        <span
+          className="table-col-resize-handle"
+          role="separator"
+          aria-orientation="vertical"
+          aria-label={`Resize ${typeof column.label === "string" ? column.label : "column"}`}
+          title="Drag to resize column"
+          onMouseDown={startResize}
+          onClick={(event) => event.stopPropagation()}
+        />
+      ) : null}
     </th>
   );
 }
@@ -427,6 +554,12 @@ export function SortableTable<T>({
     reorderEnabled ? tableId : undefined,
     columnIds
   );
+  const {
+    widths: columnWidths,
+    setColumnWidth,
+    resetWidths,
+    isCustomized: widthsCustomized
+  } = useColumnWidths(tableId, columnIds);
   const orderedColumns = useMemo(() => applyColumnOrder(columns, order), [columns, order]);
   const columnsById = useMemo(
     () => new Map(columns.map((column) => [column.id, column])),
@@ -480,12 +613,30 @@ export function SortableTable<T>({
     (column) => column.sortable !== false && column.sortValue
   ).length;
 
+  const resetLayout = useCallback(() => {
+    resetOrder();
+    resetWidths();
+  }, [resetOrder, resetWidths]);
+
   return (
     <div>
-      {reorderEnabled ? (
-        <ColumnLayoutControls onReset={resetOrder} isCustomized={isCustomized} />
+      {tableId ? (
+        <ColumnLayoutControls
+          onReset={resetLayout}
+          isCustomized={isCustomized || widthsCustomized}
+        />
       ) : null}
       <table className={clsx("table", className)}>
+        <colgroup>
+          {orderedColumns.map((column) => (
+            <col
+              key={column.id}
+              style={{
+                width: columnWidths[column.id] ?? column.width
+              }}
+            />
+          ))}
+        </colgroup>
         <thead>
           <tr>
             {orderedColumns.map((column) => {
@@ -508,6 +659,9 @@ export function SortableTable<T>({
                   onDragLeave={drag.onDragLeave}
                   onDrop={drag.onDrop}
                   onDragEnd={drag.onDragEnd}
+                  width={columnWidths[column.id]}
+                  resizeEnabled={Boolean(tableId)}
+                  onResize={setColumnWidth}
                 />
               );
             })}
@@ -615,8 +769,31 @@ export function useOrderedColumns<T extends { id: string }>(
     tableId,
     columnIds
   );
+  const {
+    widths: columnWidths,
+    setColumnWidth,
+    resetWidths,
+    isCustomized: widthsCustomized
+  } = useColumnWidths(tableId, columnIds);
   const orderedColumns = useMemo(() => applyColumnOrder(columns, order), [columns, order]);
-  return { orderedColumns, order, moveColumn, setOrder, resetOrder, isCustomized, hydrated };
+  const resetLayout = useCallback(() => {
+    resetOrder();
+    resetWidths();
+  }, [resetOrder, resetWidths]);
+  return {
+    orderedColumns,
+    order,
+    moveColumn,
+    setOrder,
+    resetOrder,
+    isCustomized,
+    hydrated,
+    columnWidths,
+    setColumnWidth,
+    resetWidths,
+    resetLayout,
+    isLayoutCustomized: isCustomized || widthsCustomized
+  };
 }
 
 export function ColumnLayoutControls({
@@ -636,8 +813,8 @@ export function ColumnLayoutControls({
         onClick={onReset}
         title={
           isCustomized
-            ? "Restore the original column order"
-            : "Column order is already the default"
+            ? "Restore the original column order and widths"
+            : "Column layout is already the default"
         }
       >
         Reset to default
@@ -651,13 +828,17 @@ export function SortableTableHeader<T>({
   sortState,
   onSort,
   columnReorder = false,
-  onMoveColumn
+  onMoveColumn,
+  columnWidths,
+  onColumnResize
 }: {
   columns: SortableColumn<T>[];
   sortState: { columnId: string; direction: SortDirection };
   onSort: (columnId: string) => void;
   columnReorder?: boolean;
   onMoveColumn?: (fromId: string, toId: string) => void;
+  columnWidths?: Record<string, number>;
+  onColumnResize?: (columnId: string, width: number) => void;
 }) {
   const columnsById = useMemo(
     () => new Map(columns.map((column) => [column.id, column])),
@@ -674,9 +855,20 @@ export function SortableTableHeader<T>({
   ).length;
 
   return (
-    <thead>
-      <tr>
-        {columns.map((column) => {
+    <>
+      <colgroup>
+        {columns.map((column) => (
+          <col
+            key={column.id}
+            style={{
+              width: columnWidths?.[column.id] ?? column.width
+            }}
+          />
+        ))}
+      </colgroup>
+      <thead>
+        <tr>
+          {columns.map((column) => {
           const isSortable =
             column.sortable !== false && column.sortValue != null && sortableColumnCount > 0;
           const isActive = sortState.columnId === column.id;
@@ -696,10 +888,14 @@ export function SortableTableHeader<T>({
               onDragLeave={drag.onDragLeave}
               onDrop={drag.onDrop}
               onDragEnd={drag.onDragEnd}
+              width={columnWidths?.[column.id]}
+              resizeEnabled={Boolean(onColumnResize)}
+              onResize={onColumnResize}
             />
           );
-        })}
-      </tr>
-    </thead>
+          })}
+        </tr>
+      </thead>
+    </>
   );
 }

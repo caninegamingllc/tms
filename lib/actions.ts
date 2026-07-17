@@ -1843,15 +1843,14 @@ export async function addCheckCall(formData: FormData) {
   const latitude = optionalFloat(formData, "latitude");
   const longitude = optionalFloat(formData, "longitude");
   const hasCoordinates = latitude !== undefined && longitude !== undefined;
-  const status = requiredString(formData, "status");
+  const notes = requiredString(formData, "notes");
   const nextCheckAt = optionalDate(formData, "nextCheckAt");
 
   const checkCall = await prisma.checkCall.create({
     data: {
       assignmentId,
       location,
-      status,
-      notes: optionalString(formData, "notes"),
+      notes,
       nextCheckAt,
       nextCheckNotes: nextCheckAt ? optionalString(formData, "nextCheckNotes") : undefined,
       ...(hasCoordinates
@@ -1874,7 +1873,7 @@ export async function addCheckCall(formData: FormData) {
       loadId,
       userId: user.id,
       action: "Check call added",
-      details: `${status} at ${location}.`
+      details: `${location}: ${notes}`
     }
   });
 

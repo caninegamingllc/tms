@@ -135,10 +135,14 @@ export function LoadSearchResults({
 }) {
   const router = useRouter();
   const [selectedIds, setSelectedIds] = useState<Set<string>>(() => new Set(loads.map((load) => load.id)));
-  const { orderedColumns, moveColumn, resetOrder, isCustomized } = useOrderedColumns(
-    "load-search",
-    baseColumns
-  );
+  const {
+    orderedColumns,
+    moveColumn,
+    resetLayout,
+    isLayoutCustomized,
+    columnWidths,
+    setColumnWidth
+  } = useOrderedColumns("load-search", baseColumns);
   const { sortedData, sortState, handleSort } = useSortedRows(loads, orderedColumns, {
     columnId: "pickup",
     direction: "desc"
@@ -221,8 +225,8 @@ export function LoadSearchResults({
         <div className="flex flex-wrap items-center gap-2">
           <ColumnLayoutControls
             className="mb-0"
-            onReset={resetOrder}
-            isCustomized={isCustomized}
+            onReset={resetLayout}
+            isCustomized={isLayoutCustomized}
           />
           <button
             type="button"
@@ -251,6 +255,8 @@ export function LoadSearchResults({
             onSort={handleSort}
             columnReorder
             onMoveColumn={moveColumn}
+            columnWidths={columnWidths}
+            onColumnResize={setColumnWidth}
           />
           <tbody>
             {pageRows.length ? (

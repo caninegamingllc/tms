@@ -144,7 +144,7 @@ export function CustomerDispatchBoard({
         render: (row) =>
           row.lastCheckCallAt ? (
             <>
-              <p className="font-semibold">{row.lastCheckCallStatus}</p>
+              <p className="font-semibold">{row.lastCheckCallNote ?? "Check call"}</p>
               <p className="muted">{row.lastCheckCallLocation}</p>
               <p className="muted">{formatDateTime(row.lastCheckCallAt)}</p>
             </>

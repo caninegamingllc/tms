@@ -174,14 +174,13 @@ export default async function HomePage({
                     </span>
                   </div>
                   <p className="mt-1.5 text-[13px] font-semibold text-foreground">
-                    {isNextCheck ? call.nextCheckNotes ?? "Scheduled check call" : call.status}
+                    {isNextCheck
+                      ? call.nextCheckNotes ?? "Scheduled check call"
+                      : call.notes ?? "Check call"}
                   </p>
                   <p className="text-[12px] text-muted-foreground">
                     {isNextCheck ? `Last check: ${call.location}` : call.location}
                   </p>
-                  {!isNextCheck && call.notes ? (
-                    <p className="mt-1 text-[12px] text-slate-600">{call.notes}</p>
-                  ) : null}
                 </Link>
               );
             })}

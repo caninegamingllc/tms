@@ -87,7 +87,7 @@ export type DispatchBoardRow = {
   rateCents: number;
   revenueCents: number;
   carrierCostCents: number;
-  lastCheckCallStatus: string | null;
+  lastCheckCallNote: string | null;
   lastCheckCallLocation: string | null;
   lastCheckCallAt: string | null;
   nextCheckAt: string | null;
@@ -236,7 +236,7 @@ type DispatchBoardLoad = {
     carrierId?: string | null;
     carrier: { name: string } | null;
     checkCalls: Array<{
-      status: string;
+      notes: string | null;
       location: string;
       occurredAt: Date;
       nextCheckAt: Date | null;
@@ -280,7 +280,7 @@ export function serializeDispatchBoardRow(load: DispatchBoardLoad): DispatchBoar
     rateCents: sumAssignmentRateCents(load.dispatchAssignments),
     revenueCents: load.revenueCents,
     carrierCostCents: load.carrierCostCents,
-    lastCheckCallStatus: latestCheckCall?.status ?? null,
+    lastCheckCallNote: latestCheckCall?.notes ?? null,
     lastCheckCallLocation: latestCheckCall?.location ?? null,
     lastCheckCallAt: latestCheckCall?.occurredAt.toISOString() ?? null,
     nextCheckAt: latestCheckCall?.nextCheckAt?.toISOString() ?? null,

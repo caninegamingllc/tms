@@ -920,10 +920,9 @@ export default async function LoadDetailPage({
                           (assignment.sequence === 0 ? "Primary" : `Leg ${assignment.sequence + 1}`)}
                       </p>
                     ) : null}
-                    <p className="font-semibold text-foreground">{call.status}</p>
+                    <p className="font-semibold text-foreground">{call.notes ?? "Check call"}</p>
                     <p className="muted">{call.location}</p>
                     <p className="text-xs text-muted-foreground">{formatDateTime(call.occurredAt)}</p>
-                    {call.notes ? <p className="mt-2 text-sm text-slate-700">{call.notes}</p> : null}
                     {call.nextCheckAt ? (
                       <div className="mt-3 rounded-xl border border-primary/20 bg-lightprimary/50 p-3 text-sm">
                         <p className="font-semibold text-primary">

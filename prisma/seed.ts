@@ -517,7 +517,6 @@ async function main() {
             create: [
               {
                 location: "Fort Wayne, IN",
-                status: "On schedule",
                 notes: "Driver checked in by phone. Reefer temp holding.",
                 occurredAt: daysFromNow(0),
                 nextCheckAt: daysFromNow(1),

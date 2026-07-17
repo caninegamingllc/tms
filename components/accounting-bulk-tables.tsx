@@ -238,10 +238,14 @@ export function AccountingInvoicesPanel({
     [quickbooksMethod]
   );
 
-  const { orderedColumns, moveColumn, resetOrder, isCustomized } = useOrderedColumns(
-    "accounting-bulk-invoices",
-    columns
-  );
+  const {
+    orderedColumns,
+    moveColumn,
+    resetLayout,
+    isLayoutCustomized,
+    columnWidths,
+    setColumnWidth
+  } = useOrderedColumns("accounting-bulk-invoices", columns);
   const { sortedData, sortState, handleSort } = useSortedRows(filtered, orderedColumns, {
     columnId: "due",
     direction: "desc"
@@ -371,7 +375,11 @@ export function AccountingInvoicesPanel({
           value={query}
           onChange={(event) => setQuery(event.target.value)}
         />
-        <ColumnLayoutControls className="mb-0" onReset={resetOrder} isCustomized={isCustomized} />
+        <ColumnLayoutControls
+          className="mb-0"
+          onReset={resetLayout}
+          isCustomized={isLayoutCustomized}
+        />
       </div>
 
       <div className="overflow-x-auto">
@@ -382,6 +390,8 @@ export function AccountingInvoicesPanel({
             onSort={handleSort}
             columnReorder
             onMoveColumn={moveColumn}
+            columnWidths={columnWidths}
+            onColumnResize={setColumnWidth}
           />
           <tbody>
             {pageRows.map((row) => (
@@ -554,10 +564,14 @@ export function AccountingBillsPanel({
     []
   );
 
-  const { orderedColumns, moveColumn, resetOrder, isCustomized } = useOrderedColumns(
-    "accounting-bulk-bills",
-    columns
-  );
+  const {
+    orderedColumns,
+    moveColumn,
+    resetLayout,
+    isLayoutCustomized,
+    columnWidths,
+    setColumnWidth
+  } = useOrderedColumns("accounting-bulk-bills", columns);
   const { sortedData, sortState, handleSort } = useSortedRows(filtered, orderedColumns, {
     columnId: "delivery",
     direction: "desc"
@@ -698,7 +712,11 @@ export function AccountingBillsPanel({
           value={query}
           onChange={(event) => setQuery(event.target.value)}
         />
-        <ColumnLayoutControls className="mb-0" onReset={resetOrder} isCustomized={isCustomized} />
+        <ColumnLayoutControls
+          className="mb-0"
+          onReset={resetLayout}
+          isCustomized={isLayoutCustomized}
+        />
       </div>
 
       <div className="overflow-x-auto">
@@ -709,6 +727,8 @@ export function AccountingBillsPanel({
             onSort={handleSort}
             columnReorder
             onMoveColumn={moveColumn}
+            columnWidths={columnWidths}
+            onColumnResize={setColumnWidth}
           />
           <tbody>
             {pageRows.map((row) => {

@@ -57,7 +57,7 @@ export type CustomerBoardRow = {
   driverPhone: string | null;
   truckNumber: string | null;
   trailerNumber: string | null;
-  lastCheckCallStatus: string | null;
+  lastCheckCallNote: string | null;
   lastCheckCallLocation: string | null;
   lastCheckCallAt: string | null;
 };
@@ -84,7 +84,7 @@ type CustomerBoardLoad = {
     carrierId?: string | null;
     carrier: { name: string } | null;
     checkCalls: Array<{
-      status: string;
+      notes: string | null;
       location: string;
       occurredAt: Date;
     }>;
@@ -121,7 +121,7 @@ export function serializeCustomerBoardRow(load: CustomerBoardLoad): CustomerBoar
     driverPhone: primary?.driverPhone ?? null,
     truckNumber: primary?.truckNumber ?? null,
     trailerNumber: primary?.trailerNumber ?? null,
-    lastCheckCallStatus: latestCheckCall?.status ?? null,
+    lastCheckCallNote: latestCheckCall?.notes ?? null,
     lastCheckCallLocation: latestCheckCall?.location ?? null,
     lastCheckCallAt: latestCheckCall?.occurredAt.toISOString() ?? null
   };

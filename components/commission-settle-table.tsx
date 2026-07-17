@@ -159,10 +159,14 @@ export function CommissionSettleTable({
 }) {
   const [selected, setSelected] = useState<string[]>([]);
   const columns = useMemo(() => buildColumns(canSettle), [canSettle]);
-  const { orderedColumns, moveColumn, resetOrder, isCustomized } = useOrderedColumns(
-    "commission-settle",
-    columns
-  );
+  const {
+    orderedColumns,
+    moveColumn,
+    resetLayout,
+    isLayoutCustomized,
+    columnWidths,
+    setColumnWidth
+  } = useOrderedColumns("commission-settle", columns);
   const { sortedData, sortState, handleSort } = useSortedRows(rows, orderedColumns, {
     columnId: "pickup",
     direction: "desc"
@@ -226,8 +230,8 @@ export function CommissionSettleTable({
         <div className="flex flex-wrap items-center gap-2">
           <ColumnLayoutControls
             className="mb-0"
-            onReset={resetOrder}
-            isCustomized={isCustomized}
+            onReset={resetLayout}
+            isCustomized={isLayoutCustomized}
           />
           {canSettle ? (
             <form action={settleBranchCommission}>
@@ -252,6 +256,8 @@ export function CommissionSettleTable({
             onSort={handleSort}
             columnReorder
             onMoveColumn={moveColumn}
+            columnWidths={columnWidths}
+            onColumnResize={setColumnWidth}
           />
           <tbody>
             {sortedData.length === 0 ? (

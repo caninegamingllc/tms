@@ -47,7 +47,6 @@ export default async function PortalLoadDetailPage({
             take: 5,
             select: {
               location: true,
-              status: true,
               occurredAt: true,
               notes: true
             }
@@ -176,9 +175,8 @@ export default async function PortalLoadDetailPage({
               {recentCheckCalls.length ? (
                 recentCheckCalls.map((call, index) => (
                   <div key={`${call.occurredAt.toISOString()}-${index}`} className="rounded-xl bg-muted p-3 text-sm">
-                    <p className="font-semibold">
-                      {call.status} — {call.location}
-                    </p>
+                    <p className="font-semibold">{call.notes ?? "Check call"}</p>
+                    <p className="muted">{call.location}</p>
                     <p className="muted">{formatDateTime(call.occurredAt)}</p>
                   </div>
                 ))

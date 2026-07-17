@@ -62,9 +62,7 @@ export default async function LoginPage({
               Freight brokerage · command center
             </div>
             <h1 className="font-display mt-4 text-[56px] leading-[0.98] font-semibold tracking-[-0.03em]">
-              Move freight
-              <br />
-              like a broker,
+              Move freight like a professional,
               <br />
               <span className="italic text-white/80">not a spreadsheet.</span>
             </h1>

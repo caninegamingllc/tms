@@ -165,9 +165,9 @@ function buildColumns(visibleColumnIds: Set<DispatchBoardColumnId>): SortableCol
       label: "Last Check Call",
       sortValue: (row) => row.lastCheckCallAt ?? "",
       render: (row) =>
-        row.lastCheckCallStatus ? (
+        row.lastCheckCallAt ? (
           <>
-            <p className="font-semibold">{row.lastCheckCallStatus}</p>
+            <p className="font-semibold">{row.lastCheckCallNote ?? "Check call"}</p>
             <p className="muted">
               {row.lastCheckCallLocation} - {formatDateTime(row.lastCheckCallAt)}
             </p>
