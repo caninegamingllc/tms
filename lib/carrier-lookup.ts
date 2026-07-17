@@ -177,6 +177,57 @@ function extractFmcsaCarriers(payload: FmcsaResponse) {
   return carrier ? [carrier] : [];
 }
 
+const localCarrierSelect = {
+  id: true,
+  name: true,
+  mcNumber: true,
+  dotNumber: true,
+  phone: true,
+  email: true,
+  address: true,
+  city: true,
+  state: true,
+  postalCode: true,
+  equipmentTypes: true,
+  safetyRating: true,
+  complianceStatus: true
+} as const;
+
+function mapLocalCarrier(carrier: {
+  id: string;
+  name: string;
+  mcNumber: string | null;
+  dotNumber: string | null;
+  phone: string | null;
+  email: string | null;
+  address: string | null;
+  city: string | null;
+  state: string | null;
+  postalCode: string | null;
+  equipmentTypes: string | null;
+  safetyRating: string | null;
+  complianceStatus: string;
+}): CarrierLookupResult {
+  return {
+    id: `local-${carrier.id}`,
+    source: "local",
+    carrierId: carrier.id,
+    name: carrier.name,
+    mcNumber: carrier.mcNumber ?? undefined,
+    dotNumber: carrier.dotNumber ?? undefined,
+    phone: carrier.phone ?? undefined,
+    email: carrier.email ?? undefined,
+    address: carrier.address ?? undefined,
+    city: carrier.city ?? undefined,
+    state: carrier.state ?? undefined,
+    postalCode: carrier.postalCode ?? undefined,
+    equipmentTypes: carrier.equipmentTypes ?? undefined,
+    safetyRating: carrier.safetyRating ?? undefined,
+    complianceStatus: carrier.complianceStatus,
+    description: `${formatAuthorityDescription(carrier.mcNumber ?? undefined, carrier.dotNumber ?? undefined)} · Existing carrier in TMS`
+  };
+}
+
 export async function searchLocalCarriers(
   companyId: string,
   type: "mc" | "dot" | "auto",
@@ -213,41 +264,10 @@ export async function searchLocalCarriers(
     },
     orderBy: { name: "asc" },
     take: SEARCH_LIMIT,
-    select: {
-      id: true,
-      name: true,
-      mcNumber: true,
-      dotNumber: true,
-      phone: true,
-      email: true,
-      address: true,
-      city: true,
-      state: true,
-      postalCode: true,
-      equipmentTypes: true,
-      safetyRating: true,
-      complianceStatus: true
-    }
+    select: localCarrierSelect
   });
 
-  return carriers.map((carrier) => ({
-    id: `local-${carrier.id}`,
-    source: "local" as const,
-    carrierId: carrier.id,
-    name: carrier.name,
-    mcNumber: carrier.mcNumber ?? undefined,
-    dotNumber: carrier.dotNumber ?? undefined,
-    phone: carrier.phone ?? undefined,
-    email: carrier.email ?? undefined,
-    address: carrier.address ?? undefined,
-    city: carrier.city ?? undefined,
-    state: carrier.state ?? undefined,
-    postalCode: carrier.postalCode ?? undefined,
-    equipmentTypes: carrier.equipmentTypes ?? undefined,
-    safetyRating: carrier.safetyRating ?? undefined,
-    complianceStatus: carrier.complianceStatus,
-    description: `${formatAuthorityDescription(carrier.mcNumber ?? undefined, carrier.dotNumber ?? undefined)} · Existing carrier in TMS`
-  }));
+  return carriers.map(mapLocalCarrier);
 }
 
 async function fetchFmcsaCarriers(type: "mc" | "dot", query: string) {
@@ -326,18 +346,147 @@ async function fetchFmcsaForType(type: "mc" | "dot" | "auto", query: string) {
     return [];
   }
 
-  // MC dockets are typically <= 6 digits; USDOT numbers run longer. Prefer the
-  // more likely authority first, then fall back to the other once.
-  const order: ("dot" | "mc")[] = digits.length >= 7 ? ["dot", "mc"] : ["mc", "dot"];
+  // An MC docket of one carrier can equal the USDOT of another. Always query
+  // both authorities and keep every distinct hit.
+  const [mcResults, dotResults] = await Promise.all([
+    fetchFmcsaCarriers("mc", query),
+    fetchFmcsaCarriers("dot", query)
+  ]);
 
-  for (const candidate of order) {
-    const results = await fetchFmcsaCarriers(candidate, query);
-    if (results.length > 0) {
-      return results;
+  return mergeLookupResults([], [...mcResults, ...dotResults]);
+}
+
+function authorityMatchKeys(result: Pick<CarrierLookupResult, "carrierId" | "mcNumber" | "dotNumber">) {
+  const keys: string[] = [];
+
+  if (result.carrierId) {
+    keys.push(`id:${result.carrierId}`);
+  }
+
+  const mcNormalized = normalizeCarrierNumber(result.mcNumber);
+  const mcDigits = result.mcNumber?.replace(/\D/g, "");
+  if (mcNormalized) {
+    keys.push(`mc:${mcNormalized}`);
+  }
+  if (mcDigits) {
+    keys.push(`mc:${mcDigits}`);
+    keys.push(`mc:MC${mcDigits}`);
+  }
+
+  const dotNormalized = normalizeCarrierNumber(result.dotNumber) ?? result.dotNumber?.replace(/\D/g, "");
+  if (dotNormalized) {
+    keys.push(`dot:${dotNormalized}`);
+  }
+
+  return keys;
+}
+
+function resultsShareIdentity(a: CarrierLookupResult, b: CarrierLookupResult) {
+  const aKeys = new Set(authorityMatchKeys(a));
+  return authorityMatchKeys(b).some((key) => aKeys.has(key));
+}
+
+function preferLookupResult(current: CarrierLookupResult, incoming: CarrierLookupResult) {
+  // Prefer the TMS record when the same entity appears from both sources.
+  if (current.source !== incoming.source) {
+    const preferred = current.source === "local" ? current : incoming;
+    const other = preferred === current ? incoming : current;
+    const mcNumber = preferred.mcNumber ?? other.mcNumber;
+    const dotNumber = preferred.dotNumber ?? other.dotNumber;
+    return {
+      ...preferred,
+      mcNumber,
+      dotNumber,
+      insuranceCoverages: preferred.insuranceCoverages ?? other.insuranceCoverages,
+      insuranceExpiresAt: preferred.insuranceExpiresAt ?? other.insuranceExpiresAt,
+      insuranceHint: preferred.insuranceHint ?? other.insuranceHint,
+      phone: preferred.phone ?? other.phone,
+      email: preferred.email ?? other.email,
+      address: preferred.address ?? other.address,
+      city: preferred.city ?? other.city,
+      state: preferred.state ?? other.state,
+      postalCode: preferred.postalCode ?? other.postalCode,
+      safetyRating: preferred.safetyRating ?? other.safetyRating,
+      complianceStatus: preferred.complianceStatus ?? other.complianceStatus,
+      description:
+        preferred.source === "local"
+          ? `${formatAuthorityDescription(mcNumber, dotNumber)} · Existing carrier in TMS`
+          : preferred.description
+    };
+  }
+
+  return current;
+}
+
+/** Merge local + FMCSA hits, collapsing the same carrier identity into one row. */
+export function mergeLookupResults(
+  localResults: CarrierLookupResult[],
+  fmcsaResults: CarrierLookupResult[]
+): CarrierLookupResult[] {
+  const merged: CarrierLookupResult[] = [];
+
+  for (const result of [...localResults, ...fmcsaResults]) {
+    const existingIndex = merged.findIndex((item) => resultsShareIdentity(item, result));
+    if (existingIndex === -1) {
+      merged.push(result);
+      continue;
+    }
+
+    merged[existingIndex] = preferLookupResult(merged[existingIndex], result);
+  }
+
+  return merged.slice(0, SEARCH_LIMIT);
+}
+
+/** Find TMS carriers that match FMCSA authority numbers (even when the query itself missed). */
+export async function findLocalCarriersByAuthorities(
+  companyId: string,
+  authorities: Array<{ mcNumber?: string; dotNumber?: string }>
+): Promise<CarrierLookupResult[]> {
+  const mcValues = new Set<string>();
+  const dotValues = new Set<string>();
+
+  for (const authority of authorities) {
+    const mcNormalized = normalizeCarrierNumber(authority.mcNumber);
+    const mcDigits = authority.mcNumber?.replace(/\D/g, "");
+    if (mcNormalized) {
+      mcValues.add(mcNormalized);
+    }
+    if (mcDigits) {
+      mcValues.add(mcDigits);
+      mcValues.add(`MC${mcDigits}`);
+    }
+
+    const dotNormalized =
+      normalizeCarrierNumber(authority.dotNumber) ?? authority.dotNumber?.replace(/\D/g, "");
+    if (dotNormalized) {
+      dotValues.add(dotNormalized);
     }
   }
 
-  return [];
+  const orClauses: (
+    | { mcNumberNormalized: string }
+    | { dotNumberNormalized: string }
+  )[] = [
+    ...[...mcValues].map((value) => ({ mcNumberNormalized: value })),
+    ...[...dotValues].map((value) => ({ dotNumberNormalized: value }))
+  ];
+
+  if (!orClauses.length) {
+    return [];
+  }
+
+  const carriers = await prisma.carrier.findMany({
+    where: {
+      companyId,
+      OR: orClauses
+    },
+    orderBy: { name: "asc" },
+    take: SEARCH_LIMIT,
+    select: localCarrierSelect
+  });
+
+  return carriers.map(mapLocalCarrier);
 }
 
 export async function lookupCarriers(
@@ -345,20 +494,33 @@ export async function lookupCarriers(
   type: "mc" | "dot" | "auto",
   query: string
 ): Promise<{ results: CarrierLookupResult[]; fmcsaAvailable: boolean }> {
+  const fmcsaAvailable = isFmcsaConfigured();
   const localResults = await searchLocalCarriers(companyId, type, query);
-  if (localResults.length > 0) {
-    return { results: localResults, fmcsaAvailable: isFmcsaConfigured() };
+
+  let fmcsaResults: CarrierLookupResult[] = [];
+  let fmcsaError: Error | null = null;
+
+  if (fmcsaAvailable) {
+    try {
+      fmcsaResults = await fetchFmcsaForType(type, query);
+    } catch (error) {
+      fmcsaError = error instanceof Error ? error : new Error("FMCSA lookup failed.");
+    }
   }
 
-  if (!isFmcsaConfigured()) {
-    return { results: [], fmcsaAvailable: false };
+  // FMCSA may return a DOT/MC the query didn't match locally (e.g. TMS has DOT
+  // only; user searched MC). Pull those TMS rows so we never offer "Add" for
+  // a carrier that already exists.
+  const reconciledLocals =
+    fmcsaResults.length > 0
+      ? await findLocalCarriersByAuthorities(companyId, fmcsaResults)
+      : [];
+
+  const results = mergeLookupResults([...localResults, ...reconciledLocals], fmcsaResults);
+
+  if (!results.length && fmcsaError) {
+    throw fmcsaError;
   }
 
-  try {
-    const fmcsaResults = await fetchFmcsaForType(type, query);
-    return { results: fmcsaResults, fmcsaAvailable: true };
-  } catch (error) {
-    const message = error instanceof Error ? error.message : "FMCSA lookup failed.";
-    throw new Error(message);
-  }
+  return { results, fmcsaAvailable };
 }
