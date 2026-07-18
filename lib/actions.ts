@@ -1042,7 +1042,6 @@ export async function createLoad(formData: FormData) {
   await requireCompanyCustomer(customerId, user);
   const branchId = await resolveBranchId(user, optionalString(formData, "branchId"), prisma);
 
-  const manualLoadNumber = optionalString(formData, "loadNumber");
   let carrierCostCents = parseMoneyToCents(formData.get("carrierCost"));
   const equipmentType = requiredString(formData, "equipmentType");
   const reeferTempF = equipmentType === "Reefer" ? optionalFloat(formData, "reeferTempF") : null;
@@ -1158,9 +1157,9 @@ export async function createLoad(formData: FormData) {
   const load = await prisma.$transaction(async (tx) => {
     const company = await tx.company.findUniqueOrThrow({ where: { id: user.companyId } });
     const sequence = String(company.nextLoadSequence).padStart(4, "0");
-    const loadNumber =
-      manualLoadNumber ??
-      (company.loadNumberPrefix ? `${company.loadNumberPrefix}-${sequence}` : sequence);
+    const loadNumber = company.loadNumberPrefix
+      ? `${company.loadNumberPrefix}-${sequence}`
+      : sequence;
 
     const createdLoad = await tx.load.create({
       data: {
@@ -1203,12 +1202,10 @@ export async function createLoad(formData: FormData) {
       }
     });
 
-    if (!manualLoadNumber) {
-      await tx.company.update({
-        where: { id: user.companyId },
-        data: { nextLoadSequence: { increment: 1 } }
-      });
-    }
+    await tx.company.update({
+      where: { id: user.companyId },
+      data: { nextLoadSequence: { increment: 1 } }
+    });
 
     if (cloneCarrierId) {
       const assignment = await tx.dispatchAssignment.create({

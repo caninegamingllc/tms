@@ -47,9 +47,8 @@ export default async function NewLoadPage({
   const keepCommodity = flagEnabled(params.keepCommodity);
   const keepNotes = flagEnabled(params.keepNotes);
 
-  const [company, customers, facilities, branches, commodities, chargeTypes, cloneSource] =
+  const [customers, facilities, branches, commodities, chargeTypes, cloneSource] =
     await Promise.all([
-    prisma.company.findUniqueOrThrow({ where: { id: user.companyId } }),
     prisma.customer.findMany({
       where: scope,
       orderBy: { name: "asc" }
@@ -117,10 +116,6 @@ export default async function NewLoadPage({
     postalCode: facility.postalCode
   }));
   const commoditySuggestions = commodities.map((item) => item.name);
-  const nextSequence = String(company.nextLoadSequence).padStart(4, "0");
-  const nextAutoLoadNumber = company.loadNumberPrefix
-    ? `${company.loadNumberPrefix}-${nextSequence}`
-    : nextSequence;
 
   const isClone = Boolean(cloneSource);
   const clonedStops = cloneSource
@@ -221,7 +216,7 @@ export default async function NewLoadPage({
           </>
         ) : null}
 
-        <div className="grid gap-4 md:grid-cols-3">
+        <div className="grid gap-4 md:grid-cols-2">
           <SearchCombobox
             name="customerId"
             label="Customer"
@@ -230,10 +225,6 @@ export default async function NewLoadPage({
             defaultValue={cloneSource?.customerId}
             required
           />
-          <label className="grid gap-2">
-            <span className="label">Load Number</span>
-            <input name="loadNumber" className="input" placeholder={`Auto: ${nextAutoLoadNumber}`} />
-          </label>
           <label className="grid gap-2">
             <span className="label">Status</span>
             <select name="status" className="select" defaultValue="AVAILABLE">
