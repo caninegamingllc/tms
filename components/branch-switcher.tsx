@@ -6,6 +6,15 @@ import { clsx } from "clsx";
 import { setBranchFilter } from "@/lib/branch-filter-actions";
 import type { BranchOption } from "@/lib/branch-filter";
 
+type SelectionState = {
+  allSelected: boolean;
+  selectedBranchIds: string[];
+};
+
+function selectionKey(state: SelectionState) {
+  return `${state.allSelected}:${state.selectedBranchIds.join(",")}`;
+}
+
 export function BranchSwitcher({
   branches,
   selectedBranchIds,
@@ -19,15 +28,46 @@ export function BranchSwitcher({
 }) {
   const [open, setOpen] = useState(false);
   const [isPending, startTransition] = useTransition();
+  const [selection, setSelection] = useState<SelectionState>({
+    allSelected,
+    selectedBranchIds
+  });
   const containerRef = useRef<HTMLDivElement>(null);
+  const latestKeyRef = useRef(selectionKey({ allSelected, selectedBranchIds }));
+  const saveTimerRef = useRef<ReturnType<typeof setTimeout> | null>(null);
+  const pendingSaveRef = useRef<SelectionState | null>(null);
+  const propsKey = selectionKey({ allSelected, selectedBranchIds });
 
-  const effectiveSelection = allSelected ? branches.map((branch) => branch.id) : selectedBranchIds;
+  // Sync from server props once they match what we last chose (or after an external change).
+  useEffect(() => {
+    if (propsKey === latestKeyRef.current) {
+      return;
+    }
+    // Ignore stale server props while a local edit is still flushing.
+    if (pendingSaveRef.current || isPending) {
+      return;
+    }
+    latestKeyRef.current = propsKey;
+    setSelection({ allSelected, selectedBranchIds });
+  }, [propsKey, allSelected, selectedBranchIds, isPending]);
+
+  useEffect(() => {
+    return () => {
+      if (saveTimerRef.current) {
+        clearTimeout(saveTimerRef.current);
+      }
+    };
+  }, []);
+
+  const effectiveSelection = selection.allSelected
+    ? branches.map((branch) => branch.id)
+    : selection.selectedBranchIds;
   const resolvedPrimaryId =
     primaryBranchId && branches.some((branch) => branch.id === primaryBranchId)
       ? primaryBranchId
       : branches[0]?.id ?? null;
 
-  const label = allSelected
+  const label = selection.allSelected
     ? "All Branches"
     : effectiveSelection.length === 1
       ? branches.find((branch) => branch.id === effectiveSelection[0])?.name ?? "1 Branch"
@@ -36,6 +76,7 @@ export function BranchSwitcher({
   useEffect(() => {
     function handleClickOutside(event: MouseEvent) {
       if (containerRef.current && !containerRef.current.contains(event.target as Node)) {
+        flushSave();
         setOpen(false);
       }
     }
@@ -46,33 +87,67 @@ export function BranchSwitcher({
     }
   }, [open]);
 
-  function applySelection(nextAllSelected: boolean, nextBranchIds: string[]) {
+  function persistSelection(next: SelectionState) {
     const formData = new FormData();
-    formData.set("allBranches", nextAllSelected ? "true" : "false");
-    for (const branchId of nextBranchIds) {
+    formData.set("allBranches", next.allSelected ? "true" : "false");
+    for (const branchId of next.selectedBranchIds) {
       formData.append("branchIds", branchId);
     }
 
     startTransition(() => {
-      setBranchFilter(formData);
-      setOpen(false);
+      void setBranchFilter(formData).finally(() => {
+        if (pendingSaveRef.current && selectionKey(pendingSaveRef.current) === selectionKey(next)) {
+          pendingSaveRef.current = null;
+        }
+      });
     });
   }
 
+  function flushSave() {
+    if (saveTimerRef.current) {
+      clearTimeout(saveTimerRef.current);
+      saveTimerRef.current = null;
+    }
+    const pending = pendingSaveRef.current;
+    if (pending) {
+      persistSelection(pending);
+    }
+  }
+
+  function applySelection(next: SelectionState) {
+    setSelection(next);
+    latestKeyRef.current = selectionKey(next);
+    pendingSaveRef.current = next;
+
+    if (saveTimerRef.current) {
+      clearTimeout(saveTimerRef.current);
+    }
+    // Debounce so rapid check/uncheck only persists the final selection.
+    saveTimerRef.current = setTimeout(() => {
+      saveTimerRef.current = null;
+      const pending = pendingSaveRef.current;
+      if (pending) {
+        persistSelection(pending);
+      }
+    }, 250);
+  }
+
   function toggleAllBranches() {
-    if (allSelected) {
+    if (selection.allSelected) {
       // Leave only the user's primary branch selected.
       if (resolvedPrimaryId) {
-        applySelection(false, [resolvedPrimaryId]);
+        applySelection({ allSelected: false, selectedBranchIds: [resolvedPrimaryId] });
         return;
       }
     }
 
-    applySelection(true, []);
+    applySelection({ allSelected: true, selectedBranchIds: [] });
   }
 
   function toggleBranch(branchId: string) {
-    const current = allSelected ? branches.map((branch) => branch.id) : [...selectedBranchIds];
+    const current = selection.allSelected
+      ? branches.map((branch) => branch.id)
+      : [...selection.selectedBranchIds];
     const next = current.includes(branchId)
       ? current.filter((id) => id !== branchId)
       : [...current, branchId];
@@ -80,32 +155,36 @@ export function BranchSwitcher({
     if (next.length === 0) {
       // Never clear everything — fall back to primary, or All if no primary.
       if (resolvedPrimaryId) {
-        applySelection(false, [resolvedPrimaryId]);
+        applySelection({ allSelected: false, selectedBranchIds: [resolvedPrimaryId] });
         return;
       }
 
-      applySelection(true, []);
+      applySelection({ allSelected: true, selectedBranchIds: [] });
       return;
     }
 
     if (next.length === branches.length) {
-      applySelection(true, []);
+      applySelection({ allSelected: true, selectedBranchIds: [] });
       return;
     }
 
-    applySelection(false, next);
+    applySelection({ allSelected: false, selectedBranchIds: next });
   }
 
   function isBranchChecked(branchId: string) {
-    return allSelected || selectedBranchIds.includes(branchId);
+    return selection.allSelected || selection.selectedBranchIds.includes(branchId);
   }
 
   return (
     <div ref={containerRef} className="relative">
       <button
         type="button"
-        disabled={isPending}
-        onClick={() => setOpen((current) => !current)}
+        onClick={() => {
+          if (open) {
+            flushSave();
+          }
+          setOpen((current) => !current);
+        }}
         className={clsx(
           "inline-flex items-center gap-2 rounded-lg border border-border bg-card px-3 py-2 text-sm font-medium text-foreground transition hover:bg-muted",
           isPending && "opacity-60"
@@ -125,10 +204,12 @@ export function BranchSwitcher({
             <span
               className={clsx(
                 "flex h-4 w-4 items-center justify-center rounded border",
-                allSelected ? "border-primary bg-primary text-primary-foreground" : "border-border"
+                selection.allSelected
+                  ? "border-primary bg-primary text-primary-foreground"
+                  : "border-border"
               )}
             >
-              {allSelected ? <Check className="h-3 w-3" /> : null}
+              {selection.allSelected ? <Check className="h-3 w-3" /> : null}
             </span>
             All Branches
           </button>
