@@ -196,15 +196,19 @@ function TileShell({
         interacting ? "opacity-95 shadow-lg ring-2 ring-primary/30" : ""
       }`}
     >
-      <div
-        ref={handleRef}
-        className="tile-drag-handle flex cursor-grab items-center gap-2 border-b border-border px-4 py-2.5 active:cursor-grabbing"
-        style={{ touchAction: "none", userSelect: "none" }}
-        data-tile-handle={id}
-      >
-        <GripVertical className="pointer-events-none h-4 w-4 shrink-0 text-muted-foreground" aria-hidden />
+      <div className="flex items-center gap-1 border-b border-border pr-4">
+        <div
+          ref={handleRef}
+          className="tile-drag-handle flex h-10 w-10 shrink-0 cursor-grab items-center justify-center active:cursor-grabbing"
+          style={{ touchAction: "none", userSelect: "none" }}
+          data-tile-handle={id}
+          title="Drag to move"
+          aria-label="Drag to move tile"
+        >
+          <GripVertical className="pointer-events-none h-4 w-4 text-muted-foreground" aria-hidden />
+        </div>
         {title ? (
-          <h2 className="pointer-events-none section-title mb-0 flex-1 truncate text-[15px]">{title}</h2>
+          <h2 className="section-title mb-0 flex-1 truncate py-2.5 text-[15px]">{title}</h2>
         ) : (
           <span className="flex-1" />
         )}
