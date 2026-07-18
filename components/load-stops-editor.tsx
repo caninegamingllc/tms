@@ -84,10 +84,12 @@ function fromInitial(stop: InitialLoadStop): DraftStop {
 
 export function LoadStopsEditor({
   facilities,
-  initialStops
+  initialStops,
+  showHeader = true
 }: {
   facilities: FacilityOption[];
   initialStops?: InitialLoadStop[];
+  showHeader?: boolean;
 }) {
   const [stops, setStops] = useState<DraftStop[]>(() => {
     if (initialStops?.length) {
@@ -129,15 +131,17 @@ export function LoadStopsEditor({
 
   return (
     <div className="grid gap-4">
-      <div>
-        <h3 className="text-sm font-semibold text-foreground">Stops</h3>
-        <p className="muted text-sm">
-          Add multiple pickups and deliveries in route order. At least one of each is required.
-        </p>
-      </div>
+      {showHeader ? (
+        <div>
+          <h3 className="text-sm font-semibold text-foreground">Stops</h3>
+          <p className="muted text-sm">
+            Add multiple pickups and deliveries in route order. At least one of each is required.
+          </p>
+        </div>
+      ) : null}
 
       {stops.map((stop, index) => (
-        <div key={stop.key} className="grid gap-3 rounded-2xl border border-border bg-muted/30 p-4">
+        <div key={stop.key} className="grid gap-3 rounded-lg border border-border bg-card p-4">
           <div className="flex flex-wrap items-center justify-between gap-2">
             <div className="flex flex-wrap items-center gap-2">
               <p className="text-sm font-semibold text-foreground">Stop {index + 1}</p>

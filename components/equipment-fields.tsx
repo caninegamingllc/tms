@@ -5,16 +5,18 @@ import { equipmentTypes } from "@/lib/constants";
 
 export function EquipmentFields({
   defaultEquipmentType = "Dry Van",
-  defaultReeferTempF
+  defaultReeferTempF,
+  className
 }: {
   defaultEquipmentType?: string;
   defaultReeferTempF?: number | null;
+  className?: string;
 }) {
   const [equipmentType, setEquipmentType] = useState(defaultEquipmentType);
   const isReefer = equipmentType === "Reefer";
 
   return (
-    <>
+    <div className={["grid gap-4 sm:grid-cols-2", className].filter(Boolean).join(" ")}>
       <label className="grid gap-2">
         <span className="label">Equipment</span>
         <select
@@ -44,6 +46,6 @@ export function EquipmentFields({
           />
         </label>
       ) : null}
-    </>
+    </div>
   );
 }

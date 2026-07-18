@@ -97,16 +97,16 @@ export function FreightLinesEditor({
       ) : null}
 
       {lines.map((line, index) => (
-        <div key={line.key} className="grid gap-3 rounded-2xl border border-border bg-muted/40 p-3">
+        <div key={line.key} className="grid gap-3 rounded-lg border border-border bg-card p-4">
           <div className="flex flex-wrap items-center justify-between gap-2">
-            <p className="text-sm font-semibold text-foreground">Line {index + 1}</p>
+            <p className="text-sm font-medium text-foreground">Line {index + 1}</p>
             <button type="button" className="btn-secondary" onClick={() => removeLine(line.key)}>
               Remove
             </button>
           </div>
 
-          <div className="grid gap-2 md:grid-cols-[0.7fr_2fr_1fr_1fr]">
-            <label className="grid gap-1">
+          <div className="grid gap-3 sm:grid-cols-12">
+            <label className="grid gap-1 sm:col-span-2">
               <span className="label">Qty</span>
               <input
                 className="input"
@@ -119,7 +119,7 @@ export function FreightLinesEditor({
                 required
               />
             </label>
-            <label className="grid gap-1">
+            <label className="grid gap-1 sm:col-span-5">
               <span className="label">Description</span>
               <input
                 className="input"
@@ -131,7 +131,7 @@ export function FreightLinesEditor({
                 required
               />
             </label>
-            <label className="grid gap-1">
+            <label className="grid gap-1 sm:col-span-2">
               <span className="label">Weight (lbs)</span>
               <input
                 className="input"
@@ -144,7 +144,7 @@ export function FreightLinesEditor({
                 required
               />
             </label>
-            <label className="grid gap-1">
+            <label className="grid gap-1 sm:col-span-3">
               <span className="label">Pieces / Pallets</span>
               <input
                 className="input"
@@ -154,10 +154,8 @@ export function FreightLinesEditor({
                 placeholder="e.g. 12 PLT"
               />
             </label>
-          </div>
 
-          <div className="grid gap-2 md:grid-cols-3">
-            <label className="grid gap-1">
+            <label className="grid gap-1 sm:col-span-4">
               <span className="label">Length (in)</span>
               <input
                 className="input"
@@ -169,7 +167,7 @@ export function FreightLinesEditor({
                 onChange={(event) => updateLine(line.key, { lengthIn: event.target.value })}
               />
             </label>
-            <label className="grid gap-1">
+            <label className="grid gap-1 sm:col-span-4">
               <span className="label">Width (in)</span>
               <input
                 className="input"
@@ -181,7 +179,7 @@ export function FreightLinesEditor({
                 onChange={(event) => updateLine(line.key, { widthIn: event.target.value })}
               />
             </label>
-            <label className="grid gap-1">
+            <label className="grid gap-1 sm:col-span-4">
               <span className="label">Height (in)</span>
               <input
                 className="input"

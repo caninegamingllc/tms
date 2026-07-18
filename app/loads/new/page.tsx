@@ -8,12 +8,13 @@ import { createLoad } from "@/lib/actions";
 import { canAccessRecord, getBranchScope } from "@/lib/branch-filter-server";
 import { ensureCompanyCatalogs } from "@/lib/catalogs";
 import { primaryAssignment } from "@/lib/dispatch-assignment";
-import { requireTmsAccess } from "@/lib/permissions";
+import { requireTmsAccess, userHasPlanFeature } from "@/lib/permissions";
 import { canPickBranch, isAdminRole } from "@/lib/scope";
 import { loadStatuses } from "@/lib/constants";
 import { prisma } from "@/lib/db";
 import { humanize } from "@/lib/format";
 import { notFound } from "next/navigation";
+import type { ReactNode } from "react";
 
 function flagEnabled(value: string | undefined) {
   return value === "1" || value === "true";
@@ -24,6 +25,26 @@ function moneyInput(cents: number) {
     return "";
   }
   return (cents / 100).toFixed(2).replace(/\.00$/, "");
+}
+
+function FormSection({
+  title,
+  description,
+  children
+}: {
+  title: string;
+  description?: string;
+  children: ReactNode;
+}) {
+  return (
+    <section className="grid gap-4 border-b border-border p-6">
+      <div>
+        <h3 className="text-base font-semibold text-foreground">{title}</h3>
+        {description ? <p className="mt-0.5 text-xs text-muted-foreground">{description}</p> : null}
+      </div>
+      {children}
+    </section>
+  );
 }
 
 export default async function NewLoadPage({
@@ -185,7 +206,7 @@ export default async function NewLoadPage({
         description={
           isClone
             ? "Customer and stops are copied. Set fresh appointment dates, review the options you kept, then save."
-            : "Enter the customer, stops, equipment, freight lines, and first financial estimate."
+            : "Customer, stops, equipment, freight, and rate estimate."
         }
       />
 
@@ -196,7 +217,7 @@ export default async function NewLoadPage({
         </div>
       ) : null}
 
-      <form action={createLoad} className="card grid gap-6">
+      <form action={createLoad} className="card mx-auto max-w-5xl overflow-hidden p-0">
         {isClone ? (
           <>
             <input type="hidden" name="cloneFromLoadId" value={cloneSource!.id} />
@@ -216,69 +237,92 @@ export default async function NewLoadPage({
           </>
         ) : null}
 
-        <div className="grid gap-4 md:grid-cols-2">
-          <SearchCombobox
-            name="customerId"
-            label="Customer"
-            placeholder="Search customers"
-            options={customerOptions}
-            defaultValue={cloneSource?.customerId}
-            required
-          />
-          <label className="grid gap-2">
-            <span className="label">Status</span>
-            <select name="status" className="select" defaultValue="AVAILABLE">
-              {loadStatuses.map((status) => (
-                <option key={status} value={status}>
-                  {humanize(status)}
-                </option>
-              ))}
-            </select>
-          </label>
-        </div>
-
-        {canPickBranch(user) ? (
-          <label className="grid gap-2 md:max-w-sm">
-            <span className="label">Branch</span>
-            <select name="branchId" className="select" defaultValue={cloneSource?.branchId ?? ""}>
-              <option value="">Default to your branch</option>
-              {branches.map((branch) => (
-                <option key={branch.id} value={branch.id}>
-                  {branch.name}
-                </option>
-              ))}
-            </select>
-          </label>
-        ) : null}
-
-        <label className="grid gap-2 md:max-w-sm">
-          <span className="label">Customer Reference</span>
-          <input name="referenceNumber" className="input" placeholder="PO / tender number" />
-        </label>
-
-        <div className="grid gap-4 md:grid-cols-2">
-          <EquipmentFields
-            defaultEquipmentType={cloneSource?.equipmentType ?? "Dry Van"}
-            defaultReeferTempF={cloneSource?.reeferTempF ?? null}
-          />
-          <label className="grid gap-2">
-            <span className="label">Estimated Carrier Cost</span>
-            <input
-              name="carrierCost"
-              className="input"
-              placeholder="1900"
-              defaultValue={clonedCarrierCost}
+        <FormSection
+          title="Load details"
+          description="Load number is assigned automatically when you save."
+        >
+          <div className="grid gap-4 sm:grid-cols-12">
+            <SearchCombobox
+              name="customerId"
+              label="Customer"
+              placeholder="Search customers"
+              options={customerOptions}
+              defaultValue={cloneSource?.customerId}
+              required
+              className="sm:col-span-6"
             />
-          </label>
-        </div>
+            <label className="grid gap-2 sm:col-span-3">
+              <span className="label">Status</span>
+              <select name="status" className="select" defaultValue="AVAILABLE">
+                {loadStatuses.map((status) => (
+                  <option key={status} value={status}>
+                    {humanize(status)}
+                  </option>
+                ))}
+              </select>
+            </label>
+            {canPickBranch(user) ? (
+              <label className="grid gap-2 sm:col-span-3">
+                <span className="label">Branch</span>
+                <select name="branchId" className="select" defaultValue={cloneSource?.branchId ?? ""}>
+                  <option value="">Default to your branch</option>
+                  {branches.map((branch) => (
+                    <option key={branch.id} value={branch.id}>
+                      {branch.name}
+                    </option>
+                  ))}
+                </select>
+              </label>
+            ) : (
+              <div className="hidden sm:col-span-3 sm:block" aria-hidden="true" />
+            )}
 
-        <div className="grid gap-3">
-          <div>
-            <h3 className="text-sm font-semibold text-foreground">Customer charges</h3>
-            <p className="muted text-sm">
-              Select charge type, quantity, and amount. Add accessorials as additional lines.
-            </p>
+            <label className="grid gap-2 sm:col-span-5">
+              <span className="label">Customer Reference</span>
+              <input name="referenceNumber" className="input" placeholder="PO / tender number" />
+            </label>
+            <EquipmentFields
+              className="sm:col-span-4"
+              defaultEquipmentType={cloneSource?.equipmentType ?? "Dry Van"}
+              defaultReeferTempF={cloneSource?.reeferTempF ?? null}
+            />
+            <label className="grid gap-2 sm:col-span-3">
+              <span className="label">Estimated Carrier Cost</span>
+              <input
+                name="carrierCost"
+                className="input"
+                placeholder="1900"
+                defaultValue={clonedCarrierCost}
+              />
+            </label>
           </div>
+        </FormSection>
+
+        <FormSection
+          title="Stops"
+          description="Add pickups and deliveries in route order. At least one of each is required."
+        >
+          <LoadStopsEditor
+            facilities={facilityOptions}
+            initialStops={clonedStops}
+            showHeader={false}
+          />
+        </FormSection>
+
+        <FormSection
+          title="Freight lines"
+          description="Add each commodity on the trailer. Quantity, description, and weight are required."
+        >
+          <FreightLinesEditor
+            descriptionSuggestions={commoditySuggestions}
+            initialLines={clonedFreightLines}
+          />
+        </FormSection>
+
+        <FormSection
+          title="Customer charges"
+          description="Choose a charge type for each line (flat, per mile, hourly, detention, and other accessorials). Quantity and rate fields update from the type."
+        >
           <CustomerChargeLinesEditor
             lineTypes={chargeTypes.map((type) => ({
               id: type.id,
@@ -288,25 +332,42 @@ export default async function NewLoadPage({
             initialLines={clonedChargeLines}
             defaultMiles={cloneSource?.routeTotalMiles}
           />
-        </div>
+        </FormSection>
 
-        <div className="grid gap-3">
-          <div>
-            <h3 className="text-sm font-semibold text-foreground">Freight lines</h3>
-            <p className="muted text-sm">
-              Add each commodity on the trailer. Quantity, description, and weight are required.
-            </p>
-          </div>
-          <FreightLinesEditor
-            descriptionSuggestions={commoditySuggestions}
-            initialLines={clonedFreightLines}
-          />
-        </div>
+        {userHasPlanFeature(user, "load_notes") ? (
+          <FormSection
+            title="Notes"
+            description="Public notes appear on rate confirmations and related documents. Private notes stay internal only."
+          >
+            <div className="grid gap-4 lg:grid-cols-2">
+              <label className="grid gap-2">
+                <span className="label">Public note</span>
+                <textarea
+                  name="publicNote"
+                  className="textarea"
+                  rows={3}
+                  placeholder="Optional — shown on customer-facing documents"
+                />
+                <p className="text-xs text-muted-foreground">Visible on customer-facing documents</p>
+              </label>
+              <label className="grid gap-2">
+                <span className="label">Private note</span>
+                <textarea
+                  name="privateNote"
+                  className="textarea"
+                  rows={3}
+                  placeholder="Optional — internal only, never on documents"
+                />
+                <p className="text-xs text-muted-foreground">Internal only — never printed on documents</p>
+              </label>
+            </div>
+          </FormSection>
+        ) : null}
 
-        <LoadStopsEditor facilities={facilityOptions} initialStops={clonedStops} />
-
-        <label className="grid gap-2">
-          <span className="label">Rate confirmation terms override</span>
+        <FormSection
+          title="Rate confirmation terms"
+          description="Optional terms that will appear on the rate con PDF for this load only."
+        >
           <textarea
             name="rateConfirmationTerms"
             className="textarea"
@@ -317,9 +378,12 @@ export default async function NewLoadPage({
           <p className="text-xs text-muted-foreground">
             Appended after built-in broker terms on rate confirmations for this load only.
           </p>
-        </label>
+        </FormSection>
 
-        <div className="flex justify-end gap-3">
+        <div className="flex flex-wrap items-center justify-between gap-3 bg-muted/50 px-6 py-4">
+          <p className="text-xs text-muted-foreground">
+            A load number will be assigned automatically once saved.
+          </p>
           <button type="submit" className="btn">
             Save Load
           </button>

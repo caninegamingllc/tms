@@ -21,7 +21,8 @@ export function SearchCombobox({
   placeholder,
   options,
   required,
-  defaultValue
+  defaultValue,
+  className
 }: {
   name: string;
   label?: string;
@@ -29,6 +30,7 @@ export function SearchCombobox({
   options: SearchOption[];
   required?: boolean;
   defaultValue?: string;
+  className?: string;
 }) {
   const initialOption = options.find((option) => option.id === defaultValue);
   const [query, setQuery] = useState(initialOption?.label ?? "");
@@ -70,7 +72,7 @@ export function SearchCombobox({
   }, []);
 
   return (
-    <label className="relative grid gap-2" ref={rootRef}>
+    <label className={["relative grid gap-2", className].filter(Boolean).join(" ")} ref={rootRef}>
       {label ? <span className="label">{label}</span> : null}
       <input type="hidden" name={name} value={selectedId} />
       <input

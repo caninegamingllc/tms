@@ -1065,6 +1065,11 @@ export async function createLoad(formData: FormData) {
 
   const cloneFromLoadId = optionalString(formData, "cloneFromLoadId");
   const keepNotes = String(formData.get("keepNotes") ?? "").trim() === "1";
+  const publicNote = optionalString(formData, "publicNote");
+  const privateNote = optionalString(formData, "privateNote");
+  if (publicNote || privateNote) {
+    await assertPlanFeature(user.companyId, "load_notes");
+  }
   const cloneCarrierId = optionalString(formData, "cloneCarrierId");
 
   let sourceLoad: { id: string; loadNumber: string } | null = null;
@@ -1279,6 +1284,32 @@ export async function createLoad(formData: FormData) {
           }))
         });
       }
+    }
+
+    const initialNotes: Array<{ body: string; isPrivate: boolean }> = [];
+    if (publicNote) {
+      initialNotes.push({ body: publicNote, isPrivate: false });
+    }
+    if (privateNote) {
+      initialNotes.push({ body: privateNote, isPrivate: true });
+    }
+    if (initialNotes.length > 0) {
+      await tx.loadNote.createMany({
+        data: initialNotes.map((note) => ({
+          loadId: createdLoad.id,
+          userId: user.id,
+          body: note.body,
+          isPrivate: note.isPrivate
+        }))
+      });
+      await tx.loadActivity.createMany({
+        data: initialNotes.map((note) => ({
+          loadId: createdLoad.id,
+          userId: user.id,
+          action: note.isPrivate ? "Private note added" : "Public note added",
+          details: note.body
+        }))
+      });
     }
 
     return createdLoad;

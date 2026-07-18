@@ -50,6 +50,12 @@ function lineAmountCents(method: string, unitRateCents: number, quantity: number
   return unitRateCents;
 }
 
+function methodLabel(method: string) {
+  if (method === "PER_MILE") return "Per mile";
+  if (method === "HOURLY") return "Hourly";
+  return "Flat";
+}
+
 function newKey() {
   return `charge-${Math.random().toString(36).slice(2, 10)}`;
 }
@@ -169,17 +175,17 @@ export function CustomerChargeLinesEditor({
       <input type="hidden" name={fieldName} value={JSON.stringify(payload)} />
       <div className="grid gap-3">
         {computed.length === 0 ? (
-          <p className="rounded-2xl border border-dashed border-border px-4 py-6 text-sm text-muted-foreground">
+          <p className="rounded-lg border border-dashed border-border px-4 py-6 text-sm text-muted-foreground">
             No charge line items. Add at least one customer rate line.
           </p>
         ) : null}
         {computed.map((line) => (
           <div
             key={line.key}
-            className="grid gap-2 rounded-2xl border border-border bg-muted/40 p-3"
+            className="grid gap-3 rounded-lg border border-border bg-card p-3"
           >
-            <div className="grid gap-2 md:grid-cols-[1.4fr_1fr_auto]">
-              <label className="grid gap-1">
+            <div className="grid gap-3 sm:grid-cols-12 sm:items-end">
+              <label className="grid gap-1 sm:col-span-4">
                 <span className="label">Charge type</span>
                 <select
                   className="select"
@@ -189,11 +195,38 @@ export function CustomerChargeLinesEditor({
                   {lineTypes.map((type) => (
                     <option key={type.id} value={type.id}>
                       {type.name}
+                      {type.calculationMethod && type.calculationMethod !== "FLAT"
+                        ? ` (${methodLabel(String(type.calculationMethod))})`
+                        : ""}
                     </option>
                   ))}
                 </select>
+                <p className="text-[11px] text-muted-foreground">
+                  Calculates as {methodLabel(line.method).toLowerCase()}
+                </p>
               </label>
-              <label className="grid gap-1">
+              {line.method === "PER_MILE" || line.method === "HOURLY" ? (
+                <label className="grid gap-1 sm:col-span-2">
+                  <span className="label">{line.method === "PER_MILE" ? "Miles" : "Hours"}</span>
+                  <input
+                    className="input"
+                    type="number"
+                    min="0"
+                    step="0.01"
+                    value={line.quantity}
+                    onChange={(event) => updateLine(line.key, { quantity: event.target.value })}
+                    required
+                  />
+                </label>
+              ) : null}
+              <label
+                className={[
+                  "grid gap-1",
+                  line.method === "PER_MILE" || line.method === "HOURLY"
+                    ? "sm:col-span-3"
+                    : "sm:col-span-4"
+                ].join(" ")}
+              >
                 <span className="label">
                   {line.method === "PER_MILE"
                     ? "Rate / mile"
@@ -209,7 +242,18 @@ export function CustomerChargeLinesEditor({
                   required
                 />
               </label>
-              <div className="flex items-end">
+              <div
+                className={[
+                  "flex items-end justify-between gap-3",
+                  line.method === "PER_MILE" || line.method === "HOURLY"
+                    ? "sm:col-span-3"
+                    : "sm:col-span-4"
+                ].join(" ")}
+              >
+                <p className="text-sm text-muted-foreground">
+                  Line:{" "}
+                  <span className="font-medium text-foreground">{formatMoney(line.amountCents)}</span>
+                </p>
                 <button
                   type="button"
                   className="btn-secondary"
@@ -221,22 +265,7 @@ export function CustomerChargeLinesEditor({
               </div>
             </div>
 
-            {line.method === "PER_MILE" || line.method === "HOURLY" ? (
-              <label className="grid gap-1 max-w-xs">
-                <span className="label">{line.method === "PER_MILE" ? "Miles" : "Hours"}</span>
-                <input
-                  className="input"
-                  type="number"
-                  min="0"
-                  step="0.01"
-                  value={line.quantity}
-                  onChange={(event) => updateLine(line.key, { quantity: event.target.value })}
-                  required
-                />
-              </label>
-            ) : null}
-
-            <label className="grid gap-1">
+            <label className="grid gap-1 sm:max-w-xl">
               <span className="label">Description (optional)</span>
               <input
                 className="input"
@@ -245,21 +274,22 @@ export function CustomerChargeLinesEditor({
                 placeholder="Notes for this line"
               />
             </label>
-
-            <p className="text-sm text-muted-foreground">
-              Line total: <span className="font-medium text-foreground">{formatMoney(line.amountCents)}</span>
-            </p>
           </div>
         ))}
       </div>
 
-      <div className="flex flex-wrap items-center justify-between gap-3">
+      <div className="flex flex-wrap items-center justify-between gap-3 rounded-lg bg-muted px-4 py-3">
         <button type="button" className="btn-secondary" onClick={addLine}>
           Add line item
         </button>
-        <p className="text-sm font-semibold text-foreground">
-          Customer rate total: {formatMoney(totalCents)}
-        </p>
+        <div className="flex items-center gap-3">
+          <span className="text-xs font-medium uppercase tracking-wide text-muted-foreground">
+            Customer rate total
+          </span>
+          <span className="text-base font-semibold tabular-nums text-foreground">
+            {formatMoney(totalCents)}
+          </span>
+        </div>
       </div>
     </div>
   );
