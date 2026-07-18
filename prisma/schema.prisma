@@ -154,6 +154,7 @@ model User {
   activities             LoadActivity[]
   customerActivities     CustomerActivity[]
   carrierActivities      CarrierActivity[]
+  dnuMarkedCarriers      Carrier[]           @relation("CarrierDnuMarkedBy")
   sessions               Session[]
   auditLogs              AuditLog[]          @relation("AuditActor")
   targetAuditLogs        AuditLog[]          @relation("AuditTargetUser")
@@ -497,6 +498,10 @@ model Carrier {
   equipmentTypes      String?
   safetyRating        String?
   insuranceExpiresAt  DateTime?
+  /// When set, carrier cannot be assigned to loads. Only dnuMarkedBy or an admin can clear.
+  dnuAt               DateTime?
+  dnuMarkedByUserId   String?
+  dnuMarkedBy         User?                       @relation("CarrierDnuMarkedBy", fields: [dnuMarkedByUserId], references: [id], onDelete: SetNull)
   complianceStatus    String                      @default("Needs Review")
   paymentTerms        String                      @default("Net 30")
   paymentMethod       String?
@@ -846,7 +851,6 @@ model CheckCall {
   assignmentId   String
   assignment     DispatchAssignment @relation(fields: [assignmentId], references: [id], onDelete: Cascade)
   location       String
-  status         String
   notes          String?
   occurredAt     DateTime           @default(now())
   nextCheckAt    DateTime?

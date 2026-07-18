@@ -19,7 +19,7 @@ export async function loadCustomerPortalBoardRows(viewer: PortalViewer): Promise
             orderBy: { occurredAt: "desc" },
             take: 1,
             select: {
-              status: true,
+              notes: true,
               location: true,
               occurredAt: true
             }

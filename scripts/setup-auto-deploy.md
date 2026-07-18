@@ -64,3 +64,16 @@ bash /var/www/tms/scripts/tms-deploy.sh
 ```bash
 ssh tms "tail -f /var/log/tms-deploy.log"
 ```
+
+## Production host
+
+Current production droplet IP: `159.65.39.111` (`tms.simple-source.com`).
+
+Local SSH `Host tms` in `~/.ssh/config` must use that same IP, or deploy-log checks will hit the wrong box.
+
+After migrating droplets:
+
+1. Point GoDaddy A records for `tms` / `www` at the new public IP.
+2. Update local `Host tms` `HostName` to match.
+3. Confirm `/etc/webhook.conf` secret matches GitHub Actions `DEPLOY_WEBHOOK_SECRET`.
+4. Verify: `dig +short tms.simple-source.com` and `ssh -G tms | grep '^hostname '` agree.

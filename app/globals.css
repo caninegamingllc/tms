@@ -224,7 +224,7 @@ textarea::placeholder {
   }
 
   .table th {
-    @apply border-b border-border bg-muted/80 px-3 py-2 text-[10.5px] font-semibold uppercase tracking-[0.12em] text-muted-foreground;
+    @apply relative border-b border-border bg-muted/80 px-3 py-2 text-[10.5px] font-semibold uppercase tracking-[0.12em] text-muted-foreground;
   }
 
   .table th.sortable button {
@@ -254,6 +254,27 @@ textarea::placeholder {
   .table th:hover .table-col-handle,
   .table th.table-col-drag-over .table-col-handle {
     opacity: 1;
+  }
+
+  .table th .table-col-resize-handle {
+    @apply absolute inset-y-0 right-0 z-10 w-2 cursor-col-resize touch-none;
+    transform: translateX(50%);
+  }
+
+  .table th .table-col-resize-handle::after {
+    @apply absolute bottom-1.5 right-1/2 top-1.5 w-px bg-border opacity-0 transition-opacity;
+    content: "";
+  }
+
+  .table th:hover .table-col-resize-handle::after,
+  .table th .table-col-resize-handle:hover::after {
+    @apply bg-primary opacity-100;
+  }
+
+  body.table-column-resizing,
+  body.table-column-resizing * {
+    cursor: col-resize !important;
+    user-select: none !important;
   }
 
   .table td {

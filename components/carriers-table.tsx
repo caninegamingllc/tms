@@ -17,6 +17,7 @@ export type CarrierTableRow = {
   coverageCount: number;
   loadCount: number;
   totalSpendCents: number;
+  isDnu?: boolean;
 };
 
 export function CarriersTable({
@@ -44,6 +45,11 @@ export function CarriersTable({
               <Link href={`/carriers/${carrier.id}`} className="font-semibold text-primary">
                 {carrier.name}
               </Link>
+              {carrier.isDnu ? (
+                <span className="ml-2 rounded-full bg-rose-100 px-2 py-0.5 text-xs font-semibold text-rose-800">
+                  DNU
+                </span>
+              ) : null}
               <p className="muted">{carrier.contact}</p>
             </>
           )

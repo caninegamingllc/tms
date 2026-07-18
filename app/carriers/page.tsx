@@ -63,7 +63,8 @@ export default async function CarriersPage({
       insuranceExpiresAt: carrier.insuranceExpiresAt?.toISOString() ?? null,
       coverageCount: carrier.insuranceCoverages.length,
       loadCount: carrier._count.assignments,
-      totalSpendCents: carrier.totalSpendCents
+      totalSpendCents: carrier.totalSpendCents,
+      isDnu: carrier.dnuAt != null
     };
   });
 

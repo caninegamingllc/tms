@@ -6,13 +6,16 @@ import { PageHeader } from "@/components/page-header";
 import { TileBoard, Tile } from "@/components/tile-board";
 import {
   addCarrierActivityNote,
+  clearCarrierDnu,
   createCarrierInsuranceCoverage,
+  markCarrierDnu,
   refreshCarrierInsuranceFromFmcsa,
   updateCarrier,
   updateCarrierInsuranceCoverage
 } from "@/lib/actions";
 import { requireTmsAccess, userHasPlanFeature } from "@/lib/permissions";
-import { canWrite } from "@/lib/scope";
+import { canClearCarrierDnu, isCarrierDnu } from "@/lib/carrier-compliance";
+import { canWrite, isAdminRole } from "@/lib/scope";
 import { insuranceCoverageTypes } from "@/lib/constants";
 import { toDocumentTableRows } from "@/lib/document-rows";
 import { prisma } from "@/lib/db";
@@ -50,6 +53,7 @@ export default async function CarrierDetailPage({
       include: {
         contacts: true,
         factoringCompany: true,
+        dnuMarkedBy: true,
         insuranceCoverages: { orderBy: [{ expiresAt: "asc" }, { coverageType: "asc" }] },
         documents: { include: { uploadedBy: true, load: true, customer: true, carrier: true } },
         assignments: { include: { load: true }, orderBy: { assignedAt: "desc" } },
@@ -70,6 +74,8 @@ export default async function CarrierDetailPage({
 
   const totalSpend = carrier.assignments.reduce((sum, assignment) => sum + assignment.rateCents, 0);
   const writable = canWrite(user);
+  const carrierIsDnu = isCarrierDnu(carrier);
+  const canClearDnu = canClearCarrierDnu(user, carrier);
 
   return (
     <>
@@ -123,10 +129,10 @@ export default async function CarrierDetailPage({
               </div>
               <input name="equipmentTypes" className="input" defaultValue={carrier.equipmentTypes ?? ""} placeholder="Equipment types" />
               <div className="grid gap-3 md:grid-cols-2">
-                <select name="status" className="select" defaultValue={carrier.status}>
+                <select name="status" className="select" defaultValue={carrier.status} disabled={carrierIsDnu}>
                   <option>Active</option>
                   <option>Prospect</option>
-                  <option>Do Not Use</option>
+                  {carrierIsDnu ? <option>Do Not Use</option> : null}
                   <option>Inactive</option>
                 </select>
                 <select name="complianceStatus" className="select" defaultValue={carrier.complianceStatus}>
@@ -250,7 +256,9 @@ export default async function CarrierDetailPage({
 
         <Tile id="insurance">
           <p className="muted">
-            Track coverage type, insurer, policy number, limits, effective dates, and expiration dates.
+            Track coverage type, underwriter, policy number, policy amount, policy start, and policy
+            expiration. Auto Liability (BIPD) and Cargo coverages with complete details are required
+            before rate confirmations or BOLs can be generated.
           </p>
           <p className="mt-2 text-xs text-muted-foreground">
             Refresh pulls active/pending federal filings from FMCSA Motus Insur, falling back to
@@ -292,7 +300,7 @@ export default async function CarrierDetailPage({
                       </option>
                     ))}
                   </select>
-                  <input name="insurerName" className="input" defaultValue={coverage.insurerName ?? ""} placeholder="Insurer" />
+                  <input name="insurerName" className="input" defaultValue={coverage.insurerName ?? ""} placeholder="Underwriter" />
                   <select name="status" className="select" defaultValue={coverage.status}>
                     <option>Current</option>
                     <option>Expiring Soon</option>
@@ -300,13 +308,13 @@ export default async function CarrierDetailPage({
                     <option>Missing</option>
                   </select>
                 </div>
-                <div className="grid gap-3 md:grid-cols-3">
+                <div className="grid gap-3 md:grid-cols-4">
                   <input name="policyNumber" className="input" defaultValue={coverage.policyNumber ?? ""} placeholder="Policy number" />
-                  <input name="limitAmount" className="input" defaultValue={coverage.limitAmount ?? ""} placeholder="Limit" />
-                  <input name="expiresAt" className="input" type="date" defaultValue={dateInputValue(coverage.expiresAt)} />
+                  <input name="limitAmount" className="input" defaultValue={coverage.limitAmount ?? ""} placeholder="Policy amount" />
+                  <input name="effectiveAt" className="input" type="date" defaultValue={dateInputValue(coverage.effectiveAt)} title="Policy start" />
+                  <input name="expiresAt" className="input" type="date" defaultValue={dateInputValue(coverage.expiresAt)} title="Policy expiration" />
                 </div>
-                <div className="grid gap-3 md:grid-cols-2">
-                  <input name="effectiveAt" className="input" type="date" defaultValue={dateInputValue(coverage.effectiveAt)} />
+                <div className="grid gap-3 md:grid-cols-1">
                   <input name="notes" className="input" defaultValue={coverage.notes ?? ""} placeholder="Notes" />
                 </div>
                 <button className="btn-secondary" type="submit">
@@ -327,7 +335,7 @@ export default async function CarrierDetailPage({
                   </option>
                 ))}
               </select>
-              <input name="insurerName" className="input" placeholder="Insurer" />
+              <input name="insurerName" className="input" placeholder="Underwriter" />
               <select name="status" className="select" defaultValue="Current">
                 <option>Current</option>
                 <option>Expiring Soon</option>
@@ -335,13 +343,13 @@ export default async function CarrierDetailPage({
                 <option>Missing</option>
               </select>
             </div>
-            <div className="grid gap-3 md:grid-cols-3">
+            <div className="grid gap-3 md:grid-cols-4">
               <input name="policyNumber" className="input" placeholder="Policy number" />
-              <input name="limitAmount" className="input" placeholder="Limit" />
-              <input name="expiresAt" className="input" type="date" />
+              <input name="limitAmount" className="input" placeholder="Policy amount" />
+              <input name="effectiveAt" className="input" type="date" title="Policy start" />
+              <input name="expiresAt" className="input" type="date" title="Policy expiration" />
             </div>
-            <div className="grid gap-3 md:grid-cols-2">
-              <input name="effectiveAt" className="input" type="date" />
+            <div className="grid gap-3 md:grid-cols-1">
               <input name="notes" className="input" placeholder="Notes" />
             </div>
             <button className="btn" type="submit">
@@ -380,6 +388,50 @@ export default async function CarrierDetailPage({
         </Tile>
         ) : null}
       </TileBoard>
+
+      {carrierIsDnu ? (
+        <div className="mt-6 rounded-2xl border border-rose-300 bg-rose-50 p-4 text-sm text-rose-900">
+          <p className="font-semibold">Do Not Use (DNU)</p>
+          <p className="mt-1">
+            This carrier cannot be assigned to loads.
+            {carrier.dnuMarkedBy ? (
+              <>
+                {" "}
+                Marked by {carrier.dnuMarkedBy.name} on {formatDateTime(carrier.dnuAt)}.
+              </>
+            ) : carrier.dnuAt ? (
+              <> Marked on {formatDateTime(carrier.dnuAt)}.</>
+            ) : null}
+          </p>
+          {writable && canClearDnu ? (
+            <form action={clearCarrierDnu} className="mt-3">
+              <input type="hidden" name="carrierId" value={carrier.id} />
+              <button className="btn-secondary" type="submit">
+                Clear Do Not Use
+              </button>
+            </form>
+          ) : writable ? (
+            <p className="mt-2 text-xs text-rose-800">
+              Only {carrier.dnuMarkedBy?.name ?? "the user who marked DNU"}
+              {isAdminRole(user.role) ? "" : " or an admin"} can clear this status.
+            </p>
+          ) : null}
+        </div>
+      ) : writable ? (
+        <div className="mt-6 rounded-2xl border border-amber-200 bg-amber-50 p-4 text-sm text-amber-900">
+          <p className="font-semibold">Carrier compliance</p>
+          <p className="mt-1">
+            Mark this carrier Do Not Use to block load assignments. Only you or an admin can clear it
+            later.
+          </p>
+          <form action={markCarrierDnu} className="mt-3">
+            <input type="hidden" name="carrierId" value={carrier.id} />
+            <button className="btn-secondary border-rose-300 text-rose-800 hover:bg-rose-100" type="submit">
+              Mark Do Not Use
+            </button>
+          </form>
+        </div>
+      ) : null}
     </>
   );
 }

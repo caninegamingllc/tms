@@ -220,8 +220,7 @@ export function CheckCallForm({ action, assignmentId, loadId }: CheckCallFormPro
         selectedLocation={selectedLocation}
         setSelectedLocation={setSelectedLocation}
       />
-      <input name="status" className="input" placeholder="Status update" required />
-      <textarea name="notes" className="textarea" placeholder="Notes" rows={3} />
+      <textarea name="notes" className="textarea" placeholder="Note" rows={3} required />
       <label className="flex items-center gap-2 rounded-xl border border-border bg-card px-3 py-2 text-sm font-semibold text-foreground">
         <input
           type="checkbox"
