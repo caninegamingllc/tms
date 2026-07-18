@@ -7,6 +7,7 @@ import {
   useOrderedColumns,
   SortableTableHeader,
   ColumnLayoutControls,
+  getResizableTableStyle,
   type SortableColumn
 } from "@/components/sortable-table";
 import { TablePagination } from "@/components/table-pagination";
@@ -249,7 +250,7 @@ export function CommissionSettleTable({
       </div>
 
       <div className="overflow-x-auto">
-        <table className="table">
+        <table className="table" style={getResizableTableStyle(headerColumns, columnWidths)}>
           <SortableTableHeader
             columns={headerColumns}
             sortState={sortState}

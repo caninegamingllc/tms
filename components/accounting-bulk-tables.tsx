@@ -9,6 +9,7 @@ import {
   useOrderedColumns,
   useSortedRows,
   ColumnLayoutControls,
+  getResizableTableStyle,
   type SortableColumn
 } from "@/components/sortable-table";
 import { TablePagination } from "@/components/table-pagination";
@@ -383,7 +384,10 @@ export function AccountingInvoicesPanel({
       </div>
 
       <div className="overflow-x-auto">
-        <table className="table min-w-full text-left text-sm">
+        <table
+          className="table min-w-full text-left text-sm"
+          style={getResizableTableStyle(headerColumns, columnWidths)}
+        >
           <SortableTableHeader
             columns={headerColumns}
             sortState={sortState}
@@ -720,7 +724,10 @@ export function AccountingBillsPanel({
       </div>
 
       <div className="overflow-x-auto">
-        <table className="table min-w-full text-left text-sm">
+        <table
+          className="table min-w-full text-left text-sm"
+          style={getResizableTableStyle(headerColumns, columnWidths)}
+        >
           <SortableTableHeader
             columns={headerColumns}
             sortState={sortState}
