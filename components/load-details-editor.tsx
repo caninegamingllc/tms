@@ -66,6 +66,7 @@ export function LoadDetailsEditor({
   loadId,
   writable,
   customerId,
+  customerName,
   customerOptions,
   branchId,
   branches,
@@ -91,6 +92,7 @@ export function LoadDetailsEditor({
   loadId: string;
   writable: boolean;
   customerId: string;
+  customerName: string;
   customerOptions: SearchOption[];
   branchId: string | null;
   branches: Array<{ id: string; name: string }>;
@@ -132,7 +134,8 @@ export function LoadDetailsEditor({
       <div className="grid gap-6">
         <div className="flex flex-wrap items-start justify-between gap-4">
           <div>
-            {statusBadge}
+            <p className="text-xl font-semibold text-foreground">{customerName}</p>
+            <div className="mt-2">{statusBadge}</div>
             <p className="mt-3 muted">
               {equipmentType}
               {equipmentType === "Reefer" && reeferTempF != null ? ` @ ${reeferTempF}°F` : ""} -{" "}

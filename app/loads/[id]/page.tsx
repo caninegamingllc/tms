@@ -362,6 +362,7 @@ export default async function LoadDetailPage({
               loadId={load.id}
               writable={canWrite(user)}
               customerId={load.customerId}
+              customerName={load.customer.name}
               customerOptions={customerOptions}
               branchId={load.branchId}
               branches={branches}
