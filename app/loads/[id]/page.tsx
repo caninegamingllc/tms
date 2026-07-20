@@ -584,7 +584,12 @@ export default async function LoadDetailPage({
         <Tile id="workflow">
           <form action={updateLoadStatus} className="mt-4 grid gap-3">
             <input type="hidden" name="loadId" value={load.id} />
-            <select name="status" className="select" defaultValue={load.status}>
+            <select
+              key={load.status}
+              name="status"
+              className="select"
+              defaultValue={load.status}
+            >
               {loadStatuses.map((status) => (
                 <option key={status} value={status}>
                   {humanize(status)}
