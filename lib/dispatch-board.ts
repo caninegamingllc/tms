@@ -17,6 +17,9 @@ export const dispatchBoardStages = [
 export type DispatchBoardStage = (typeof dispatchBoardStages)[number];
 export type DispatchBoardStageFilter = DispatchBoardStage | "all";
 
+/** Stages selected when visiting /dispatch with no stage query param. */
+export const defaultDispatchBoardStages: DispatchBoardStage[] = ["pending", "active", "en_route"];
+
 export const dispatchBoardStageLabels: Record<DispatchBoardStage, string> = {
   pending: "Pending",
   active: "Active",
@@ -141,21 +144,31 @@ export function parseDispatchBoardParams(searchParams: Record<string, string | s
     }
   }
 
+  const trimmed = rawValues.map((value) => value.trim()).filter(Boolean);
+
+  if (!trimmed.length) {
+    return { stages: [...defaultDispatchBoardStages] };
+  }
+
+  if (trimmed.includes("all")) {
+    return { stages: [] };
+  }
+
   const validStages = new Set<DispatchBoardStage>(dispatchBoardStages);
   const selected = new Set(
-    rawValues
-      .map((value) => value.trim())
-      .filter((value): value is DispatchBoardStage => validStages.has(value as DispatchBoardStage))
+    trimmed.filter((value): value is DispatchBoardStage => validStages.has(value as DispatchBoardStage))
   );
 
+  const stages = dispatchBoardStages.filter((stage) => selected.has(stage));
+
   return {
-    stages: dispatchBoardStages.filter((stage) => selected.has(stage))
+    stages: stages.length ? stages : [...defaultDispatchBoardStages]
   };
 }
 
 export function buildDispatchBoardQueryString(stages: DispatchBoardStage[]) {
   if (!stages.length) {
-    return "";
+    return "stage=all";
   }
 
   const ordered = dispatchBoardStages.filter((stage) => stages.includes(stage));

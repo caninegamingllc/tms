@@ -343,20 +343,6 @@ export function DispatchBoard({
         </div>
 
         <div className="mt-4 flex gap-2 overflow-x-auto pb-1">
-          <button
-            type="button"
-            className={clsx(
-              "shrink-0 rounded-full border px-4 py-2 text-sm font-semibold transition",
-              activeStages.length === 0
-                ? "border-primary bg-lightprimary text-primary"
-                : "border-border bg-card text-foreground hover:bg-muted"
-            )}
-            onClick={() => navigateToStages([])}
-          >
-            All
-            <span className="ml-2 text-muted-foreground">{stageCounts.all}</span>
-          </button>
-
           {dispatchBoardStages.map((stage) => {
             const isActive = activeStageSet.has(stage);
             return (
@@ -378,6 +364,20 @@ export function DispatchBoard({
               </button>
             );
           })}
+
+          <button
+            type="button"
+            className={clsx(
+              "shrink-0 rounded-full border px-4 py-2 text-sm font-semibold transition",
+              activeStages.length === 0
+                ? "border-primary bg-lightprimary text-primary"
+                : "border-border bg-card text-foreground hover:bg-muted"
+            )}
+            onClick={() => navigateToStages([])}
+          >
+            All
+            <span className="ml-2 text-muted-foreground">{stageCounts.all}</span>
+          </button>
         </div>
       </div>
 
