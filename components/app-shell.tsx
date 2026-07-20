@@ -35,6 +35,7 @@ import { canAccessAdmin } from "@/lib/seats";
 import { OrgSwitcher } from "@/components/org-switcher";
 import { BranchSwitcher } from "@/components/branch-switcher";
 import { CarrierQuickSearch } from "@/components/carrier-quick-search";
+import { ThemeToggle } from "@/components/theme-toggle";
 import type { BranchSwitcherData } from "@/lib/branch-filter";
 
 const SESSION_HEARTBEAT_MS = 30_000;
@@ -480,7 +481,8 @@ export function AppShell({
             </div>
           ) : null}
 
-          <div className="ml-auto flex items-center gap-3">
+          <div className="ml-auto flex items-center gap-2 sm:gap-3">
+            <ThemeToggle />
             <div className="hidden items-center gap-2 text-[12px] text-muted-foreground xl:flex">
               <span className="truncate">{currentUser.companyName}</span>
               <span className="h-4 w-px bg-border" />
@@ -510,7 +512,7 @@ export function AppShell({
         </header>
 
         {!currentUser.hasSeat && canAccessAdmin(currentUser.role) ? (
-          <div className="border-b border-amber-200 bg-amber-50 px-4 py-2 text-xs text-amber-800 md:px-5">
+          <div className="border-b border-amber-200 bg-amber-50 px-4 py-2 text-xs text-amber-800 dark:border-amber-900/60 dark:bg-amber-950/40 dark:text-amber-200 md:px-5">
             No seat assigned.{" "}
             <Link href="/admin/billing" className="font-semibold underline">
               Purchase and assign a seat

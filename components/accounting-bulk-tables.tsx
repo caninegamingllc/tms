@@ -323,7 +323,7 @@ export function AccountingInvoicesPanel({
             ) : null}
           </div>
           {showPayment ? (
-            <form action={receiveArPayment} className="mt-4 grid gap-3 rounded-2xl bg-white p-4">
+            <form action={receiveArPayment} className="mt-4 grid gap-3 rounded-2xl bg-card p-4">
               {[...selection.selected].map((id) => (
                 <input key={id} type="hidden" name="invoiceIds" value={id} />
               ))}
@@ -665,7 +665,7 @@ export function AccountingBillsPanel({
             ) : null}
           </div>
           {showPayment ? (
-            <form action={recordApPayment} className="mt-4 grid gap-3 rounded-2xl bg-white p-4">
+            <form action={recordApPayment} className="mt-4 grid gap-3 rounded-2xl bg-card p-4">
               {[...selection.selected].map((id) => (
                 <input key={id} type="hidden" name="billIds" value={id} />
               ))}

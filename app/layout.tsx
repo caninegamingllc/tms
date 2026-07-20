@@ -5,6 +5,7 @@ import "./globals.css";
 import { AppShell } from "@/components/app-shell";
 import { getCurrentUser } from "@/lib/auth";
 import { getBranchSwitcherData } from "@/lib/branch-filter-server";
+import { themeBootstrapScript } from "@/lib/theme";
 
 const sourceSans = Source_Sans_3({
   subsets: ["latin"],
@@ -52,8 +53,9 @@ export default async function RootLayout({ children }: { children: React.ReactNo
 
   if (portal) {
     return (
-      <html lang="en">
+      <html lang="en" suppressHydrationWarning>
         <body className={`${sourceSans.variable} ${fraunces.variable} font-sans antialiased`}>
+          <script dangerouslySetInnerHTML={{ __html: themeBootstrapScript }} />
           {children}
         </body>
       </html>
@@ -103,8 +105,9 @@ export default async function RootLayout({ children }: { children: React.ReactNo
   const branchSwitcher = currentUser ? await getBranchSwitcherData(currentUser) : null;
 
   return (
-    <html lang="en">
+    <html lang="en" suppressHydrationWarning>
       <body className={`${sourceSans.variable} ${fraunces.variable} font-sans antialiased`}>
+        <script dangerouslySetInnerHTML={{ __html: themeBootstrapScript }} />
         <AppShell currentUser={currentUser} branchSwitcher={branchSwitcher}>
           {children}
         </AppShell>

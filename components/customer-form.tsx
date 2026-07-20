@@ -153,7 +153,7 @@ export function CustomerForm({ action, branches = [], showBranchPicker = false }
           autoComplete="off"
         />
         {showSuggestions && trimmedName.length >= 3 && (results.length > 0 || loading || searchError) ? (
-          <div className="absolute left-0 right-0 top-full z-20 mt-1 overflow-hidden rounded-2xl border border-border bg-white shadow-card">
+          <div className="absolute left-0 right-0 top-full z-20 mt-1 overflow-hidden rounded-2xl border border-border bg-card shadow-card">
             {loading ? (
               <p className="px-4 py-3 text-sm text-muted-foreground">Searching businesses...</p>
             ) : searchError ? (

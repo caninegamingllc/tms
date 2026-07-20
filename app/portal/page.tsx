@@ -54,7 +54,7 @@ export default async function PortalOverviewPage() {
             { label: "Open invoices", value: openInvoices.length },
             { label: "Open balance", value: formatMoney(openBalance) }
           ].map((metric) => (
-            <div key={metric.label} className="rounded-2xl border border-border bg-white p-4">
+            <div key={metric.label} className="rounded-2xl border border-border bg-card p-4">
               <p className="text-[11px] font-semibold uppercase tracking-[0.16em] text-muted-foreground">
                 {metric.label}
               </p>

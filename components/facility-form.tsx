@@ -211,7 +211,7 @@ export function FacilityForm({ action, customers, facility }: FacilityFormProps)
     }
 
     return (
-      <div className="absolute left-0 right-0 top-full z-20 mt-1 overflow-hidden rounded-2xl border border-border bg-white shadow-card">
+      <div className="absolute left-0 right-0 top-full z-20 mt-1 overflow-hidden rounded-2xl border border-border bg-card shadow-card">
         {loading ? (
           <p className="px-4 py-3 text-sm text-muted-foreground">
             {field === "name" ? "Searching businesses..." : "Searching places..."}

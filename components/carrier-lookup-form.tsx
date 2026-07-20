@@ -180,7 +180,7 @@ export function CarrierLookupForm({
 
     if (loading || searchError || results.length > 0) {
       return (
-        <div className="absolute left-0 right-0 top-full z-20 mt-1 overflow-hidden rounded-2xl border border-border bg-white shadow-card">
+        <div className="absolute left-0 right-0 top-full z-20 mt-1 overflow-hidden rounded-2xl border border-border bg-card shadow-card">
           {loading ? (
             <p className="px-4 py-3 text-sm text-muted-foreground">Searching carriers...</p>
           ) : searchError ? (
@@ -211,7 +211,7 @@ export function CarrierLookupForm({
 
     if (hasSearched) {
       return (
-        <div className="absolute left-0 right-0 top-full z-20 mt-1 overflow-hidden rounded-2xl border border-border bg-white shadow-card">
+        <div className="absolute left-0 right-0 top-full z-20 mt-1 overflow-hidden rounded-2xl border border-border bg-card shadow-card">
           <p className="px-4 py-3 text-sm text-muted-foreground">No matches found.</p>
         </div>
       );

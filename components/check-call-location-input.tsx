@@ -181,7 +181,7 @@ function CheckCallLocationInput({
         Select a Google location so this check call can move the load pin.
       </p>
       {showSuggestions && trimmedQuery.length >= 3 && (results.length > 0 || loading || searchError) ? (
-        <div className="absolute left-0 right-0 top-full z-20 mt-1 overflow-hidden rounded-2xl border border-border bg-white shadow-card">
+        <div className="absolute left-0 right-0 top-full z-20 mt-1 overflow-hidden rounded-2xl border border-border bg-card shadow-card">
           {loading ? (
             <p className="px-4 py-3 text-sm text-muted-foreground">Searching locations...</p>
           ) : searchError ? (

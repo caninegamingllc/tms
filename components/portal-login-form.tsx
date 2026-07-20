@@ -5,7 +5,7 @@ import { portalLogin } from "@/lib/portal-auth-actions";
 
 export function PortalLoginForm({ error, message }: { error?: string; message?: string }) {
   return (
-    <div className="w-full max-w-md rounded-2xl border border-border bg-white p-8 shadow-sm">
+    <div className="w-full max-w-md rounded-2xl border border-border bg-card p-8 shadow-sm">
       <p className="text-[11px] font-semibold uppercase tracking-[0.22em] text-muted-foreground">
         Customer portal
       </p>

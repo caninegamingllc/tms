@@ -29,7 +29,7 @@ export default async function PortalInvoicesPage() {
           <h1 className="font-display mt-1 text-3xl font-semibold tracking-tight">Invoices</h1>
         </div>
 
-        <div className="overflow-x-auto rounded-2xl border border-border bg-white">
+        <div className="overflow-x-auto rounded-2xl border border-border bg-card">
           <table className="min-w-full text-left text-sm">
             <thead className="border-b border-border bg-muted text-[11px] uppercase tracking-[0.12em] text-muted-foreground">
               <tr>

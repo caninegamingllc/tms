@@ -36,7 +36,7 @@ export default async function PortalAcceptInvitePage({
 
   return (
     <main className="flex min-h-screen items-center justify-center bg-background px-4 py-10">
-      <div className="w-full max-w-md rounded-2xl border border-border bg-white p-8 shadow-sm">
+      <div className="w-full max-w-md rounded-2xl border border-border bg-card p-8 shadow-sm">
         <p className="text-[11px] font-semibold uppercase tracking-[0.22em] text-muted-foreground">
           Customer portal
         </p>

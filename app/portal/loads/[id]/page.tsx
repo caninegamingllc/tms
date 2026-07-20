@@ -87,26 +87,26 @@ export default async function PortalLoadDetailPage({
         </div>
 
         <div className="grid gap-4 md:grid-cols-2 xl:grid-cols-4">
-          <div className="rounded-2xl border border-border bg-white p-4">
+          <div className="rounded-2xl border border-border bg-card p-4">
             <p className="label">Stage</p>
             <p className="font-semibold">{boardStage ? humanize(boardStage) : "—"}</p>
           </div>
-          <div className="rounded-2xl border border-border bg-white p-4">
+          <div className="rounded-2xl border border-border bg-card p-4">
             <p className="label">Equipment</p>
             <p className="font-semibold">{load.equipmentType}</p>
           </div>
-          <div className="rounded-2xl border border-border bg-white p-4">
+          <div className="rounded-2xl border border-border bg-card p-4">
             <p className="label">Commodity</p>
             <p className="font-semibold">{load.commodity ?? "General freight"}</p>
           </div>
-          <div className="rounded-2xl border border-border bg-white p-4">
+          <div className="rounded-2xl border border-border bg-card p-4">
             <p className="label">Reference</p>
             <p className="font-semibold">{load.referenceNumber ?? "—"}</p>
           </div>
         </div>
 
         <div className="grid gap-6 lg:grid-cols-2">
-          <section className="rounded-2xl border border-border bg-white p-5">
+          <section className="rounded-2xl border border-border bg-card p-5">
             <h2 className="section-title">Stops</h2>
             <div className="mt-4 grid gap-3">
               {load.stops.length ? (
@@ -144,7 +144,7 @@ export default async function PortalLoadDetailPage({
             </div>
           </section>
 
-          <section className="rounded-2xl border border-border bg-white p-5">
+          <section className="rounded-2xl border border-border bg-card p-5">
             <h2 className="section-title">Carrier & driver</h2>
             {primary ? (
               <div className="mt-4 grid gap-3 text-sm">
@@ -187,7 +187,7 @@ export default async function PortalLoadDetailPage({
           </section>
         </div>
 
-        <section className="rounded-2xl border border-border bg-white p-5">
+        <section className="rounded-2xl border border-border bg-card p-5">
           <h2 className="section-title">Documents</h2>
           <div className="mt-4 grid gap-2">
             {load.documents.length ? (

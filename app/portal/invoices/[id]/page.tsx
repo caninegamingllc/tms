@@ -88,25 +88,25 @@ export default async function PortalInvoiceDetailPage({
         </div>
 
         <div className="grid gap-4 sm:grid-cols-2 lg:grid-cols-4">
-          <div className="rounded-2xl border border-border bg-white p-4">
+          <div className="rounded-2xl border border-border bg-card p-4">
             <p className="label">Total</p>
             <p className="font-display text-2xl font-semibold">{formatMoney(invoice.totalCents)}</p>
           </div>
-          <div className="rounded-2xl border border-border bg-white p-4">
+          <div className="rounded-2xl border border-border bg-card p-4">
             <p className="label">Balance</p>
             <p className="font-display text-2xl font-semibold">{formatMoney(invoice.balanceCents)}</p>
           </div>
-          <div className="rounded-2xl border border-border bg-white p-4">
+          <div className="rounded-2xl border border-border bg-card p-4">
             <p className="label">Issued</p>
             <p className="font-semibold">{invoice.issuedAt ? formatDate(invoice.issuedAt) : "—"}</p>
           </div>
-          <div className="rounded-2xl border border-border bg-white p-4">
+          <div className="rounded-2xl border border-border bg-card p-4">
             <p className="label">Due</p>
             <p className="font-semibold">{invoice.dueAt ? formatDate(invoice.dueAt) : "—"}</p>
           </div>
         </div>
 
-        <section className="rounded-2xl border border-border bg-white p-5">
+        <section className="rounded-2xl border border-border bg-card p-5">
           <h2 className="section-title">Documents</h2>
           <div className="mt-4 grid gap-2">
             {docs.length ? (

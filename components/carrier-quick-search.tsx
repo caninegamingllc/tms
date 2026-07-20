@@ -191,7 +191,7 @@ export function CarrierQuickSearch() {
                 return (
                   <li
                     key={result.id}
-                    className="rounded-2xl border border-border bg-white p-4"
+                    className="rounded-2xl border border-border bg-card p-4"
                   >
                     <div className="flex items-start justify-between gap-3">
                       <div className="min-w-0">
