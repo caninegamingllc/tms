@@ -26,6 +26,7 @@ import {
   Settings,
   ShieldCheck,
   Truck,
+  User,
   X
 } from "lucide-react";
 import type { CurrentUser } from "@/lib/auth";
@@ -133,6 +134,7 @@ const navGroups: NavGroup[] = [
         icon: Plug,
         feature: "marketplace_integrations"
       },
+      { href: "/settings", label: "Settings", icon: Settings },
       { href: "/settings/email", label: "Email settings", icon: FileText, feature: "email_mailbox" }
     ]
   }
@@ -142,6 +144,14 @@ function isNavActive(pathname: string, href: string) {
   if (href === "/") return pathname === "/";
   if (href === "/admin") return pathname === "/admin";
   if (href === "/commissions") return pathname === "/commissions";
+  // Keep Settings highlighted for its hub + account page, but not Email settings (separate item).
+  if (href === "/settings") {
+    return (
+      pathname === "/settings" ||
+      pathname === "/settings/account" ||
+      pathname.startsWith("/settings/account/")
+    );
+  }
   return pathname === href || pathname.startsWith(`${href}/`);
 }
 
@@ -226,15 +236,35 @@ function MobileNavList({
         ) : null}
 
         <div className="mt-3 rounded-md border border-white/10 bg-white/5 p-3">
-          <p className="text-sm font-semibold text-white">{currentUser.name}</p>
-          <p className="text-xs text-white/55">{currentUser.email}</p>
-          <p className="text-xs text-white/55">{currentUser.companyName}</p>
-          <p className="text-xs text-white/55">Role: {currentUser.role}</p>
-          <form action="/logout" method="post" className="mt-3">
-            <button className="btn-secondary w-full !bg-white/10 !text-white" type="submit">
-              Sign Out
-            </button>
-          </form>
+          <Link href="/profile" onClick={onNavigate} className="block">
+            <p className="text-sm font-semibold text-white">{currentUser.name}</p>
+            <p className="text-xs text-white/55">{currentUser.email}</p>
+            <p className="text-xs text-white/55">{currentUser.companyName}</p>
+            <p className="text-xs text-white/55">Role: {currentUser.role}</p>
+          </Link>
+          <div className="mt-3 grid gap-2">
+            <Link
+              href="/profile"
+              onClick={onNavigate}
+              className="btn-secondary flex w-full items-center justify-center gap-2 !bg-white/10 !text-white"
+            >
+              <User className="h-4 w-4" aria-hidden />
+              Profile
+            </Link>
+            <Link
+              href="/settings"
+              onClick={onNavigate}
+              className="btn-secondary flex w-full items-center justify-center gap-2 !bg-white/10 !text-white"
+            >
+              <Settings className="h-4 w-4" aria-hidden />
+              Settings
+            </Link>
+            <form action="/logout" method="post">
+              <button className="btn-secondary w-full !bg-white/10 !text-white" type="submit">
+                Sign Out
+              </button>
+            </form>
+          </div>
         </div>
       </div>
     </div>
@@ -420,7 +450,11 @@ export function AppShell({
           ))}
         </nav>
 
-        <div className="flex items-center gap-3 border-t border-white/10 p-4">
+        <Link
+          href="/profile"
+          className="flex items-center gap-3 border-t border-white/10 p-4 transition hover:bg-white/5"
+          title="Open profile"
+        >
           <div
             className="flex h-9 w-9 shrink-0 items-center justify-center rounded-full border border-white/15 bg-white/10 text-[11px] font-semibold text-white"
           >
@@ -430,7 +464,7 @@ export function AppShell({
             <p className="rail-brand-title truncate text-xs font-semibold">{currentUser.name}</p>
             <p className="rail-brand-sub truncate text-[11px]">{currentUser.companyName}</p>
           </div>
-        </div>
+        </Link>
       </aside>
 
       {/* Mobile drawer */}
@@ -503,6 +537,13 @@ export function AppShell({
                 compact
               />
             </div>
+            <Link
+              href="/profile"
+              className="btn-secondary hidden !px-2.5 !py-1 !text-[12px] sm:inline-flex"
+              title="Profile"
+            >
+              Profile
+            </Link>
             <form action="/logout" method="post" className="hidden sm:block">
               <button className="btn-secondary !px-2.5 !py-1 !text-[12px]" type="submit">
                 Sign Out

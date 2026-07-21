@@ -27,4 +27,4 @@ export function resolveOAuthLinkDecision(input: {
 }
 
 export const LINK_REQUIRED_MESSAGE =
-  "An account already exists for that email. Sign in with your original method, then connect Google/Microsoft from Settings.";
+  "An account already exists for that email. Sign in with your original method, then connect Google/Microsoft under Settings → Account.";

@@ -58,13 +58,23 @@ export async function GET(
     return errorRedirect(request, path, "You must agree to the Terms of Service and Privacy Policy");
   }
 
+  let safeReturnTo = returnTo;
+  if (returnTo) {
+    if (!returnTo.startsWith("/") || returnTo.startsWith("//") || returnTo.includes("://")) {
+      safeReturnTo = undefined;
+    }
+  }
+  if (mode === "link" && !safeReturnTo) {
+    safeReturnTo = "/settings/account";
+  }
+
   const state = encodeOAuthState({
     mode,
     provider,
     nonce: randomBytes(16).toString("hex"),
     companyName,
     inviteToken,
-    returnTo,
+    returnTo: safeReturnTo,
     acceptedLegal: mode === "register" || mode === "accept-invite" ? acceptedLegal : undefined
   });
 

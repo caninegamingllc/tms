@@ -13,6 +13,7 @@ import { didAcceptLegal, legalAcceptanceData } from "@/lib/legal";
 import { normalizePlanId } from "@/lib/plans";
 import { tryAutoAssignSeat } from "@/lib/seats";
 import { ensureMembershipBranchesSynced } from "@/lib/membership-branches";
+import { validatePasswordChangeInput } from "@/lib/profile";
 import type { OrganizationSummary, SessionUser } from "@/lib/types";
 
 export const sessionCookieName = "tms_session";
@@ -623,9 +624,10 @@ export async function registerCompany(formData: FormData) {
   redirect("/?welcome=1");
 }
 
-export async function changeOwnPassword(formData: FormData) {
-  "use server";
-
+async function changeOwnPasswordInternal(
+  formData: FormData,
+  paths: { errorPath: string; successPath: string }
+) {
   const user = await getCurrentUser();
 
   if (!user) {
@@ -636,15 +638,25 @@ export async function changeOwnPassword(formData: FormData) {
   const newPassword = String(formData.get("newPassword") ?? "");
   const confirmPassword = String(formData.get("confirmPassword") ?? "");
 
-  if (newPassword.length < 8 || newPassword !== confirmPassword) {
-    redirect("/change-password?error=Password%20must%20match%20and%20be%20at%20least%208%20characters");
+  const inputError = validatePasswordChangeInput({ newPassword, confirmPassword });
+  if (inputError) {
+    redirect(`${paths.errorPath}?error=${encodeURIComponent(inputError)}`);
   }
 
   const dbUser = await prisma.user.findUniqueOrThrow({ where: { id: user.id } });
+
+  if (!dbUser.passwordHash) {
+    redirect(
+      `${paths.errorPath}?error=${encodeURIComponent(
+        "This account uses Google or Microsoft sign-in. Use Forgot password to set a password, or manage sign-in methods under Settings."
+      )}`
+    );
+  }
+
   const valid = await verifyPassword(currentPassword, dbUser.passwordHash);
 
   if (!valid) {
-    redirect("/change-password?error=Current%20password%20is%20incorrect");
+    redirect(`${paths.errorPath}?error=${encodeURIComponent("Current password is incorrect")}`);
   }
 
   await prisma.user.update({
@@ -667,7 +679,25 @@ export async function changeOwnPassword(formData: FormData) {
     }
   });
 
-  redirect("/");
+  redirect(paths.successPath);
+}
+
+/** Forced password change (admin-required) before continuing into the app. */
+export async function changeOwnPassword(formData: FormData) {
+  "use server";
+  await changeOwnPasswordInternal(formData, {
+    errorPath: "/change-password",
+    successPath: "/"
+  });
+}
+
+/** Voluntary password change from Settings. */
+export async function changeOwnPasswordFromSettings(formData: FormData) {
+  "use server";
+  await changeOwnPasswordInternal(formData, {
+    errorPath: "/settings",
+    successPath: "/settings?passwordUpdated=1"
+  });
 }
 
 export async function getInviteByToken(token: string) {

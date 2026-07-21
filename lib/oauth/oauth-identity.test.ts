@@ -38,13 +38,25 @@ describe("resolveOAuthLinkDecision", () => {
   });
 
   it("auto-links a verified Google email to an existing credentials user", () => {
+    const googleVerified: Pick<OAuthProfile, "emailVerified"> = { emailVerified: true };
     assert.equal(
       resolveOAuthLinkDecision({
         linkedUserId: null,
         userByEmailId: "user-1",
-        emailVerified: true
+        emailVerified: googleVerified.emailVerified
       }),
       "AUTOLINK"
+    );
+  });
+
+  it("requires explicit linking for unverified Google matching an existing user", () => {
+    assert.equal(
+      resolveOAuthLinkDecision({
+        linkedUserId: null,
+        userByEmailId: "user-1",
+        emailVerified: false
+      }),
+      "LINK_REQUIRED"
     );
   });
 
@@ -59,15 +71,24 @@ describe("resolveOAuthLinkDecision", () => {
     );
   });
 
-  it("requires explicit linking for Microsoft (emailVerified always false)", () => {
+  it("requires explicit linking for Microsoft when email matches an existing user", () => {
+    const microsoftProfile: OAuthProfile = {
+      provider: "MICROSOFT",
+      providerAccountId: "oid-1",
+      email: "existing@example.com",
+      name: "Existing",
+      emailVerified: false,
+      tenantId: "tid-1"
+    };
     assert.equal(
       resolveOAuthLinkDecision({
         linkedUserId: null,
         userByEmailId: "user-1",
-        emailVerified: false
+        emailVerified: microsoftProfile.emailVerified
       }),
       "LINK_REQUIRED"
     );
+    assertProfileHasNoSecrets(microsoftProfile);
   });
 
   it("returns NO_ACCOUNT when nothing matches", () => {
@@ -81,8 +102,9 @@ describe("resolveOAuthLinkDecision", () => {
     );
   });
 
-  it("exports a recovery message without tokens or secrets", () => {
+  it("exports a recovery message pointing to Settings → Account without secrets", () => {
     assert.match(LINK_REQUIRED_MESSAGE, /Sign in with your original method/i);
+    assert.match(LINK_REQUIRED_MESSAGE, /Settings\s*→\s*Account/i);
     assert.doesNotMatch(LINK_REQUIRED_MESSAGE, /token|secret|password|access_token/i);
   });
 });

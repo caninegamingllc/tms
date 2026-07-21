@@ -341,7 +341,24 @@ async function handleLink(profile: OAuthProfile, returnTo?: string) {
   }
 
   await linkOAuthAccount(session.userId, profile);
-  return { redirectTo: returnTo || "/settings/email?linked=1" };
+
+  const safeReturnTo =
+    returnTo &&
+    returnTo.startsWith("/") &&
+    !returnTo.startsWith("//") &&
+    !returnTo.includes("://")
+      ? returnTo
+      : null;
+
+  if (safeReturnTo) {
+    const separator = safeReturnTo.includes("?") ? "&" : "?";
+    const withLinked = /[?&]linked=/.test(safeReturnTo)
+      ? safeReturnTo
+      : `${safeReturnTo}${separator}linked=1`;
+    return { redirectTo: withLinked };
+  }
+
+  return { redirectTo: "/settings/account?linked=1" };
 }
 
 export async function completeIdentityOAuth(
