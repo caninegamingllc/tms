@@ -6,6 +6,10 @@ export type OAuthProfile = {
   providerAccountId: string;
   email: string;
   name: string;
+  /** True only when the provider cryptographically asserts email ownership. */
+  emailVerified: boolean;
+  /** Microsoft Entra tenant id (tid), when present. */
+  tenantId?: string;
 };
 
 const GOOGLE_AUTH = "https://accounts.google.com/o/oauth2/v2/auth";
@@ -131,8 +135,9 @@ async function fetchGoogleProfile(accessToken: string): Promise<OAuthProfile> {
   return {
     provider: "GOOGLE",
     providerAccountId: data.sub,
-    email: data.email.toLowerCase(),
-    name: data.name?.trim() || data.email.split("@")[0]
+    email: data.email.trim().toLowerCase(),
+    name: data.name?.trim() || data.email.split("@")[0],
+    emailVerified: data.email_verified === true
   };
 }
 

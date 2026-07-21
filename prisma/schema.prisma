@@ -175,6 +175,8 @@ model OAuthAccount {
   provider          String
   providerAccountId String
   email             String
+  /// Microsoft Entra tenant id (tid), when known. Nullable for legacy rows and Google.
+  tenantId          String?
   createdAt         DateTime @default(now())
   updatedAt         DateTime @updatedAt
 

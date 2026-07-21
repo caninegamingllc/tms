@@ -11,11 +11,21 @@ import { legalAcceptanceData } from "@/lib/legal";
 import { tryAutoAssignSeat } from "@/lib/seats";
 import type { OAuthProfile } from "@/lib/oauth/google";
 import {
+  LINK_REQUIRED_MESSAGE,
+  resolveOAuthLinkDecision
+} from "@/lib/oauth/link-decision";
+import {
   IDENTITY_OAUTH_STATE_COOKIE,
   shouldUseSecureCookies,
   type IdentityOAuthState,
   type OAuthProvider
 } from "@/lib/oauth/types";
+
+export {
+  LINK_REQUIRED_MESSAGE,
+  resolveOAuthLinkDecision,
+  type OAuthLinkDecision
+} from "@/lib/oauth/link-decision";
 
 function hashToken(token: string) {
   return createHash("sha256").update(token).digest("hex");
@@ -60,11 +70,13 @@ async function linkOAuthAccount(userId: string, profile: OAuthProfile) {
       userId,
       provider: profile.provider,
       providerAccountId: profile.providerAccountId,
-      email: profile.email
+      email: profile.email,
+      tenantId: profile.tenantId ?? null
     },
     update: {
       providerAccountId: profile.providerAccountId,
-      email: profile.email
+      email: profile.email,
+      tenantId: profile.tenantId ?? null
     }
   });
 }
@@ -127,7 +139,7 @@ async function finishLoginSession(userId: string, preferredMembershipId?: string
   return { redirectTo: "/" };
 }
 
-async function resolveUserForLogin(profile: OAuthProfile) {
+async function handleLogin(profile: OAuthProfile) {
   const byProvider = await prisma.oAuthAccount.findUnique({
     where: {
       provider_providerAccountId: {
@@ -138,29 +150,37 @@ async function resolveUserForLogin(profile: OAuthProfile) {
     include: { user: true }
   });
 
-  if (byProvider) {
-    return byProvider.user;
+  const byEmail = byProvider
+    ? null
+    : await prisma.user.findUnique({ where: { email: profile.email } });
+
+  const decision = resolveOAuthLinkDecision({
+    linkedUserId: byProvider?.userId ?? null,
+    userByEmailId: byEmail?.id ?? null,
+    emailVerified: profile.emailVerified
+  });
+
+  switch (decision) {
+    case "LOGIN_LINKED": {
+      // Refresh stored email/tenant from the latest provider profile.
+      await linkOAuthAccount(byProvider!.userId, profile);
+      return finishLoginSession(byProvider!.userId);
+    }
+    case "AUTOLINK": {
+      await linkOAuthAccount(byEmail!.id, profile);
+      return finishLoginSession(byEmail!.id);
+    }
+    case "LINK_REQUIRED":
+      return {
+        redirectTo: `/login?error=${encodeURIComponent(LINK_REQUIRED_MESSAGE)}`
+      };
+    case "NO_ACCOUNT":
+    default:
+      return {
+        redirectTo:
+          "/login?error=No%20account%20found%20for%20that%20email.%20Register%20a%20company%20or%20accept%20an%20invite%20first."
+      };
   }
-
-  const byEmail = await prisma.user.findUnique({ where: { email: profile.email } });
-  if (byEmail) {
-    await linkOAuthAccount(byEmail.id, profile);
-    return byEmail;
-  }
-
-  return null;
-}
-
-async function handleLogin(profile: OAuthProfile) {
-  const user = await resolveUserForLogin(profile);
-  if (!user) {
-    return {
-      redirectTo:
-        "/login?error=No%20account%20found%20for%20that%20email.%20Register%20a%20company%20or%20accept%20an%20invite%20first."
-    };
-  }
-
-  return finishLoginSession(user.id);
 }
 
 async function handleRegister(
@@ -217,6 +237,9 @@ async function handleAcceptInvite(
   inviteToken?: string,
   acceptedLegal?: boolean
 ) {
+  // Security boundary is the hashed invite token, not the OAuth email claim.
+  // Email match is a UX guard so the wrong person cannot accidentally claim
+  // an invite they somehow obtained; it is not the sole authorization check.
   if (!inviteToken) {
     return { redirectTo: "/login?error=Invalid%20invite%20link" };
   }

@@ -108,7 +108,13 @@ async function exchangeMicrosoftCode(code: string, redirectUri: string) {
   };
 }
 
-function profileFromMicrosoftIdToken(idToken: string): OAuthProfile {
+/**
+ * Build an identity profile from a Microsoft ID token payload.
+ * Identity is keyed by oid (or sub); email/preferred_username are never treated
+ * as verified — they are display/registration hints only.
+ * Exported for unit tests.
+ */
+export function profileFromMicrosoftIdToken(idToken: string): OAuthProfile {
   const parts = idToken.split(".");
   if (parts.length < 2) {
     throw new Error("Microsoft ID token was malformed.");
@@ -118,6 +124,7 @@ function profileFromMicrosoftIdToken(idToken: string): OAuthProfile {
     aud?: string | string[];
     oid?: string;
     sub?: string;
+    tid?: string;
     email?: string;
     preferred_username?: string;
     name?: string;
@@ -131,7 +138,7 @@ function profileFromMicrosoftIdToken(idToken: string): OAuthProfile {
     throw new Error("Microsoft ID token audience mismatch.");
   }
 
-  const email = (payload.email || payload.preferred_username || "").toLowerCase();
+  const email = (payload.email || payload.preferred_username || "").trim().toLowerCase();
   if (!email || !email.includes("@")) {
     throw new Error("Microsoft account did not return an email address.");
   }
@@ -145,7 +152,11 @@ function profileFromMicrosoftIdToken(idToken: string): OAuthProfile {
     provider: "MICROSOFT" satisfies OAuthProvider,
     providerAccountId,
     email,
-    name: payload.name?.trim() || email.split("@")[0]
+    name: payload.name?.trim() || email.split("@")[0],
+    // With MICROSOFT_TENANT_ID=common the email/preferred_username claims are
+    // not domain-verified and must never drive automatic account linking.
+    emailVerified: false,
+    tenantId: payload.tid?.trim() || undefined
   };
 }
 
@@ -165,7 +176,7 @@ async function fetchMicrosoftProfile(accessToken: string): Promise<OAuthProfile>
     userPrincipalName?: string;
   };
 
-  const email = (data.mail || data.userPrincipalName || "").toLowerCase();
+  const email = (data.mail || data.userPrincipalName || "").trim().toLowerCase();
   if (!email || !email.includes("@")) {
     throw new Error("Microsoft account did not return an email address.");
   }
@@ -174,7 +185,9 @@ async function fetchMicrosoftProfile(accessToken: string): Promise<OAuthProfile>
     provider: "MICROSOFT" satisfies OAuthProvider,
     providerAccountId: data.id,
     email,
-    name: data.displayName?.trim() || email.split("@")[0]
+    name: data.displayName?.trim() || email.split("@")[0],
+    // Mailbox connect is not identity linking; keep emailVerified false.
+    emailVerified: false
   };
 }
 
