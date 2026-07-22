@@ -22,8 +22,7 @@ export function tourIdForNavUrl(url: string): string | undefined {
     "/search": "nav-search",
     "/dispatch": "nav-dispatch",
     "/customers": "nav-customers",
-    "/carriers": "nav-carriers",
-    "/settings": "nav-settings"
+    "/carriers": "nav-carriers"
   };
   return map[url];
 }
@@ -78,8 +77,8 @@ export const PRODUCT_TOUR_STEPS: TourStepDef[] = [
     elementId: "nav-settings",
     title: "Settings",
     description:
-      "Update security and appearance here. You can replay this tour anytime from Settings.",
-    side: "right",
+      "Open your profile menu for Settings, and replay this tour anytime from there.",
+    side: "top",
     align: "start"
   }
 ];

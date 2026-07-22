@@ -1,6 +1,6 @@
 {
   "name": "freight-broker-tms",
-  "version": "0.5.1",
+  "version": "0.5.2",
   "private": true,
   "scripts": {
     "dev": "prisma generate && prisma migrate deploy && next dev --webpack",

@@ -34,6 +34,8 @@ async function persistOnboarding(body: Record<string, unknown>) {
   const response = await fetch("/api/onboarding", {
     method: "POST",
     headers: { "Content-Type": "application/json" },
+    credentials: "same-origin",
+    keepalive: true,
     body: JSON.stringify(body)
   });
   if (!response.ok) {
@@ -42,19 +44,42 @@ async function persistOnboarding(body: Record<string, unknown>) {
   return (await response.json()) as { onboarding?: OnboardingPreferences };
 }
 
+function isElementVisible(el: Element): boolean {
+  let node: HTMLElement | null = el as HTMLElement;
+  while (node) {
+    if (node.hidden) return false;
+    const style = window.getComputedStyle(node);
+    if (style.display === "none" || style.visibility === "hidden") return false;
+    node = node.parentElement;
+  }
+  return true;
+}
+
+function findVisibleTourElement(id: string): Element | null {
+  const nodes = document.querySelectorAll(tourSelector(id));
+  for (const node of nodes) {
+    if (isElementVisible(node)) return node;
+  }
+  return null;
+}
+
 function buildDriverSteps() {
-  return PRODUCT_TOUR_STEPS.filter((step) => document.querySelector(tourSelector(step.elementId))).map(
-    (step) => ({
-      element: tourSelector(step.elementId),
-      popover: {
-        title: step.title,
-        description: step.description,
-        side: step.side,
-        align: step.align,
-        showButtons: ["next", "previous", "close"] as Array<"next" | "previous" | "close">
+  return PRODUCT_TOUR_STEPS.flatMap((step) => {
+    const element = findVisibleTourElement(step.elementId);
+    if (!element) return [];
+    return [
+      {
+        element,
+        popover: {
+          title: step.title,
+          description: step.description,
+          side: step.side,
+          align: step.align,
+          showButtons: ["next", "previous", "close"] as Array<"next" | "previous" | "close">
+        }
       }
-    })
-  );
+    ];
+  });
 }
 
 function ProductTourAutoStart({
@@ -77,7 +102,7 @@ function ProductTourAutoStart({
     if (tourCompletedAt) return;
 
     const welcome = searchParams.get("welcome") === "1";
-    autoStartedRef.current = true;
+    let cancelled = false;
 
     if (welcome) {
       const params = new URLSearchParams(searchParams.toString());
@@ -86,17 +111,27 @@ function ProductTourAutoStart({
       router.replace(qs ? `${pathname}?${qs}` : pathname);
     }
 
-    const launch = () => startTour();
+    const launch = () => {
+      if (cancelled || autoStartedRef.current) return;
+      autoStartedRef.current = true;
+      startTour();
+    };
 
     // Prefer dashboard so welcome + sidebar anchors exist together.
     if (pathname !== DASHBOARD_PATH) {
       router.push(DASHBOARD_PATH);
       const timer = window.setTimeout(launch, 450);
-      return () => window.clearTimeout(timer);
+      return () => {
+        cancelled = true;
+        window.clearTimeout(timer);
+      };
     }
 
     const timer = window.setTimeout(launch, welcome ? 200 : 600);
-    return () => window.clearTimeout(timer);
+    return () => {
+      cancelled = true;
+      window.clearTimeout(timer);
+    };
   }, [autoStart, tourCompletedAt, pathname, router, searchParams, startTour]);
 
   return null;
@@ -125,6 +160,16 @@ export function ProductTourProvider({
     () => initialOnboarding?.dismissedCoachmarks ?? []
   );
   const [tourActive, setTourActive] = useState(false);
+
+  // Server login payload wins over stale client state (e.g. after soft remount).
+  useEffect(() => {
+    if (initialOnboarding?.tourCompletedAt) {
+      setTourCompletedAt(initialOnboarding.tourCompletedAt);
+    }
+    if (initialOnboarding?.dismissedCoachmarks) {
+      setDismissed(initialOnboarding.dismissedCoachmarks);
+    }
+  }, [initialOnboarding?.tourCompletedAt, initialOnboarding?.dismissedCoachmarks]);
 
   const tourCompleted = Boolean(tourCompletedAt);
   const dismissedCoachmarks = useMemo(() => new Set(dismissed), [dismissed]);

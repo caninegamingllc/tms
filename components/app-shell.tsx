@@ -27,7 +27,6 @@ import {
   Settings,
   ShieldCheck,
   Truck,
-  User,
   X
 } from "lucide-react";
 import type { CurrentUser } from "@/lib/auth";
@@ -39,8 +38,8 @@ import { BranchSwitcher } from "@/components/branch-switcher";
 import { CarrierQuickSearch } from "@/components/carrier-quick-search";
 import { ThemeToggle } from "@/components/theme-toggle";
 import { ProductTourProvider } from "@/components/onboarding/ProductTourProvider";
-import { ReplayProductTourButton } from "@/components/onboarding/ReplayProductTourButton";
 import { TOUR_ATTR, tourIdForNavUrl } from "@/components/onboarding/tour-steps";
+import { SidebarUserMenu } from "@/components/sidebar-user-menu";
 import type { OnboardingPreferences } from "@/lib/ui-preferences";
 import type { BranchSwitcherData } from "@/lib/branch-filter";
 
@@ -160,15 +159,6 @@ function isNavActive(pathname: string, href: string) {
   return pathname === href || pathname.startsWith(`${href}/`);
 }
 
-function initials(name: string) {
-  return name
-    .split(/\s+/)
-    .filter(Boolean)
-    .slice(0, 2)
-    .map((part) => part[0]?.toUpperCase() ?? "")
-    .join("");
-}
-
 function MobileNavList({
   groups,
   pathname,
@@ -242,38 +232,13 @@ function MobileNavList({
           </div>
         ) : null}
 
-        <div className="mt-3 rounded-md border border-white/10 bg-white/5 p-3">
-          <Link href="/profile" onClick={onNavigate} className="block">
-            <p className="text-sm font-semibold text-white">{currentUser.name}</p>
-            <p className="text-xs text-white/55">{currentUser.email}</p>
-            <p className="text-xs text-white/55">{currentUser.companyName}</p>
-            <p className="text-xs text-white/55">Role: {currentUser.role}</p>
-          </Link>
-          <div className="mt-3 grid gap-2">
-            <Link
-              href="/profile"
-              onClick={onNavigate}
-              className="btn-secondary flex w-full items-center justify-center gap-2 !bg-white/10 !text-white"
-            >
-              <User className="h-4 w-4" aria-hidden />
-              Profile
-            </Link>
-            <Link
-              href="/settings"
-              onClick={onNavigate}
-              {...{ [TOUR_ATTR]: "nav-settings" }}
-              className="btn-secondary flex w-full items-center justify-center gap-2 !bg-white/10 !text-white"
-            >
-              <Settings className="h-4 w-4" aria-hidden />
-              Settings
-            </Link>
-            <ReplayProductTourButton variant="rail" />
-            <form action="/logout" method="post">
-              <button className="btn-secondary w-full !bg-white/10 !text-white" type="submit">
-                Sign Out
-              </button>
-            </form>
-          </div>
+        <div className="mt-3">
+          <SidebarUserMenu
+            name={currentUser.name}
+            email={currentUser.email}
+            companyName={currentUser.companyName}
+            onNavigate={onNavigate}
+          />
         </div>
       </div>
     </div>
@@ -518,25 +483,11 @@ function AppShellFrame({
         </nav>
 
         <div className="border-t border-white/10 p-3">
-          <ReplayProductTourButton
-            variant="rail"
-            className="btn-secondary mb-2 flex w-full items-center justify-center gap-2 !bg-white/10 !text-white !text-[11px]"
+          <SidebarUserMenu
+            name={currentUser.name}
+            email={currentUser.email}
+            companyName={currentUser.companyName}
           />
-          <Link
-            href="/profile"
-            className="flex items-center gap-3 rounded-md p-1 transition hover:bg-white/5"
-            title="Open profile"
-          >
-            <div
-              className="flex h-9 w-9 shrink-0 items-center justify-center rounded-full border border-white/15 bg-white/10 text-[11px] font-semibold text-white"
-            >
-              {initials(currentUser.name) || "SS"}
-            </div>
-            <div className="min-w-0">
-              <p className="rail-brand-title truncate text-xs font-semibold">{currentUser.name}</p>
-              <p className="rail-brand-sub truncate text-[11px]">{currentUser.companyName}</p>
-            </div>
-          </Link>
         </div>
       </aside>
 
@@ -610,18 +561,6 @@ function AppShellFrame({
                 compact
               />
             </div>
-            <Link
-              href="/profile"
-              className="btn-secondary hidden !px-2.5 !py-1 !text-[12px] sm:inline-flex"
-              title="Profile"
-            >
-              Profile
-            </Link>
-            <form action="/logout" method="post" className="hidden sm:block">
-              <button className="btn-secondary !px-2.5 !py-1 !text-[12px]" type="submit">
-                Sign Out
-              </button>
-            </form>
           </div>
         </header>
 
