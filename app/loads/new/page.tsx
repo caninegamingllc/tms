@@ -56,6 +56,7 @@ export default async function NewLoadPage({
     keepRate?: string;
     keepCommodity?: string;
     keepNotes?: string;
+    error?: string;
   }>;
 }) {
   const user = await requireTmsAccess();
@@ -67,6 +68,7 @@ export default async function NewLoadPage({
   const keepRate = flagEnabled(params.keepRate);
   const keepCommodity = flagEnabled(params.keepCommodity);
   const keepNotes = flagEnabled(params.keepNotes);
+  const formError = params.error?.trim() || null;
 
   const [customers, facilities, branches, commodities, chargeTypes, cloneSource] =
     await Promise.all([
@@ -209,6 +211,12 @@ export default async function NewLoadPage({
             : "Customer, stops, equipment, freight, and rate estimate."
         }
       />
+
+      {formError ? (
+        <div className="mb-4 rounded-lg border border-rose-200 bg-rose-50 p-3 text-sm font-semibold text-rose-700">
+          {formError}
+        </div>
+      ) : null}
 
       {shouldCloneCarrier && assignment?.carrier ? (
         <div className="mb-4 rounded-lg border border-border bg-muted/60 p-3 text-sm text-foreground">

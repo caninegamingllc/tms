@@ -1,4 +1,5 @@
 import type { Prisma, PrismaClient } from "@prisma/client";
+import { assertMoneyCentsFitInt4 } from "@/lib/format";
 import { LATE_FEE_CHARGE_TYPE } from "@/lib/late-fees";
 
 type CatalogDb = PrismaClient | Prisma.TransactionClient;
@@ -79,6 +80,9 @@ export async function parseCustomerChargesFromForm(
       lineType.calculationMethod === "PER_MILE" || lineType.calculationMethod === "HOURLY"
         ? Math.round(unitRateCents * quantity)
         : unitRateCents;
+
+    assertMoneyCentsFitInt4(unitRateCents, `${lineType.name} rate`);
+    assertMoneyCentsFitInt4(amountCents, `${lineType.name} amount`);
 
     return {
       lineTypeId: lineType.id,

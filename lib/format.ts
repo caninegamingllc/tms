@@ -31,6 +31,34 @@ export function formatDateTime(date?: Date | string | null) {
   }).format(new Date(date));
 }
 
+/** Postgres `integer` / Prisma `Int` bounds (signed 32-bit). */
+export const POSTGRES_INT4_MAX = 2_147_483_647;
+export const POSTGRES_INT4_MIN = -2_147_483_648;
+/** Largest dollar amount that still fits when stored as cents in Int4. */
+export const MAX_MONEY_DOLLARS = Math.floor(POSTGRES_INT4_MAX / 100);
+
+export function assertFitsInt4(value: number, label: string) {
+  if (!Number.isFinite(value)) {
+    throw new Error(`${label} must be a valid number.`);
+  }
+  if (value > POSTGRES_INT4_MAX || value < POSTGRES_INT4_MIN) {
+    throw new Error(
+      `${label} is too large (max ${POSTGRES_INT4_MAX.toLocaleString("en-US")}). Check weights (lbs) and dollar amounts.`
+    );
+  }
+}
+
+export function assertMoneyCentsFitInt4(cents: number, label: string) {
+  if (!Number.isFinite(cents)) {
+    throw new Error(`${label} must be a valid amount.`);
+  }
+  if (cents > POSTGRES_INT4_MAX || cents < POSTGRES_INT4_MIN) {
+    throw new Error(
+      `${label} is too large (max about $${MAX_MONEY_DOLLARS.toLocaleString("en-US")}). Use a smaller amount.`
+    );
+  }
+}
+
 export function parseMoneyToCents(value: FormDataEntryValue | null) {
   const numeric = Number(String(value ?? "0").replace(/[^0-9.-]/g, ""));
   return Math.round((Number.isFinite(numeric) ? numeric : 0) * 100);

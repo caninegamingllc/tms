@@ -1,3 +1,5 @@
+import { assertFitsInt4 } from "@/lib/format";
+
 export type FreightLineInput = {
   quantity: number;
   description: string;
@@ -79,6 +81,7 @@ export function parseFreightLinesFromForm(formData: FormData): FreightLineInput[
     if (weightLbs == null) {
       throw new Error("Each freight line needs a weight (lbs).");
     }
+    assertFitsInt4(weightLbs, "Freight line weight");
 
     lines.push({
       quantity,
@@ -103,7 +106,9 @@ export function rollupCommodity(lines: Pick<FreightLineInput, "description">[]):
 }
 
 export function rollupWeight(lines: Pick<FreightLineInput, "weightLbs">[]): number {
-  return lines.reduce((sum, line) => sum + line.weightLbs, 0);
+  const total = lines.reduce((sum, line) => sum + line.weightLbs, 0);
+  assertFitsInt4(total, "Total freight weight");
+  return total;
 }
 
 export function commodityLinesCreateData(lines: FreightLineInput[]) {

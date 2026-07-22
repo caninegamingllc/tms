@@ -1,7 +1,7 @@
 "use server";
 
 import { revalidatePath } from "next/cache";
-import { redirect } from "next/navigation";
+import { redirect, unstable_rethrow } from "next/navigation";
 import { Prisma } from "@prisma/client";
 import { prisma } from "@/lib/db";
 import type { SessionUser } from "@/lib/types";
@@ -29,7 +29,7 @@ import {
   FMCSA_INSURANCE_NOTE_LEGACY,
   fetchFmcsaInsuranceCoverages
 } from "@/lib/fmcsa-insurance";
-import { parseMoneyToCents } from "@/lib/format";
+import { assertMoneyCentsFitInt4, parseMoneyToCents } from "@/lib/format";
 import { LATE_FEE_CHARGE_TYPE, parseLateFeePercent } from "@/lib/late-fees";
 import { recalculateLoadCommission } from "@/lib/commission";
 import { deleteStoredFile, saveUploadedFile } from "@/lib/document-storage";
@@ -96,6 +96,21 @@ function optionalFloat(formData: FormData, key: string) {
 
   const parsed = Number(value);
   return Number.isFinite(parsed) ? parsed : undefined;
+}
+
+function friendlyLoadSaveError(error: unknown) {
+  const message = error instanceof Error ? error.message : "";
+  if (
+    message.includes("Unable to fit integer value") ||
+    message.includes("INT4") ||
+    message.includes("into an INT4")
+  ) {
+    return "A weight or dollar amount is too large. Weights must be under 2,147,483,647 lbs and amounts under about $21,474,836.";
+  }
+  if (message) {
+    return message;
+  }
+  return "Could not save the load. Check the form and try again.";
 }
 
 async function loadForDocument(loadId: string, user: SessionUser) {
@@ -1020,6 +1035,15 @@ export async function updateFacility(formData: FormData) {
 }
 
 export async function createLoad(formData: FormData) {
+  try {
+    await createLoadUnchecked(formData);
+  } catch (error) {
+    unstable_rethrow(error);
+    redirect(`/loads/new?error=${encodeURIComponent(friendlyLoadSaveError(error))}`);
+  }
+}
+
+async function createLoadUnchecked(formData: FormData) {
   const user = await requireWriteUser();
   await assertPlanFeature(user.companyId, "loads_create");
 
@@ -1062,6 +1086,8 @@ export async function createLoad(formData: FormData) {
   if (revenueCents < 0) {
     throw new Error("Customer rate total cannot be negative.");
   }
+  assertMoneyCentsFitInt4(revenueCents, "Customer rate total");
+  assertMoneyCentsFitInt4(carrierCostCents, "Carrier cost");
 
   const cloneFromLoadId = optionalString(formData, "cloneFromLoadId");
   const keepNotes = String(formData.get("keepNotes") ?? "").trim() === "1";
@@ -1134,6 +1160,9 @@ export async function createLoad(formData: FormData) {
               ? Math.round(unitRateCents * quantity)
               : unitRateCents;
 
+          assertMoneyCentsFitInt4(unitRateCents, `${lineType.name} rate`);
+          assertMoneyCentsFitInt4(amountCents, `${lineType.name} amount`);
+
           return {
             lineTypeId: lineType.id,
             description: line.description?.trim() || null,
@@ -1147,6 +1176,7 @@ export async function createLoad(formData: FormData) {
         const payTotal = normalizedClonePayLines.reduce((sum, line) => sum + line.amountCents, 0);
         if (payTotal > 0) {
           carrierCostCents = payTotal;
+          assertMoneyCentsFitInt4(carrierCostCents, "Carrier cost");
         }
       }
     }
@@ -1333,6 +1363,7 @@ export async function updateLoad(formData: FormData) {
   const branchId = await resolveBranchId(user, optionalString(formData, "branchId"), prisma);
 
   const carrierCostCents = parseMoneyToCents(formData.get("carrierCost"));
+  assertMoneyCentsFitInt4(carrierCostCents, "Carrier cost");
   const equipmentType = requiredString(formData, "equipmentType");
   const reeferTempF = equipmentType === "Reefer" ? optionalFloat(formData, "reeferTempF") ?? null : null;
   const freightLines = parseFreightLinesFromForm(formData);
@@ -1358,6 +1389,7 @@ export async function updateLoad(formData: FormData) {
       .filter(isLateFeeCharge)
       .reduce((sum, charge) => sum + charge.amountCents, 0);
     const revenueCents = customerChargesTotalCents(customerChargeLines) + lateFeeCents;
+    assertMoneyCentsFitInt4(revenueCents, "Customer rate total");
 
     await tx.loadCharge.deleteMany({
       where: {
