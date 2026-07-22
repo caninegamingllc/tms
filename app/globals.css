@@ -97,15 +97,21 @@ html {
 }
 
 /* Unlayered overrides for surfaces where inherit would wash out contrast. */
-.landing-nav a {
+.landing-nav:not(.landing-nav-scrolled):not(.landing-nav-light) a {
   color: #ffffff;
   -webkit-text-fill-color: #ffffff;
 }
 
-.landing-nav a:hover {
+.landing-nav:not(.landing-nav-scrolled):not(.landing-nav-light) a:hover {
   color: #ffffff;
   -webkit-text-fill-color: #ffffff;
   opacity: 0.92;
+}
+
+.landing-nav-scrolled a,
+.landing-nav-light a {
+  color: inherit;
+  -webkit-text-fill-color: currentColor;
 }
 
 /*
