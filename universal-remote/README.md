@@ -10,10 +10,14 @@ Phone PWA ──HTTP──▶ Local bridge (:8787) ──▶ TVs on LAN
 
 ## Clone onto Windows
 
+See [WINDOWS.md](./WINDOWS.md) for full options. Quick path from this repo:
+
 ```powershell
-mkdir "C:\Users\fperi\cursor projects\Universal Remote" -Force
-cd "C:\Users\fperi\cursor projects\Universal Remote"
-git clone <REPO_URL> .
+cd "C:\Users\fperi\cursor projects"
+git clone https://github.com/caninegamingllc/tms.git tms-tmp
+New-Item -ItemType Directory -Force -Path ".\Universal Remote" | Out-Null
+Copy-Item -Recurse -Force ".\tms-tmp\universal-remote\*" ".\Universal Remote\"
+cd ".\Universal Remote"
 npm install
 npm --prefix bridge install
 ```

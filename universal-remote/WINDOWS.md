@@ -1,8 +1,20 @@
 # Clone to your Windows path
 
-This cloud agent could not create a new GitHub repository (token lacks `createRepository`). Use either path below.
+This app currently lives under `universal-remote/` in the TMS repo for delivery. Move it to a standalone folder (and ideally its own GitHub repo) before day-to-day use.
 
-## Option A — from the artifact tarball
+## Option A — copy from this repo
+
+```powershell
+cd "C:\Users\fperi\cursor projects"
+git clone https://github.com/caninegamingllc/tms.git tms-tmp
+New-Item -ItemType Directory -Force -Path ".\Universal Remote" | Out-Null
+Copy-Item -Recurse -Force ".\tms-tmp\universal-remote\*" ".\Universal Remote\"
+cd ".\Universal Remote"
+npm install
+npm --prefix bridge install
+```
+
+## Option B — from the artifact tarball
 
 1. Download `universal-remote.tar.gz` from this agent’s artifacts.
 2. On Windows PowerShell:
@@ -15,10 +27,10 @@ npm install
 npm --prefix bridge install
 ```
 
-## Option B — your own GitHub repo
+## Option C — your own GitHub repo
 
 1. Create an empty repo on GitHub (for example `caninegamingllc/universal-remote`).
-2. From the project folder (or after extracting the tarball):
+2. From the project folder:
 
 ```powershell
 cd "C:\Users\fperi\cursor projects\Universal Remote"
