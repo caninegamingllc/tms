@@ -18,7 +18,7 @@ import {
 } from "@/lib/plan-marketing";
 import { formatPlanPrice, PLANS, type PlanId } from "@/lib/plans";
 
-const COMPANY_URL = "https://simple-source.lovable.app";
+const COMPANY_URL = "https://simple-source.com";
 const CRM_URL = "https://crm.simple-source.com";
 
 function planCtaLabel(planId: PlanId): string {
