@@ -3,6 +3,7 @@
 import Link from "next/link";
 import { usePathname, useRouter } from "next/navigation";
 import {
+  Suspense,
   useEffect,
   useMemo,
   useState,
@@ -37,6 +38,10 @@ import { OrgSwitcher } from "@/components/org-switcher";
 import { BranchSwitcher } from "@/components/branch-switcher";
 import { CarrierQuickSearch } from "@/components/carrier-quick-search";
 import { ThemeToggle } from "@/components/theme-toggle";
+import { ProductTourProvider } from "@/components/onboarding/ProductTourProvider";
+import { ReplayProductTourButton } from "@/components/onboarding/ReplayProductTourButton";
+import { TOUR_ATTR, tourIdForNavUrl } from "@/components/onboarding/tour-steps";
+import type { OnboardingPreferences } from "@/lib/ui-preferences";
 import type { BranchSwitcherData } from "@/lib/branch-filter";
 
 const SESSION_HEARTBEAT_MS = 30_000;
@@ -192,12 +197,14 @@ function MobileNavList({
               {group.items.map((item) => {
                 const Icon = item.icon;
                 const active = isNavActive(pathname, item.href);
+                const tourId = tourIdForNavUrl(item.href);
                 return (
                   <Link
                     key={item.href}
                     href={item.href}
                     onClick={onNavigate}
                     data-active={active ? "true" : "false"}
+                    {...(tourId ? { [TOUR_ATTR]: tourId } : {})}
                     className="rail-nav-link flex items-center gap-3 rounded-md px-3 py-2 text-sm font-medium transition"
                     style={{
                       color: "#f8fafc",
@@ -254,11 +261,13 @@ function MobileNavList({
             <Link
               href="/settings"
               onClick={onNavigate}
+              {...{ [TOUR_ATTR]: "nav-settings" }}
               className="btn-secondary flex w-full items-center justify-center gap-2 !bg-white/10 !text-white"
             >
               <Settings className="h-4 w-4" aria-hidden />
               Settings
             </Link>
+            <ReplayProductTourButton variant="rail" />
             <form action="/logout" method="post">
               <button className="btn-secondary w-full !bg-white/10 !text-white" type="submit">
                 Sign Out
@@ -274,11 +283,13 @@ function MobileNavList({
 export function AppShell({
   children,
   currentUser,
-  branchSwitcher
+  branchSwitcher,
+  onboarding
 }: {
   children: React.ReactNode;
   currentUser: CurrentUser | null;
   branchSwitcher: BranchSwitcherData | null;
+  onboarding?: OnboardingPreferences | null;
 }) {
   const pathname = usePathname();
   const router = useRouter();
@@ -388,6 +399,60 @@ export function AppShell({
     );
   }
 
+  const autoStart = currentUser.hasSeat && !currentUser.mustChangePassword;
+
+  return (
+    <Suspense
+      fallback={
+        <AppShellFrame
+          currentUser={currentUser}
+          branchSwitcher={branchSwitcher}
+          visibleGroups={visibleGroups}
+          activeGroup={activeGroup}
+          pathname={pathname}
+          mobileNavOpen={mobileNavOpen}
+          setMobileNavOpen={setMobileNavOpen}
+        >
+          {children}
+        </AppShellFrame>
+      }
+    >
+      <ProductTourProvider initialOnboarding={onboarding} autoStart={autoStart}>
+        <AppShellFrame
+          currentUser={currentUser}
+          branchSwitcher={branchSwitcher}
+          visibleGroups={visibleGroups}
+          activeGroup={activeGroup}
+          pathname={pathname}
+          mobileNavOpen={mobileNavOpen}
+          setMobileNavOpen={setMobileNavOpen}
+        >
+          {children}
+        </AppShellFrame>
+      </ProductTourProvider>
+    </Suspense>
+  );
+}
+
+function AppShellFrame({
+  children,
+  currentUser,
+  branchSwitcher,
+  visibleGroups,
+  activeGroup,
+  pathname,
+  mobileNavOpen,
+  setMobileNavOpen
+}: {
+  children: React.ReactNode;
+  currentUser: CurrentUser;
+  branchSwitcher: BranchSwitcherData | null;
+  visibleGroups: NavGroup[];
+  activeGroup: NavGroup | null;
+  pathname: string;
+  mobileNavOpen: boolean;
+  setMobileNavOpen: (open: boolean) => void;
+}) {
   return (
     <div className="flex min-h-screen bg-background text-foreground">
       {mobileNavOpen ? (
@@ -424,11 +489,13 @@ export function AppShell({
                 {group.items.map((item) => {
                   const Icon = item.icon;
                   const active = isNavActive(pathname, item.href);
+                  const tourId = tourIdForNavUrl(item.href);
                   return (
                     <Link
                       key={item.href}
                       href={item.href}
                       data-active={active ? "true" : "false"}
+                      {...(tourId ? { [TOUR_ATTR]: tourId } : {})}
                       className="rail-nav-link flex items-center gap-3 rounded-md px-3 py-2 text-[13px] font-medium transition"
                       style={{
                         color: "#f8fafc",
@@ -450,21 +517,27 @@ export function AppShell({
           ))}
         </nav>
 
-        <Link
-          href="/profile"
-          className="flex items-center gap-3 border-t border-white/10 p-4 transition hover:bg-white/5"
-          title="Open profile"
-        >
-          <div
-            className="flex h-9 w-9 shrink-0 items-center justify-center rounded-full border border-white/15 bg-white/10 text-[11px] font-semibold text-white"
+        <div className="border-t border-white/10 p-3">
+          <ReplayProductTourButton
+            variant="rail"
+            className="btn-secondary mb-2 flex w-full items-center justify-center gap-2 !bg-white/10 !text-white !text-[11px]"
+          />
+          <Link
+            href="/profile"
+            className="flex items-center gap-3 rounded-md p-1 transition hover:bg-white/5"
+            title="Open profile"
           >
-            {initials(currentUser.name) || "SS"}
-          </div>
-          <div className="min-w-0">
-            <p className="rail-brand-title truncate text-xs font-semibold">{currentUser.name}</p>
-            <p className="rail-brand-sub truncate text-[11px]">{currentUser.companyName}</p>
-          </div>
-        </Link>
+            <div
+              className="flex h-9 w-9 shrink-0 items-center justify-center rounded-full border border-white/15 bg-white/10 text-[11px] font-semibold text-white"
+            >
+              {initials(currentUser.name) || "SS"}
+            </div>
+            <div className="min-w-0">
+              <p className="rail-brand-title truncate text-xs font-semibold">{currentUser.name}</p>
+              <p className="rail-brand-sub truncate text-[11px]">{currentUser.companyName}</p>
+            </div>
+          </Link>
+        </div>
       </aside>
 
       {/* Mobile drawer */}

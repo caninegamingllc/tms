@@ -14,8 +14,14 @@ export type PageLayouts = {
   sm?: GridItemLayout[];
 };
 
+export type OnboardingPreferences = {
+  tourCompletedAt?: string | null;
+  dismissedCoachmarks?: string[];
+};
+
 export type UiPreferences = {
   layouts?: Record<string, PageLayouts>;
+  onboarding?: OnboardingPreferences;
 };
 
 export type TileDefinition = {
@@ -31,17 +37,92 @@ export type TileDefinition = {
   };
 };
 
+function parseOnboarding(value: unknown): OnboardingPreferences | undefined {
+  if (!value || typeof value !== "object" || Array.isArray(value)) {
+    return undefined;
+  }
+
+  const raw = value as Record<string, unknown>;
+  const onboarding: OnboardingPreferences = {};
+
+  if (raw.tourCompletedAt === null) {
+    onboarding.tourCompletedAt = null;
+  } else if (typeof raw.tourCompletedAt === "string") {
+    onboarding.tourCompletedAt = raw.tourCompletedAt;
+  }
+
+  if (Array.isArray(raw.dismissedCoachmarks)) {
+    onboarding.dismissedCoachmarks = raw.dismissedCoachmarks.filter(
+      (id): id is string => typeof id === "string" && id.length > 0
+    );
+  }
+
+  if (onboarding.tourCompletedAt === undefined && onboarding.dismissedCoachmarks === undefined) {
+    return undefined;
+  }
+
+  return onboarding;
+}
+
 export function parseUiPreferences(value: unknown): UiPreferences {
   if (!value || typeof value !== "object" || Array.isArray(value)) {
     return { layouts: {} };
   }
 
-  const layouts = (value as UiPreferences).layouts;
-  if (!layouts || typeof layouts !== "object" || Array.isArray(layouts)) {
-    return { layouts: {} };
+  const record = value as Record<string, unknown>;
+  const layouts = record.layouts;
+  const onboarding = parseOnboarding(record.onboarding);
+
+  const parsed: UiPreferences = {
+    layouts:
+      layouts && typeof layouts === "object" && !Array.isArray(layouts)
+        ? (layouts as Record<string, PageLayouts>)
+        : {}
+  };
+
+  if (onboarding) {
+    parsed.onboarding = onboarding;
   }
 
-  return { layouts: layouts as Record<string, PageLayouts> };
+  return parsed;
+}
+
+export type OnboardingPatch = {
+  tourCompletedAt?: string | null;
+  dismissCoachmark?: string;
+  resetCoachmarks?: boolean;
+};
+
+/** Merge onboarding flags while preserving layouts. */
+export function mergeOnboarding(
+  preferences: UiPreferences | unknown,
+  patch: OnboardingPatch
+): UiPreferences {
+  const parsed = parseUiPreferences(preferences);
+  const current = parsed.onboarding ?? {};
+  let dismissed = [...(current.dismissedCoachmarks ?? [])];
+
+  if (patch.resetCoachmarks) {
+    dismissed = [];
+  }
+
+  if (patch.dismissCoachmark && !dismissed.includes(patch.dismissCoachmark)) {
+    dismissed = [...dismissed, patch.dismissCoachmark];
+  }
+
+  const next: OnboardingPreferences = {
+    ...current,
+    dismissedCoachmarks: dismissed
+  };
+
+  if (patch.tourCompletedAt !== undefined) {
+    next.tourCompletedAt = patch.tourCompletedAt;
+  }
+
+  return {
+    layouts: parsed.layouts ?? {},
+    onboarding: next
+  };
 }
 
 function isGridItemLayout(value: unknown): value is GridItemLayout {
@@ -176,5 +257,9 @@ export function setPageLayouts(
     nextLayouts[pageId] = layouts;
   }
 
-  return { layouts: nextLayouts };
+  const next: UiPreferences = { layouts: nextLayouts };
+  if (parsed.onboarding) {
+    next.onboarding = parsed.onboarding;
+  }
+  return next;
 }

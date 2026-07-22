@@ -2,6 +2,8 @@ import { Suspense } from "react";
 import { CustomerForm } from "@/components/customer-form";
 import { CustomerSearchFilters } from "@/components/customer-search-filters";
 import { CustomersTable } from "@/components/customers-table";
+import { Coachmark } from "@/components/onboarding/Coachmark";
+import { COACHMARK_IDS } from "@/components/onboarding/tour-steps";
 import { PageHeader } from "@/components/page-header";
 import { SearchPrompt } from "@/components/search-prompt";
 import { ServerPagination } from "@/components/server-pagination";
@@ -75,10 +77,20 @@ export default async function CustomersPage({
 
   return (
     <>
-      <PageHeader
-        title="Customers"
-        description="Manage shipper accounts, contacts, credit limits, payment terms, lane history, and open receivables."
-      />
+      <div className="relative">
+        <PageHeader
+          title="Customers"
+          description="Manage shipper accounts, contacts, credit limits, payment terms, lane history, and open receivables."
+        />
+        <Coachmark
+          id={COACHMARK_IDS.customersToolbar}
+          variant="blue"
+          arrow="top-left"
+          className="left-0 top-2 sm:left-4"
+        >
+          Search shippers or add a customer to track credit, contacts, and load history.
+        </Coachmark>
+      </div>
 
       {saved ? (
         <div className="mb-6 rounded-2xl border border-emerald-200 bg-emerald-50 p-4 text-sm font-semibold text-emerald-800">

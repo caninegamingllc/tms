@@ -534,6 +534,32 @@ textarea::placeholder {
   }
 }
 
+/* Product tour (driver.js) */
+.tms-product-tour {
+  background: var(--background);
+  color: var(--foreground);
+  border: 1px solid var(--border);
+  border-radius: 0.75rem;
+  box-shadow: var(--shadow-card);
+}
+
+.tms-product-tour .driver-popover-title {
+  font-size: 0.95rem;
+  font-weight: 600;
+}
+
+.tms-product-tour .driver-popover-description {
+  font-size: 0.8125rem;
+  line-height: 1.45;
+  color: var(--muted-foreground);
+}
+
+.tms-product-tour .driver-popover-navigation-btns button {
+  border-radius: 0.5rem;
+  font-size: 0.8125rem;
+  text-shadow: none;
+}
+
 @media print {
   aside,
   .app-rail,

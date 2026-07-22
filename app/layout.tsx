@@ -6,6 +6,7 @@ import { AppShell } from "@/components/app-shell";
 import { getCurrentUser } from "@/lib/auth";
 import { getBranchSwitcherData } from "@/lib/branch-filter-server";
 import { themeBootstrapScript } from "@/lib/theme";
+import { loadUiPreferencesForUser } from "@/lib/ui-preferences-load";
 
 const sourceSans = Source_Sans_3({
   subsets: ["latin"],
@@ -103,12 +104,16 @@ export default async function RootLayout({ children }: { children: React.ReactNo
     throw error;
   }
   const branchSwitcher = currentUser ? await getBranchSwitcherData(currentUser) : null;
+  const onboarding =
+    currentUser != null
+      ? (await loadUiPreferencesForUser(currentUser.id)).onboarding ?? null
+      : null;
 
   return (
     <html lang="en" suppressHydrationWarning>
       <body className={`${sourceSans.variable} ${fraunces.variable} font-sans antialiased`}>
         <script dangerouslySetInnerHTML={{ __html: themeBootstrapScript }} />
-        <AppShell currentUser={currentUser} branchSwitcher={branchSwitcher}>
+        <AppShell currentUser={currentUser} branchSwitcher={branchSwitcher} onboarding={onboarding}>
           {children}
         </AppShell>
       </body>

@@ -45,6 +45,7 @@ export default async function HomePage({
         title="Command center"
         description="Live pulse across loads, margin, AR, and check calls."
         eyebrow="Operations"
+        tourId="dashboard-welcome"
         action={
           <Link href="/loads/new" className="btn">
             Create Load

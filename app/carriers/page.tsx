@@ -2,6 +2,8 @@ import { Suspense } from "react";
 import { CarrierLookupForm } from "@/components/carrier-lookup-form";
 import { CarrierSearchFilters } from "@/components/carrier-search-filters";
 import { CarriersTable } from "@/components/carriers-table";
+import { Coachmark } from "@/components/onboarding/Coachmark";
+import { COACHMARK_IDS } from "@/components/onboarding/tour-steps";
 import { PageHeader } from "@/components/page-header";
 import { SearchPrompt } from "@/components/search-prompt";
 import { ServerPagination } from "@/components/server-pagination";
@@ -70,10 +72,20 @@ export default async function CarriersPage({
 
   return (
     <>
-      <PageHeader
-        title="Carriers"
-        description="Track carrier profiles, authority details, insurance, compliance documents, and carrier performance."
-      />
+      <div className="relative">
+        <PageHeader
+          title="Carriers"
+          description="Track carrier profiles, authority details, insurance, compliance documents, and carrier performance."
+        />
+        <Coachmark
+          id={COACHMARK_IDS.carriersToolbar}
+          variant="rose"
+          arrow="top-left"
+          className="left-0 top-2 sm:left-4"
+        >
+          Look up carriers, review compliance, and keep your network ready to cover loads.
+        </Coachmark>
+      </div>
 
       {error ? (
         <div className="mb-6 rounded-2xl border border-rose-200 bg-rose-50 p-4 text-sm font-semibold text-rose-700">

@@ -1,5 +1,6 @@
 import Link from "next/link";
 import { PageHeader } from "@/components/page-header";
+import { ReplayProductTourButton } from "@/components/onboarding/ReplayProductTourButton";
 import { ThemeToggle } from "@/components/theme-toggle";
 import { changeOwnPasswordFromSettings, requireUser } from "@/lib/auth";
 import { prisma } from "@/lib/db";
@@ -104,6 +105,15 @@ export default async function SettingsPage({
           </p>
           <div className="mt-4">
             <ThemeToggle />
+          </div>
+          <div className="mt-6 border-t border-border pt-4">
+            <p className="text-sm font-semibold text-foreground">Product tour</p>
+            <p className="mt-1 text-sm text-muted-foreground">
+              Replay the guided walkthrough of core TMS features.
+            </p>
+            <div className="mt-3">
+              <ReplayProductTourButton />
+            </div>
           </div>
         </div>
 

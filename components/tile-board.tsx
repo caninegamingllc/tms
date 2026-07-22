@@ -18,6 +18,8 @@ import {
   type PageLayouts,
   type TileDefinition
 } from "@/lib/ui-preferences";
+import { Coachmark } from "@/components/onboarding/Coachmark";
+import { COACHMARK_IDS } from "@/components/onboarding/tour-steps";
 
 async function persistLayout(pageId: string, layouts: PageLayouts | null, reset = false) {
   await fetch("/api/ui-layout", {
@@ -587,7 +589,7 @@ export function TileBoard({ pageId, tiles, initialLayouts = null, children }: Ti
   }
 
   return (
-    <div className="tile-board">
+    <div className="tile-board relative">
       <div className="mb-3 flex flex-wrap items-center justify-between gap-2">
         <p className="muted mb-0">Drag tiles to move, edges to resize. Reset restores the default layout.</p>
         <button
@@ -599,6 +601,16 @@ export function TileBoard({ pageId, tiles, initialLayouts = null, children }: Ti
           Reset to default
         </button>
       </div>
+      {pageId === "dashboard" ? (
+        <Coachmark
+          id={COACHMARK_IDS.dashboardTiles}
+          variant="blue"
+          arrow="top-right"
+          className="right-0 top-10 sm:right-2"
+        >
+          Drag tiles to rearrange your command center. Reset restores the default layout.
+        </Coachmark>
+      ) : null}
       <div ref={containerRef} className="relative w-full" style={{ height: boardHeight }}>
         {layout.map((item) => {
           const tile = tileById.get(item.i);

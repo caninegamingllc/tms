@@ -1,20 +1,27 @@
 import type { ReactNode } from "react";
+import { TOUR_ATTR } from "@/components/onboarding/tour-steps";
 
 type PageHeaderProps = {
   title: string;
   description?: string;
   action?: ReactNode;
   eyebrow?: string;
+  /** Stable product-tour anchor id (sets data-tour). */
+  tourId?: string;
 };
 
 export function PageHeader({
   title,
   description,
   action,
-  eyebrow = "Simple Source TMS"
+  eyebrow = "Simple Source TMS",
+  tourId
 }: PageHeaderProps) {
   return (
-    <div className="mb-4 flex flex-col gap-3 border-b border-border pb-4 md:flex-row md:items-end md:justify-between">
+    <div
+      className="mb-4 flex flex-col gap-3 border-b border-border pb-4 md:flex-row md:items-end md:justify-between"
+      {...(tourId ? { [TOUR_ATTR]: tourId } : {})}
+    >
       <div className="min-w-0">
         <p className="text-[10.5px] font-semibold uppercase tracking-[0.18em] text-muted-foreground">
           {eyebrow}

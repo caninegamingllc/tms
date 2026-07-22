@@ -4,6 +4,8 @@ import { after } from "next/server";
 import { Suspense } from "react";
 import { LoadSearchFilters } from "@/components/load-search-filters";
 import { LoadsTable } from "@/components/loads-table";
+import { Coachmark } from "@/components/onboarding/Coachmark";
+import { COACHMARK_IDS } from "@/components/onboarding/tour-steps";
 import { PageHeader } from "@/components/page-header";
 import { SearchPrompt } from "@/components/search-prompt";
 import { ServerPagination } from "@/components/server-pagination";
@@ -66,20 +68,30 @@ export default async function LoadsPage({
 
   return (
     <>
-      <PageHeader
-        title="Load Management"
-        description="Create, search, cover, dispatch, and track customer loads through the full brokerage lifecycle."
-        action={
-          <div className="flex flex-wrap gap-2">
-            <Link href="/search" className="btn-secondary">
-              Advanced Search
-            </Link>
-            <Link href="/loads/new" className="btn">
-              New Load
-            </Link>
-          </div>
-        }
-      />
+      <div className="relative">
+        <PageHeader
+          title="Load Management"
+          description="Create, search, cover, dispatch, and track customer loads through the full brokerage lifecycle."
+          action={
+            <div className="flex flex-wrap gap-2">
+              <Link href="/search" className="btn-secondary">
+                Advanced Search
+              </Link>
+              <Link href="/loads/new" className="btn">
+                New Load
+              </Link>
+            </div>
+          }
+        />
+        <Coachmark
+          id={COACHMARK_IDS.loadsToolbar}
+          variant="amber"
+          arrow="top-right"
+          className="right-0 top-2 sm:right-2"
+        >
+          Search existing loads or create a new one to start the brokerage workflow.
+        </Coachmark>
+      </div>
 
       <section className="card p-5">
         <div className="mb-4">
