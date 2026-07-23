@@ -82,11 +82,21 @@ export function LoadSearchFilters({
         <div className="grid gap-4 md:grid-cols-2 xl:grid-cols-4">
           <label className="grid gap-2">
             <span className="label">Pickup From</span>
-            <DatePicker name="dateFrom" defaultValue={filters.dateFrom ?? ""} placeholder="Pickup from" />
+            <DatePicker
+              name="dateFrom"
+              defaultValue={filters.dateFrom ?? ""}
+              placeholder="Pickup from"
+              clearable
+            />
           </label>
           <label className="grid gap-2">
             <span className="label">Pickup To</span>
-            <DatePicker name="dateTo" defaultValue={filters.dateTo ?? ""} placeholder="Pickup to" />
+            <DatePicker
+              name="dateTo"
+              defaultValue={filters.dateTo ?? ""}
+              placeholder="Pickup to"
+              clearable
+            />
           </label>
           <SearchCombobox
             name="customerId"

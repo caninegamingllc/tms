@@ -18,6 +18,11 @@ type DatePickerProps = {
   name?: string;
   id?: string;
   required?: boolean;
+  /**
+   * When true, show a Clear action in the popover (optional fields only).
+   * Required fields never show Clear.
+   */
+  clearable?: boolean;
   defaultValue?: string;
   /** Controlled value as `YYYY-MM-DD`. */
   value?: string;
@@ -70,12 +75,14 @@ export function DatePicker({
   name,
   id,
   required,
+  clearable = false,
   defaultValue,
   value: valueProp,
   onChange,
   className,
   placeholder = "Pick a date",
 }: DatePickerProps) {
+  const showClear = clearable && !required;
   const isControlled = valueProp !== undefined;
   const initial = defaultValue ? parseLocalDate(defaultValue) ?? undefined : undefined;
   const [open, setOpen] = React.useState(false);
@@ -123,7 +130,7 @@ export function DatePicker({
             }}
             defaultMonth={date}
           />
-          {!required ? (
+          {showClear ? (
             <div className="border-border border-t p-2">
               <Button
                 type="button"
@@ -154,6 +161,7 @@ export function DateTimePicker({
   name,
   id,
   required,
+  clearable = false,
   defaultValue,
   value: valueProp,
   onChange,
@@ -161,6 +169,7 @@ export function DateTimePicker({
   placeholder = "Pick date & time",
   defaultToNineAm = false,
 }: DateTimePickerProps) {
+  const showClear = clearable && !required;
   const isControlled = valueProp !== undefined;
   const initial = defaultValue
     ? parseLocalDateTime(defaultValue) ?? undefined
@@ -272,7 +281,7 @@ export function DateTimePicker({
             </select>
           </div>
           <div className="border-border flex gap-2 border-t p-2">
-            {!required ? (
+            {showClear ? (
               <Button
                 type="button"
                 variant="ghost"

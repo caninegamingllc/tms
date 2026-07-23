@@ -514,8 +514,8 @@ export default async function AccountingPage({
                       </select>
                       <div className="grid gap-3 md:grid-cols-3">
                         <input name="total" className="input" placeholder="Total" required />
-                        <DatePicker name="issuedAt" placeholder="Issued date" />
-                        <DatePicker name="dueAt" placeholder="Due date" />
+                        <DatePicker name="issuedAt" placeholder="Issued date" clearable />
+                        <DatePicker name="dueAt" placeholder="Due date" clearable />
                       </div>
                       <button type="submit" className="btn">
                         Save Invoice

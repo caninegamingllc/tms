@@ -344,7 +344,7 @@ export function AccountingInvoicesPanel({
                       className="input"
                       placeholder={`Amount (default ${formatMoney(openBalance)})`}
                     />
-                    <DatePicker name="paidAt" placeholder="Payment date" />
+                    <DatePicker name="paidAt" placeholder="Payment date" clearable />
                     <select name="method" className="select" defaultValue="CHECK">
                       <option value="CHECK">Check</option>
                       <option value="ACH">ACH</option>
@@ -685,7 +685,7 @@ export function AccountingBillsPanel({
                       className="input"
                       placeholder={`Amount (default ${formatMoney(openBalance)})`}
                     />
-                    <DatePicker name="paidAt" placeholder="Payment date" />
+                    <DatePicker name="paidAt" placeholder="Payment date" clearable />
                     <select name="method" className="select" defaultValue="CHECK">
                       <option value="CHECK">Check</option>
                       <option value="ACH">ACH</option>

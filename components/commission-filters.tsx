@@ -58,12 +58,22 @@ export function CommissionFilters({ filters }: { filters: CommissionFilters }) {
 
           <label className="grid gap-2">
             <span className="label">Pickup From</span>
-            <DatePicker name="dateFrom" defaultValue={filters.dateFrom ?? ""} placeholder="Pickup from" />
+            <DatePicker
+              name="dateFrom"
+              defaultValue={filters.dateFrom ?? ""}
+              placeholder="Pickup from"
+              clearable
+            />
           </label>
 
           <label className="grid gap-2">
             <span className="label">Pickup To</span>
-            <DatePicker name="dateTo" defaultValue={filters.dateTo ?? ""} placeholder="Pickup to" />
+            <DatePicker
+              name="dateTo"
+              defaultValue={filters.dateTo ?? ""}
+              placeholder="Pickup to"
+              clearable
+            />
           </label>
         </div>
 
