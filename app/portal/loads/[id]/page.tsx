@@ -5,7 +5,7 @@ import { StatusBadge } from "@/components/status-badge";
 import { CUSTOMER_FACING_DOCUMENT_TYPES, getLoadBoardStage } from "@/lib/customer-board";
 import { carrierDisplayName, primaryAssignment } from "@/lib/dispatch-assignment";
 import { prisma } from "@/lib/db";
-import { formatDate, formatDateTime, humanize } from "@/lib/format";
+import { formatAppointmentWindow, formatDate, formatDateTime, humanize } from "@/lib/format";
 import { requirePortalViewer } from "@/lib/portal-auth";
 
 export default async function PortalLoadDetailPage({
@@ -119,7 +119,9 @@ export default async function PortalLoadDetailPage({
                       {[stop.address, stop.city, stop.state, stop.postalCode].filter(Boolean).join(", ")}
                     </p>
                     {stop.appointmentAt ? (
-                      <p className="muted">Appt {formatDateTime(stop.appointmentAt)}</p>
+                      <p className="muted">
+                        Appt {formatAppointmentWindow(stop.appointmentAt, stop.appointmentEndAt)}
+                      </p>
                     ) : null}
                   </div>
                 ))

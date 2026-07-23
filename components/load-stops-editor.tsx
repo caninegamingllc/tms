@@ -21,6 +21,7 @@ export type InitialLoadStop = {
   state: string;
   postalCode?: string | null;
   appointmentAt?: Date | string | null;
+  appointmentEndAt?: Date | string | null;
   instructions?: string | null;
 };
 
@@ -34,6 +35,8 @@ type DraftStop = {
   state: string;
   postalCode: string;
   appointmentAt: string;
+  hasWindow: boolean;
+  appointmentEndAt: string;
   instructions: string;
 };
 
@@ -63,12 +66,15 @@ function emptyStop(type: "PICKUP" | "DELIVERY"): DraftStop {
     state: "",
     postalCode: "",
     appointmentAt: "",
+    hasWindow: false,
+    appointmentEndAt: "",
     instructions: ""
   };
 }
 
 function fromInitial(stop: InitialLoadStop): DraftStop {
   const type = stop.type.toUpperCase() === "DELIVERY" ? "DELIVERY" : "PICKUP";
+  const appointmentEndAt = toDatetimeLocalValue(stop.appointmentEndAt);
   return {
     key: newKey(),
     type,
@@ -79,6 +85,8 @@ function fromInitial(stop: InitialLoadStop): DraftStop {
     state: stop.state ?? "",
     postalCode: stop.postalCode ?? "",
     appointmentAt: toDatetimeLocalValue(stop.appointmentAt),
+    hasWindow: Boolean(appointmentEndAt),
+    appointmentEndAt,
     instructions: stop.instructions ?? ""
   };
 }
@@ -208,16 +216,49 @@ export function LoadStopsEditor({
             defaultPostalCode={stop.postalCode}
           />
 
-          <label className="grid gap-2 md:max-w-sm">
-            <span className="label">Appointment</span>
-            <DateTimePicker
-              name="stopAppointment"
-              value={stop.appointmentAt}
-              onChange={(next) => updateStop(stop.key, { appointmentAt: next })}
-              required
-              placeholder="Appointment date & time"
-            />
-          </label>
+          <div className="grid gap-3 md:max-w-sm">
+            <label className="grid gap-2">
+              <span className="label">Appointment</span>
+              <DateTimePicker
+                name="stopAppointment"
+                value={stop.appointmentAt}
+                onChange={(next) => updateStop(stop.key, { appointmentAt: next })}
+                required
+                placeholder="Appointment date & time"
+              />
+            </label>
+
+            <input type="hidden" name="stopHasWindow" value={stop.hasWindow ? "1" : "0"} />
+            <label className="flex cursor-pointer items-center gap-2 text-sm text-foreground">
+              <input
+                type="checkbox"
+                className="h-4 w-4 rounded border-border text-primary focus:ring-primary"
+                checked={stop.hasWindow}
+                onChange={(event) =>
+                  updateStop(stop.key, {
+                    hasWindow: event.target.checked,
+                    appointmentEndAt: event.target.checked ? stop.appointmentEndAt : ""
+                  })
+                }
+              />
+              Window
+            </label>
+
+            {stop.hasWindow ? (
+              <label className="grid gap-2">
+                <span className="label">Window end</span>
+                <DateTimePicker
+                  name="stopAppointmentEnd"
+                  value={stop.appointmentEndAt}
+                  onChange={(next) => updateStop(stop.key, { appointmentEndAt: next })}
+                  required
+                  placeholder="Window end date & time"
+                />
+              </label>
+            ) : (
+              <input type="hidden" name="stopAppointmentEnd" value="" />
+            )}
+          </div>
 
           <label className="grid gap-2">
             <span className="label">Instructions</span>

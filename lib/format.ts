@@ -31,6 +31,46 @@ export function formatDateTime(date?: Date | string | null) {
   }).format(new Date(date));
 }
 
+function formatTimeOnly(date: Date) {
+  return new Intl.DateTimeFormat("en-US", {
+    hour: "numeric",
+    minute: "2-digit"
+  }).format(date);
+}
+
+function sameLocalDay(a: Date, b: Date) {
+  return (
+    a.getFullYear() === b.getFullYear() &&
+    a.getMonth() === b.getMonth() &&
+    a.getDate() === b.getDate()
+  );
+}
+
+/** Exact appointment, or start – end window when `end` is set. */
+export function formatAppointmentWindow(
+  start?: Date | string | null,
+  end?: Date | string | null
+) {
+  if (!start) {
+    return "Not set";
+  }
+  if (!end) {
+    return formatDateTime(start);
+  }
+  const startDate = new Date(start);
+  const endDate = new Date(end);
+  if (Number.isNaN(startDate.getTime())) {
+    return "Not set";
+  }
+  if (Number.isNaN(endDate.getTime())) {
+    return formatDateTime(start);
+  }
+  if (sameLocalDay(startDate, endDate)) {
+    return `${formatDateTime(startDate)} – ${formatTimeOnly(endDate)}`;
+  }
+  return `${formatDateTime(startDate)} – ${formatDateTime(endDate)}`;
+}
+
 /** Postgres `integer` / Prisma `Int` bounds (signed 32-bit). */
 export const POSTGRES_INT4_MAX = 2_147_483_647;
 export const POSTGRES_INT4_MIN = -2_147_483_648;

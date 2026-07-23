@@ -13,6 +13,7 @@ export type StopFacilitySnapshot = {
 export type ParsedLoadStop = StopFacilitySnapshot & {
   type: "PICKUP" | "DELIVERY";
   appointmentAt: Date;
+  appointmentEndAt?: Date;
   instructions?: string;
 };
 
@@ -43,6 +44,29 @@ function parseAppointment(value: string | undefined, label: string) {
     throw new Error(`Invalid ${label} appointment`);
   }
   return date;
+}
+
+function parseAppointmentEnd(
+  hasWindow: boolean,
+  value: string | undefined,
+  start: Date,
+  label: string
+): Date | undefined {
+  if (!hasWindow) {
+    return undefined;
+  }
+  const trimmed = (value ?? "").trim();
+  if (!trimmed) {
+    throw new Error(`${label} window end is required`);
+  }
+  const end = parseLocalDateTime(trimmed);
+  if (!end) {
+    throw new Error(`Invalid ${label} window end`);
+  }
+  if (end.getTime() <= start.getTime()) {
+    throw new Error(`${label} window end must be after the appointment start`);
+  }
+  return end;
 }
 
 async function resolveFacilitySnapshot(
@@ -80,6 +104,8 @@ export async function parseLoadStopsFromForm(
 ): Promise<ParsedLoadStop[]> {
   const types = formValues(formData, "stopType");
   const appointments = formValues(formData, "stopAppointment");
+  const hasWindows = formValues(formData, "stopHasWindow");
+  const appointmentEnds = formValues(formData, "stopAppointmentEnd");
   const instructions = formValues(formData, "stopInstructions");
   const facilities = formValues(formData, "stopFacility");
   const count = Math.max(types.length, appointments.length, facilities.length);
@@ -96,11 +122,22 @@ export async function parseLoadStopsFromForm(
       throw new Error("Each stop must be a Pickup or Delivery.");
     }
 
+    const label = typeRaw === "PICKUP" ? "Pickup" : "Delivery";
+    const appointmentAt = parseAppointment(appointments[index], label);
+    const hasWindow = (hasWindows[index] ?? "").trim() === "1";
+    const appointmentEndAt = parseAppointmentEnd(
+      hasWindow,
+      appointmentEnds[index],
+      appointmentAt,
+      label
+    );
+
     const facility = await resolveFacilitySnapshot(formData, index, companyId);
     stops.push({
       type: typeRaw,
       ...facility,
-      appointmentAt: parseAppointment(appointments[index], typeRaw === "PICKUP" ? "Pickup" : "Delivery"),
+      appointmentAt,
+      appointmentEndAt,
       instructions: optionalStringValue(instructions[index])
     });
   }
@@ -139,6 +176,7 @@ export function stopsCreateData(stops: ParsedLoadStop[]) {
     state: stop.state,
     postalCode: stop.postalCode ?? null,
     appointmentAt: stop.appointmentAt,
+    appointmentEndAt: stop.appointmentEndAt ?? null,
     instructions: stop.instructions ?? null
   }));
 }

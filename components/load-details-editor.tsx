@@ -34,6 +34,7 @@ type StopView = {
   state: string;
   postalCode: string | null;
   appointmentAt: Date | string | null;
+  appointmentEndAt?: Date | string | null;
   instructions: string | null;
 };
 

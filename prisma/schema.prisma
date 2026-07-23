@@ -696,8 +696,9 @@ model LoadStop {
   city          String
   state         String
   postalCode    String?
-  appointmentAt DateTime?
-  actualAt      DateTime?
+  appointmentAt    DateTime?
+  appointmentEndAt DateTime?
+  actualAt         DateTime?
   instructions  String?
   latitude      Float?
   longitude     Float?

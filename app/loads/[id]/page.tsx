@@ -45,7 +45,7 @@ import { expenseTypes, loadStatuses } from "@/lib/constants";
 import { ensureCompanyCatalogs } from "@/lib/catalogs";
 import { prisma } from "@/lib/db";
 import { carrierDisplayName, primaryAssignment } from "@/lib/dispatch-assignment";
-import { commissionMethodLabel, formatDate, formatDateTime, formatMoney, humanize, marginPercent } from "@/lib/format";
+import { commissionMethodLabel, formatAppointmentWindow, formatDate, formatDateTime, formatMoney, humanize, marginPercent } from "@/lib/format";
 import { isPrivateLoadNote } from "@/lib/document-templates";
 import {
   pushCarrierBillToQuickbooksAction,
@@ -427,7 +427,7 @@ export default async function LoadDetailPage({
                         </p>
                       </div>
                       <span className="text-sm text-muted-foreground">
-                        {formatDateTime(stop.appointmentAt)}
+                        {formatAppointmentWindow(stop.appointmentAt, stop.appointmentEndAt)}
                       </span>
                     </div>
                     {stop.instructions ? (

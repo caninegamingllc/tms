@@ -1,5 +1,5 @@
 import type { Company, Prisma } from "@prisma/client";
-import { formatDate, formatDateTime, formatMoney } from "@/lib/format";
+import { formatAppointmentWindow, formatDate, formatDateTime, formatMoney } from "@/lib/format";
 import type { BolFormData } from "@/lib/bol-types";
 import {
   hasAssignmentOriginDestination,
@@ -159,7 +159,7 @@ function mapStops(load: LoadForDocument): DocumentStop[] {
       ]
         .filter(Boolean)
         .join(", "),
-      appointment: formatDateTime(stop.appointmentAt),
+      appointment: formatAppointmentWindow(stop.appointmentAt, stop.appointmentEndAt),
       instructions: stop.instructions || ""
     }));
 }

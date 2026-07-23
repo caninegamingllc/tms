@@ -151,6 +151,7 @@ export default async function NewLoadPage({
         state: stop.state,
         postalCode: stop.postalCode,
         appointmentAt: null,
+        appointmentEndAt: null,
         instructions: stop.instructions
       }))
     : undefined;
