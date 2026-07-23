@@ -192,6 +192,13 @@ textarea::placeholder {
   background: var(--gradient-brand);
 }
 
+.text-gradient-brand {
+  background: linear-gradient(120deg, var(--color-primary) 0%, var(--color-secondary) 100%);
+  -webkit-background-clip: text;
+  background-clip: text;
+  color: transparent;
+}
+
 .rail-gradient {
   background: var(--gradient-rail);
 }

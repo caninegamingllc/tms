@@ -4,7 +4,7 @@ import { FuelIndexCard } from "@/components/fuel-index-card";
 import { LoadSnapshotTable } from "@/components/load-snapshot-table";
 import { MarketingLanding } from "@/components/marketing-landing";
 import { MetricCard } from "@/components/metric-card";
-import { PageHeader } from "@/components/page-header";
+import { DashboardWelcome } from "@/components/dashboard-welcome";
 import { TileBoard, Tile } from "@/components/tile-board";
 import { getCurrentUser } from "@/lib/auth";
 import { getDieselPrices } from "@/lib/eia-diesel";
@@ -28,6 +28,7 @@ export default async function HomePage({
   const user = await requireTmsAccess();
   const params = await searchParams;
   const showFuel = planHasFeature(user.plan, "dashboard_fuel_index");
+  const firstName = user.name.trim().split(/\s+/)[0] || user.name;
 
   const [data, dieselPrices, layouts] = await Promise.all([
     getDashboardData(),
@@ -41,10 +42,9 @@ export default async function HomePage({
 
   return (
     <>
-      <PageHeader
-        title="Command center"
-        description="Live pulse across loads, margin, AR, and check calls."
-        eyebrow="Operations"
+      <DashboardWelcome
+        firstName={firstName}
+        organizationName={user.companyName}
         tourId="dashboard-welcome"
         action={
           <Link href="/loads/new" className="btn">
