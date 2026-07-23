@@ -41,7 +41,7 @@ export default async function HomePage({
     : DASHBOARD_TILES.filter((tile) => tile.id !== "fuel-index");
 
   return (
-    <>
+    <div className="bg-app-mesh -mx-4 -mb-4 min-h-[calc(100vh-3.5rem)] px-4 py-6 md:-mx-6 md:-mb-5 md:px-6 md:py-8">
       <DashboardWelcome
         firstName={firstName}
         organizationName={user.companyName}
@@ -193,6 +193,6 @@ export default async function HomePage({
           </div>
         </Tile>
       </TileBoard>
-    </>
+    </div>
   );
 }

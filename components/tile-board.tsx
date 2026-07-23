@@ -1,6 +1,5 @@
 "use client";
 
-import { GripVertical } from "lucide-react";
 import {
   Children,
   isValidElement,
@@ -33,7 +32,6 @@ const COLS = 12;
 const ROW_HEIGHT = 28;
 const MARGIN_X = 16;
 const MARGIN_Y = 16;
-const HEADER_HEIGHT = 48;
 const MAX_AUTO_H = 80;
 
 type TileBoardProps = {
@@ -61,7 +59,7 @@ type ResizeState = {
   originY: number;
   pointerStartX: number;
   pointerStartY: number;
-  edge: "se" | "e" | "s";
+  edge: "se";
 };
 
 function overlaps(
@@ -130,7 +128,7 @@ function reflowAroundAnchor(items: GridItemLayout[], anchorId: string, cols = CO
 }
 
 function heightToUnits(heightPx: number, minH: number) {
-  const units = Math.ceil((heightPx + HEADER_HEIGHT + MARGIN_Y) / (ROW_HEIGHT + MARGIN_Y));
+  const units = Math.ceil((heightPx + MARGIN_Y) / (ROW_HEIGHT + MARGIN_Y));
   return Math.min(MAX_AUTO_H, Math.max(minH, units));
 }
 
@@ -194,58 +192,31 @@ function TileShell({
 
   return (
     <section
-      className={`card relative flex h-full flex-col overflow-hidden !p-0 ${
-        interacting ? "opacity-95 shadow-lg ring-2 ring-primary/30" : ""
+      className={`card-frost border-border relative flex h-full flex-col overflow-hidden rounded-2xl border ${
+        interacting ? "ring-1 ring-primary/25 shadow-[0_28px_60px_-28px_rgba(43,107,128,0.35)]" : ""
       }`}
     >
-      <div className="flex items-center gap-1 border-b border-border pr-4">
-        <div
-          ref={handleRef}
-          className="tile-drag-handle flex h-10 w-10 shrink-0 cursor-grab items-center justify-center active:cursor-grabbing"
-          style={{ touchAction: "none", userSelect: "none" }}
-          data-tile-handle={id}
-          title="Drag to move"
-          aria-label="Drag to move tile"
-        >
-          <GripVertical className="pointer-events-none h-4 w-4 text-muted-foreground" aria-hidden />
-        </div>
-        {title ? (
-          <h2 className="section-title mb-0 flex-1 truncate py-2.5 text-[15px]">{title}</h2>
-        ) : (
-          <span className="flex-1" />
-        )}
-      </div>
+      {/* Upper-left move handle (invisible hit target) */}
+      <div
+        ref={handleRef}
+        className="tile-drag-handle absolute top-0 left-0 z-20 h-8 w-8 cursor-grab active:cursor-grabbing"
+        style={{ touchAction: "none", userSelect: "none" }}
+        data-tile-handle={id}
+        title="Drag to move"
+        aria-label="Drag to move tile"
+        role="button"
+      />
+
       <div className="min-h-0 flex-1 overflow-auto">
-        <div ref={measureRef} className="p-5">
+        <div ref={measureRef} className="space-y-3 p-5 pt-6">
+          {title ? <h2 className="mb-0 text-sm font-semibold tracking-tight">{title}</h2> : null}
           {children}
         </div>
       </div>
 
-      {/* East edge */}
+      {/* Bottom-right resize handle (invisible hit target) */}
       <div
-        className="absolute inset-y-3 right-0 z-10 w-2 cursor-ew-resize"
-        style={{ touchAction: "none" }}
-        onPointerDown={(event) => {
-          event.preventDefault();
-          event.stopPropagation();
-          onResizeStart(id, "e", event.nativeEvent);
-        }}
-        aria-hidden
-      />
-      {/* South edge */}
-      <div
-        className="absolute inset-x-3 bottom-0 z-10 h-2 cursor-ns-resize"
-        style={{ touchAction: "none" }}
-        onPointerDown={(event) => {
-          event.preventDefault();
-          event.stopPropagation();
-          onResizeStart(id, "s", event.nativeEvent);
-        }}
-        aria-hidden
-      />
-      {/* Southeast corner */}
-      <div
-        className="absolute bottom-0 right-0 z-20 h-4 w-4 cursor-se-resize"
+        className="absolute right-0 bottom-0 z-20 h-8 w-8 cursor-se-resize"
         style={{ touchAction: "none" }}
         onPointerDown={(event) => {
           event.preventDefault();
@@ -255,9 +226,7 @@ function TileShell({
         title="Resize"
         aria-label="Resize tile"
         role="button"
-      >
-        <span className="pointer-events-none absolute bottom-1 right-1 h-2.5 w-2.5 rounded-sm border-b-2 border-r-2 border-muted-foreground/70" />
-      </div>
+      />
     </section>
   );
 }
@@ -512,12 +481,8 @@ export function TileBoard({ pageId, tiles, initialLayouts = null, children }: Ti
         let nextW = nextResize.originW;
         let nextH = nextResize.originH;
 
-        if (edge === "e" || edge === "se") {
-          nextW = Math.min(COLS - nextResize.originX, Math.max(minW, nextResize.originW + deltaCols));
-        }
-        if (edge === "s" || edge === "se") {
-          nextH = Math.min(MAX_AUTO_H, Math.max(minH, nextResize.originH + deltaRows));
-        }
+        nextW = Math.min(COLS - nextResize.originX, Math.max(minW, nextResize.originW + deltaCols));
+        nextH = Math.min(MAX_AUTO_H, Math.max(minH, nextResize.originH + deltaRows));
 
         setLayout((prev) => {
           const updated = prev.map((entry) =>

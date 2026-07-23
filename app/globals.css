@@ -31,9 +31,11 @@
 :root {
   color-scheme: light;
   --primary-emphasis: #1f5466;
+  --primary-glow: #5eb3c4;
   --gradient-brand: linear-gradient(135deg, #1e3a5f 0%, #2b6b80 55%, #3d9ba8 100%);
   --gradient-rail: linear-gradient(180deg, #1e293b 0%, #141c28 100%);
   --shadow-lifted: 0 8px 24px -12px rgba(15, 23, 42, 0.18);
+  --shadow-frost: 0 20px 45px -25px rgba(43, 107, 128, 0.28), 0 4px 12px -6px rgba(27, 36, 51, 0.08);
   background: var(--color-background);
   color: var(--color-foreground);
 }
@@ -58,7 +60,9 @@
     --color-info: #5a9bcf;
     --shadow-card: 0 1px 0 rgba(0, 0, 0, 0.35), 0 1px 2px rgba(0, 0, 0, 0.28);
     --primary-emphasis: #6bb4c4;
+    --primary-glow: #7ec8d6;
     --shadow-lifted: 0 8px 24px -12px rgba(0, 0, 0, 0.55);
+    --shadow-frost: 0 20px 45px -25px rgba(0, 0, 0, 0.55), 0 4px 12px -6px rgba(0, 0, 0, 0.35);
   }
 }
 
@@ -223,6 +227,28 @@ textarea::placeholder {
 .tile-board .tile-drag-handle {
   touch-action: none;
   user-select: none;
+}
+
+/* Dashboard atmosphere + frosted tile cards (aligned with CRM) */
+.bg-app-mesh {
+  background-color: var(--color-background);
+  background-image:
+    radial-gradient(1200px 700px at 8% -10%, color-mix(in oklab, var(--color-primary) 18%, transparent), transparent 60%),
+    radial-gradient(900px 600px at 100% 0%, color-mix(in oklab, var(--color-secondary) 16%, transparent), transparent 55%),
+    radial-gradient(700px 500px at 50% 110%, color-mix(in oklab, var(--color-info) 12%, transparent), transparent 60%);
+}
+
+.card-frost {
+  background-color: color-mix(in oklab, var(--color-card) 78%, transparent);
+  backdrop-filter: saturate(140%) blur(14px);
+  -webkit-backdrop-filter: saturate(140%) blur(14px);
+  border: 1px solid color-mix(in oklab, #ffffff 65%, transparent);
+  box-shadow: var(--shadow-frost);
+}
+
+.dark .card-frost {
+  background-color: color-mix(in oklab, var(--color-card) 72%, transparent);
+  border-color: color-mix(in oklab, var(--color-foreground) 8%, transparent);
 }
 
 @layer components {

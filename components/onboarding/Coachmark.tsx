@@ -8,11 +8,11 @@ type CoachmarkVariant = "blue" | "rose" | "amber";
 
 const VARIANT_STYLES: Record<CoachmarkVariant, string> = {
   blue:
-    "border-[#b7d6dc] bg-[#e6f1f3] text-[#1f4e5e] dark:border-primary/40 dark:bg-primary/15 dark:text-[#c5e4ea]",
+    "border-[#b7d6dc] bg-[#e6f1f3] text-[#1f4e5e] dark:border-[#3d7a8c] dark:bg-[#1a3d4a] dark:text-[#c5e4ea]",
   rose:
-    "border-[#edc9c6] bg-[#fbeceb] text-[#7a3b39] dark:border-rose-500/40 dark:bg-rose-950/70 dark:text-rose-100",
+    "border-[#edc9c6] bg-[#fbeceb] text-[#7a3b39] dark:border-rose-700 dark:bg-rose-950 dark:text-rose-100",
   amber:
-    "border-[#ecd7a3] bg-[#fbf1dc] text-[#6b4a15] dark:border-amber-500/40 dark:bg-amber-950/70 dark:text-amber-100"
+    "border-[#ecd7a3] bg-[#fbf1dc] text-[#6b4a15] dark:border-amber-700 dark:bg-amber-950 dark:text-amber-100"
 };
 
 const DOT_STYLES: Record<CoachmarkVariant, string> = {
