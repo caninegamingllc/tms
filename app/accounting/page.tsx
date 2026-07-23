@@ -7,6 +7,7 @@ import {
 import { AccountingAgingReport } from "@/components/accounting-aging-report";
 import { MetricCard } from "@/components/metric-card";
 import { PageHeader } from "@/components/page-header";
+import { DatePicker } from "@/components/ui/date-picker";
 import { TileBoard, Tile } from "@/components/tile-board";
 import { createInvoice, generateCustomerInvoice } from "@/lib/actions";
 import { recomputeOverdueStatuses } from "@/lib/accounting-actions";
@@ -23,7 +24,7 @@ import {
 } from "@/lib/quickbooks/exports";
 import type { AccountingExportMethod, QuickbooksMethod } from "@/lib/quickbooks/types";
 import { ACCOUNTING_TILES } from "@/lib/tile-defaults";
-import { loadPageLayouts } from "@/lib/ui-preferences-load";
+import { loadPageLayoutContext } from "@/lib/ui-preferences-load";
 
 const TABS = [
   { id: "invoices", label: "Invoices" },
@@ -77,7 +78,7 @@ export default async function AccountingPage({
     void recomputeOverdueStatuses(user.companyId);
   });
 
-  const [loads, invoices, carrierBills, qboAccount, layouts] = await Promise.all([
+  const [loads, invoices, carrierBills, qboAccount, layoutContext] = await Promise.all([
     prisma.load.findMany({
       where: loadScope,
       orderBy: { loadNumber: "desc" },
@@ -120,7 +121,7 @@ export default async function AccountingPage({
         companyId_provider: { companyId: user.companyId, provider: "QUICKBOOKS" }
       }
     }),
-    loadPageLayouts("accounting")
+    loadPageLayoutContext("accounting")
   ]);
 
   // In-memory repair for bad rows (balance wiped while still open). Persist after response.
@@ -382,7 +383,13 @@ export default async function AccountingPage({
         </div>
       ) : null}
 
-      <TileBoard pageId="accounting" tiles={tiles} initialLayouts={layouts}>
+      <TileBoard
+        pageId="accounting"
+        tiles={tiles}
+        initialLayouts={layoutContext.layouts}
+        orgDefaultLayouts={layoutContext.orgDefaultLayouts}
+        canSetOrgDefault={layoutContext.canSetOrgDefault}
+      >
         {showQuickbooks ? (
           <Tile id="quickbooks">
             <div className="flex flex-wrap items-start justify-between gap-3">
@@ -507,8 +514,8 @@ export default async function AccountingPage({
                       </select>
                       <div className="grid gap-3 md:grid-cols-3">
                         <input name="total" className="input" placeholder="Total" required />
-                        <input name="issuedAt" className="input" type="date" />
-                        <input name="dueAt" className="input" type="date" />
+                        <DatePicker name="issuedAt" placeholder="Issued date" />
+                        <DatePicker name="dueAt" placeholder="Due date" />
                       </div>
                       <button type="submit" className="btn">
                         Save Invoice

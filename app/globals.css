@@ -1,4 +1,5 @@
 @import "tailwindcss";
+@import "tw-animate-css";
 
 @custom-variant dark (&:where(.dark, .dark *));
 
@@ -14,6 +15,10 @@
   --color-secondary: #3d9ba8;
   --color-lightprimary: #2b6b801f;
   --color-lightinfo: #4a8bbf1f;
+  --color-lightsecondary: #3d9ba81f;
+  --color-lightsuccess: #2a9b8f1f;
+  --color-lightwarning: #e5a84b1f;
+  --color-lighterror: #d4563a1f;
   --color-sidebar-foreground: #cbd5e1;
   --color-rail: #1a2332;
   --color-rail-foreground: #cbd5e1;
@@ -22,6 +27,13 @@
   --color-warning: #e5a84b;
   --color-error: #d4563a;
   --color-info: #4a8bbf;
+  --color-popover: #ffffff;
+  --color-popover-foreground: #1b2433;
+  --color-accent: #f1f5f9;
+  --color-accent-foreground: #1b2433;
+  --color-ring: #2b6b801f;
+  --color-input: #cbd5e1;
+  --color-destructive: #d4563a;
   --shadow-card: 0 1px 0 rgba(15, 23, 42, 0.04), 0 1px 2px rgba(15, 23, 42, 0.04);
   --radius-lg: 0.5rem;
   --font-sans: var(--font-source-sans), ui-sans-serif, system-ui, sans-serif;
@@ -54,10 +66,21 @@
     --color-secondary: #4db0bc;
     --color-lightprimary: #4a9bb033;
     --color-lightinfo: #5a9bcf33;
+    --color-lightsecondary: #4db0bc33;
+    --color-lightsuccess: #3cb5a833;
+    --color-lightwarning: #e5b45c33;
+    --color-lighterror: #e0725a33;
     --color-success: #3cb5a8;
     --color-warning: #e5b45c;
     --color-error: #e0725a;
     --color-info: #5a9bcf;
+    --color-popover: #1a2332;
+    --color-popover-foreground: #e8eef5;
+    --color-accent: #243041;
+    --color-accent-foreground: #e8eef5;
+    --color-ring: #4a9bb033;
+    --color-input: #3d4a5c;
+    --color-destructive: #e0725a;
     --shadow-card: 0 1px 0 rgba(0, 0, 0, 0.35), 0 1px 2px rgba(0, 0, 0, 0.28);
     --primary-emphasis: #6bb4c4;
     --primary-glow: #7ec8d6;
@@ -222,6 +245,10 @@ textarea::placeholder {
 
 .tabular {
   font-variant-numeric: tabular-nums;
+}
+
+select.select-no-chevron {
+  background-image: none !important;
 }
 
 .tile-board .tile-drag-handle {

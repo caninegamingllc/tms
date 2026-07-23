@@ -17,7 +17,7 @@ import { requirePlanFeature } from "@/lib/permissions";
 import { prisma } from "@/lib/db";
 import { formatDate, humanize } from "@/lib/format";
 import { LIST_SEARCH_ADD_TILES } from "@/lib/tile-defaults";
-import { loadPageLayouts } from "@/lib/ui-preferences-load";
+import { loadPageLayoutContext } from "@/lib/ui-preferences-load";
 
 const tiles = LIST_SEARCH_ADD_TILES.map((t) => ({
   ...t,
@@ -37,7 +37,7 @@ export default async function LocationsPage({
   const showResults = isSearchSubmitted(params);
 
   const scope = await getBranchScope(user);
-  const [facilitiesResult, customers, layouts] = await Promise.all([
+  const [facilitiesResult, customers, layoutContext] = await Promise.all([
     showResults
       ? searchLocations(scope, filters, pagination)
       : Promise.resolve({ items: [], total: 0, page: 1, pageSize: pagination.pageSize, totalPages: 0 }),
@@ -46,7 +46,7 @@ export default async function LocationsPage({
       orderBy: { name: "asc" },
       select: { id: true, name: true }
     }),
-    loadPageLayouts("locations")
+    loadPageLayoutContext("locations")
   ]);
 
   const customerOptions = customers.map((customer) => ({
@@ -67,7 +67,13 @@ export default async function LocationsPage({
         </div>
       ) : null}
 
-      <TileBoard pageId="locations" tiles={tiles} initialLayouts={layouts}>
+      <TileBoard
+        pageId="locations"
+        tiles={tiles}
+        initialLayouts={layoutContext.layouts}
+        orgDefaultLayouts={layoutContext.orgDefaultLayouts}
+        canSetOrgDefault={layoutContext.canSetOrgDefault}
+      >
         <Tile id="search">
           <LocationSearchFilters filters={filters} customers={customerOptions} />
         </Tile>

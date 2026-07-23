@@ -5,6 +5,7 @@ import { redirect } from "next/navigation";
 import { prisma } from "@/lib/db";
 import { SAFETY_EVENT_TYPES } from "@/lib/fleet-constants";
 import { assertPlanFeature, requireWriteUser } from "@/lib/permissions";
+import { parseLocalDateTime } from "@/lib/dates";
 
 function requiredString(formData: FormData, key: string) {
   const value = String(formData.get(key) ?? "").trim();
@@ -19,7 +20,8 @@ function optionalString(formData: FormData, key: string) {
 
 function optionalDate(formData: FormData, key: string) {
   const value = String(formData.get(key) ?? "").trim();
-  return value ? new Date(value) : null;
+  if (!value) return null;
+  return parseLocalDateTime(value);
 }
 
 export async function createSafetyEvent(formData: FormData) {

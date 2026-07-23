@@ -1,4 +1,6 @@
 import { addMaintenanceLog } from "@/lib/fleet-actions";
+import { DatePicker } from "@/components/ui/date-picker";
+import { formatLocalDate } from "@/lib/dates";
 
 export function MaintenanceLogForm({
   assetType,
@@ -15,11 +17,10 @@ export function MaintenanceLogForm({
       <input type="hidden" name="assetId" value={assetId} />
       <label className="grid gap-1">
         <span className="label">Date</span>
-        <input
-          className="input"
+        <DatePicker
           name="performedAt"
-          type="date"
-          defaultValue={new Date().toISOString().slice(0, 10)}
+          defaultValue={formatLocalDate(new Date())}
+          placeholder="Performed date"
         />
       </label>
       <label className="grid gap-1">

@@ -1,7 +1,9 @@
 import Link from "next/link";
+import { DatePicker } from "@/components/ui/date-picker";
 import { deleteDqfItem, upsertDqfItem } from "@/lib/dqf-actions";
 import { DQF_CATEGORIES } from "@/lib/fleet-constants";
 import { formatDate, humanize } from "@/lib/format";
+import { formatLocalDate } from "@/lib/dates";
 
 type Item = {
   id: string;
@@ -17,9 +19,9 @@ type Item = {
 
 function dateInputValue(value?: Date | string | null) {
   if (!value) return "";
-  const d = new Date(value);
+  const d = typeof value === "string" ? new Date(value) : value;
   if (Number.isNaN(d.getTime())) return "";
-  return d.toISOString().slice(0, 10);
+  return formatLocalDate(d);
 }
 
 export function DqfSection({ driverId, items }: { driverId: string; items: Item[] }) {
@@ -76,16 +78,11 @@ export function DqfSection({ driverId, items }: { driverId: string; items: Item[
               </label>
               <label className="grid gap-1">
                 <span className="label">Issued</span>
-                <input className="input" name="issuedAt" type="date" defaultValue={dateInputValue(item.issuedAt)} />
+                <DatePicker name="issuedAt" defaultValue={dateInputValue(item.issuedAt)} placeholder="Issued" />
               </label>
               <label className="grid gap-1">
                 <span className="label">Expires</span>
-                <input
-                  className="input"
-                  name="expiresAt"
-                  type="date"
-                  defaultValue={dateInputValue(item.expiresAt)}
-                />
+                <DatePicker name="expiresAt" defaultValue={dateInputValue(item.expiresAt)} placeholder="Expires" />
               </label>
               <label className="grid gap-1">
                 <span className="label">Upload / replace file</span>
@@ -132,11 +129,11 @@ export function DqfSection({ driverId, items }: { driverId: string; items: Item[
           </label>
           <label className="grid gap-1">
             <span className="label">Issued</span>
-            <input className="input" name="issuedAt" type="date" />
+            <DatePicker name="issuedAt" placeholder="Issued" />
           </label>
           <label className="grid gap-1">
             <span className="label">Expires</span>
-            <input className="input" name="expiresAt" type="date" />
+            <DatePicker name="expiresAt" placeholder="Expires" />
           </label>
           <label className="grid gap-1 sm:col-span-2">
             <span className="label">File</span>

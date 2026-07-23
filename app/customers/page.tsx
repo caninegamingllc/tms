@@ -20,7 +20,7 @@ import { requireTmsAccess } from "@/lib/permissions";
 import { canPickBranch, isAdminRole } from "@/lib/scope";
 import { prisma } from "@/lib/db";
 import { LIST_SEARCH_ADD_TILES } from "@/lib/tile-defaults";
-import { loadPageLayouts } from "@/lib/ui-preferences-load";
+import { loadPageLayoutContext } from "@/lib/ui-preferences-load";
 
 const tiles = LIST_SEARCH_ADD_TILES.map((t) => ({
   ...t,
@@ -40,7 +40,7 @@ export default async function CustomersPage({
   const showResults = isSearchSubmitted(params);
 
   const scope = await getBranchScope(user);
-  const [customersResult, branches, layouts] = await Promise.all([
+  const [customersResult, branches, layoutContext] = await Promise.all([
     showResults
       ? searchCustomers(scope, filters, pagination)
       : Promise.resolve({ items: [], total: 0, page: 1, pageSize: pagination.pageSize, totalPages: 0 }),
@@ -53,7 +53,7 @@ export default async function CustomersPage({
           orderBy: { name: "asc" }
         })
       : Promise.resolve([]),
-    loadPageLayouts("customers")
+    loadPageLayoutContext("customers")
   ]);
 
   const rows = customersResult.items.map((customer) => {
@@ -98,7 +98,13 @@ export default async function CustomersPage({
         </div>
       ) : null}
 
-      <TileBoard pageId="customers" tiles={tiles} initialLayouts={layouts}>
+      <TileBoard
+        pageId="customers"
+        tiles={tiles}
+        initialLayouts={layoutContext.layouts}
+        orgDefaultLayouts={layoutContext.orgDefaultLayouts}
+        canSetOrgDefault={layoutContext.canSetOrgDefault}
+      >
         <Tile id="search">
           <CustomerSearchFilters filters={filters} />
         </Tile>

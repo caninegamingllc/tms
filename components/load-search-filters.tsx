@@ -3,6 +3,7 @@
 import { useRouter } from "next/navigation";
 import { FormEvent, useMemo } from "react";
 import { SearchCombobox } from "@/components/search-combobox";
+import { DatePicker } from "@/components/ui/date-picker";
 import { equipmentTypes } from "@/lib/constants";
 import type { LoadSearchFilters } from "@/lib/load-search";
 import { buildSearchQueryString } from "@/lib/load-search";
@@ -81,16 +82,11 @@ export function LoadSearchFilters({
         <div className="grid gap-4 md:grid-cols-2 xl:grid-cols-4">
           <label className="grid gap-2">
             <span className="label">Pickup From</span>
-            <input
-              type="date"
-              name="dateFrom"
-              className="input"
-              defaultValue={filters.dateFrom ?? ""}
-            />
+            <DatePicker name="dateFrom" defaultValue={filters.dateFrom ?? ""} placeholder="Pickup from" />
           </label>
           <label className="grid gap-2">
             <span className="label">Pickup To</span>
-            <input type="date" name="dateTo" className="input" defaultValue={filters.dateTo ?? ""} />
+            <DatePicker name="dateTo" defaultValue={filters.dateTo ?? ""} placeholder="Pickup to" />
           </label>
           <SearchCombobox
             name="customerId"

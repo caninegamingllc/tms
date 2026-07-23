@@ -14,7 +14,7 @@ import { getSeatSummary } from "@/lib/seats";
 import { getSettingsNavItems } from "@/lib/settings-nav";
 import { isStripeConfigured } from "@/lib/stripe";
 import { ADMIN_BILLING_TILES } from "@/lib/tile-defaults";
-import { loadPageLayouts } from "@/lib/ui-preferences-load";
+import { loadPageLayoutContext } from "@/lib/ui-preferences-load";
 
 export default async function BillingPage({
   searchParams
@@ -30,9 +30,9 @@ export default async function BillingPage({
   const user = await requireAdmin();
   const params = await searchParams;
   await refreshSeatSubscriptionFromStripe(user.companyId, { force: params.success === "1" });
-  const [seatSummary, layouts] = await Promise.all([
+  const [seatSummary, layoutContext] = await Promise.all([
     getSeatSummary(user.companyId),
-    loadPageLayouts("admin-billing")
+    loadPageLayoutContext("admin-billing")
   ]);
   const stripeReady = isStripeConfigured();
   const currentPlan = seatSummary.plan;
@@ -90,7 +90,13 @@ export default async function BillingPage({
         </div>
       ) : null}
 
-      <TileBoard pageId="admin-billing" tiles={ADMIN_BILLING_TILES} initialLayouts={layouts}>
+      <TileBoard
+        pageId="admin-billing"
+        tiles={ADMIN_BILLING_TILES}
+        initialLayouts={layoutContext.layouts}
+        orgDefaultLayouts={layoutContext.orgDefaultLayouts}
+        canSetOrgDefault={layoutContext.canSetOrgDefault}
+      >
         <Tile id="seat-summary">
           <div className="grid grid-cols-2 gap-3 text-center sm:grid-cols-4">
             <div className="rounded-2xl bg-muted p-4">

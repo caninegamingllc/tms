@@ -2,6 +2,8 @@
 
 import { useState } from "react";
 import { FacilityCombobox, type SearchOption } from "@/components/search-combobox";
+import { DateTimePicker } from "@/components/ui/date-picker";
+import { formatLocalDateTime } from "@/lib/dates";
 
 type FacilityOption = SearchOption & {
   address?: string | null;
@@ -47,8 +49,7 @@ function toDatetimeLocalValue(value: Date | string | null | undefined) {
   if (Number.isNaN(date.getTime())) {
     return "";
   }
-  const pad = (n: number) => String(n).padStart(2, "0");
-  return `${date.getFullYear()}-${pad(date.getMonth() + 1)}-${pad(date.getDate())}T${pad(date.getHours())}:${pad(date.getMinutes())}`;
+  return formatLocalDateTime(date);
 }
 
 function emptyStop(type: "PICKUP" | "DELIVERY"): DraftStop {
@@ -209,13 +210,12 @@ export function LoadStopsEditor({
 
           <label className="grid gap-2 md:max-w-sm">
             <span className="label">Appointment</span>
-            <input
+            <DateTimePicker
               name="stopAppointment"
-              className="input"
-              type="datetime-local"
               value={stop.appointmentAt}
-              onChange={(event) => updateStop(stop.key, { appointmentAt: event.target.value })}
+              onChange={(next) => updateStop(stop.key, { appointmentAt: next })}
               required
+              placeholder="Appointment date & time"
             />
           </label>
 

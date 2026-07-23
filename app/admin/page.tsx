@@ -14,7 +14,7 @@ import { planHasFeature } from "@/lib/plans";
 import { getSeatSummary } from "@/lib/seats";
 import { getSettingsNavItems } from "@/lib/settings-nav";
 import { ADMIN_TILES } from "@/lib/tile-defaults";
-import { loadPageLayouts } from "@/lib/ui-preferences-load";
+import { loadPageLayoutContext } from "@/lib/ui-preferences-load";
 import Link from "next/link";
 
 export default async function AdminPage({
@@ -45,7 +45,7 @@ export default async function AdminPage({
     commodities,
     payLineTypes,
     chargeTypes,
-    layouts
+    layoutContext
   ] = await Promise.all([
       prisma.company.findUniqueOrThrow({ where: { id: currentUser.companyId } }),
       prisma.companyMembership.findMany({
@@ -94,7 +94,7 @@ export default async function AdminPage({
         include: { _count: { select: { charges: true } } },
         orderBy: [{ sortOrder: "asc" }, { name: "asc" }]
       }),
-      loadPageLayouts("admin")
+      loadPageLayoutContext("admin")
     ]);
 
   const branchNameById = new Map(branches.map((branch) => [branch.id, branch.name]));
@@ -189,7 +189,13 @@ export default async function AdminPage({
 
       {invite ? <InviteLinkBanner invitePath={invite} emailSent={emailSent === "1"} /> : null}
 
-      <TileBoard pageId="admin" tiles={ADMIN_TILES} initialLayouts={layouts}>
+      <TileBoard
+        pageId="admin"
+        tiles={ADMIN_TILES}
+        initialLayouts={layoutContext.layouts}
+        orgDefaultLayouts={layoutContext.orgDefaultLayouts}
+        canSetOrgDefault={layoutContext.canSetOrgDefault}
+      >
         <Tile id="seat-usage">
           <div className="flex flex-wrap items-center justify-between gap-3">
             <p className="muted">

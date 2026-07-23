@@ -11,7 +11,7 @@ import { formatDate, formatDateTime, humanize } from "@/lib/format";
 import { getCompanyQuickbooksMethod } from "@/lib/quickbooks/exports";
 import { getSettingsNavItems } from "@/lib/settings-nav";
 import { integrationsTiles } from "@/lib/tile-defaults";
-import { loadPageLayouts } from "@/lib/ui-preferences-load";
+import { loadPageLayoutContext } from "@/lib/ui-preferences-load";
 
 const capabilities: Record<string, string[]> = {
   DAT: ["Post available loads", "Search trucks", "Import market rates"],
@@ -59,13 +59,13 @@ export default async function IntegrationsPage({
     }
   }
 
-  const [integrationsRaw, quickbooksMethod, layouts] = await Promise.all([
+  const [integrationsRaw, quickbooksMethod, layoutContext] = await Promise.all([
     prisma.integrationAccount.findMany({
       where: { companyId: user.companyId },
       orderBy: { provider: "asc" }
     }),
     getCompanyQuickbooksMethod(user.companyId),
-    loadPageLayouts("integrations")
+    loadPageLayoutContext("integrations")
   ]);
 
   const integrations = integrationsRaw.filter((integration) => {
@@ -109,7 +109,13 @@ export default async function IntegrationsPage({
         </div>
       ) : null}
 
-      <TileBoard pageId="integrations" tiles={tiles} initialLayouts={layouts}>
+      <TileBoard
+        pageId="integrations"
+        tiles={tiles}
+        initialLayouts={layoutContext.layouts}
+        orgDefaultLayouts={layoutContext.orgDefaultLayouts}
+        canSetOrgDefault={layoutContext.canSetOrgDefault}
+      >
         {isAdmin ? (
           <Tile id="quickbooks">
             <p className="muted">

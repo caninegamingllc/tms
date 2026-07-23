@@ -2,6 +2,7 @@
 
 import { useEffect, useMemo, useRef, useState } from "react";
 import type { BusinessSearchResult } from "@/lib/business-search";
+import { DateTimePicker } from "@/components/ui/date-picker";
 
 type CheckCallFormProps = {
   action: (formData: FormData) => void | Promise<void>;
@@ -234,7 +235,7 @@ export function CheckCallForm({ action, assignmentId, loadId }: CheckCallFormPro
         <div className="grid gap-3 rounded-xl border border-border bg-card p-3">
           <label className="grid gap-2">
             <span className="label">Next check call date/time</span>
-            <input name="nextCheckAt" className="input" type="datetime-local" required />
+            <DateTimePicker name="nextCheckAt" required placeholder="Next check call date & time" />
           </label>
           <label className="grid gap-2">
             <span className="label">Next check notes</span>

@@ -1,4 +1,5 @@
 import Link from "next/link";
+import { DatePicker } from "@/components/ui/date-picker";
 import {
   ASSET_STATUSES,
   DRIVER_STATUSES,
@@ -6,12 +7,13 @@ import {
   TRUCK_OWNERSHIPS
 } from "@/lib/fleet-constants";
 import { createDriver, createTrailer, createTruck } from "@/lib/fleet-actions";
+import { formatLocalDate } from "@/lib/dates";
 
 function dateInputValue(value?: Date | string | null) {
   if (!value) return "";
-  const d = new Date(value);
+  const d = typeof value === "string" ? new Date(value) : value;
   if (Number.isNaN(d.getTime())) return "";
-  return d.toISOString().slice(0, 10);
+  return formatLocalDate(d);
 }
 
 export function DriverForm({
@@ -74,24 +76,22 @@ export function DriverForm({
       </label>
       <label className="grid gap-1">
         <span className="label">Hire date</span>
-        <input className="input" name="hireDate" type="date" defaultValue={dateInputValue(driver?.hireDate)} />
+        <DatePicker name="hireDate" defaultValue={dateInputValue(driver?.hireDate)} placeholder="Hire date" />
       </label>
       <label className="grid gap-1">
         <span className="label">Termination date</span>
-        <input
-          className="input"
+        <DatePicker
           name="terminationDate"
-          type="date"
           defaultValue={dateInputValue(driver?.terminationDate)}
+          placeholder="Termination date"
         />
       </label>
       <label className="grid gap-1">
         <span className="label">Date of birth</span>
-        <input
-          className="input"
+        <DatePicker
           name="dateOfBirth"
-          type="date"
           defaultValue={dateInputValue(driver?.dateOfBirth)}
+          placeholder="Date of birth"
         />
       </label>
       <label className="grid gap-1">
@@ -112,20 +112,18 @@ export function DriverForm({
       </label>
       <label className="grid gap-1">
         <span className="label">CDL expiration</span>
-        <input
-          className="input"
+        <DatePicker
           name="cdlExpiresAt"
-          type="date"
           defaultValue={dateInputValue(driver?.cdlExpiresAt)}
+          placeholder="CDL expiration"
         />
       </label>
       <label className="grid gap-1">
         <span className="label">Medical card expiration</span>
-        <input
-          className="input"
+        <DatePicker
           name="medicalExpiresAt"
-          type="date"
           defaultValue={dateInputValue(driver?.medicalExpiresAt)}
+          placeholder="Medical card expiration"
         />
       </label>
       <label className="grid gap-1 sm:col-span-2">
@@ -217,38 +215,34 @@ export function TruckForm({
       </label>
       <label className="grid gap-1">
         <span className="label">Registration expiration</span>
-        <input
-          className="input"
+        <DatePicker
           name="registrationExpiresAt"
-          type="date"
           defaultValue={dateInputValue(truck?.registrationExpiresAt)}
+          placeholder="Registration expiration"
         />
       </label>
       <label className="grid gap-1">
         <span className="label">Annual inspection expiration</span>
-        <input
-          className="input"
+        <DatePicker
           name="annualInspectionExpiresAt"
-          type="date"
           defaultValue={dateInputValue(truck?.annualInspectionExpiresAt)}
+          placeholder="Annual inspection expiration"
         />
       </label>
       <label className="grid gap-1">
         <span className="label">IRP / cab card expiration</span>
-        <input
-          className="input"
+        <DatePicker
           name="irpExpiresAt"
-          type="date"
           defaultValue={dateInputValue(truck?.irpExpiresAt)}
+          placeholder="IRP / cab card expiration"
         />
       </label>
       <label className="grid gap-1">
         <span className="label">Insurance expiration</span>
-        <input
-          className="input"
+        <DatePicker
           name="insuranceExpiresAt"
-          type="date"
           defaultValue={dateInputValue(truck?.insuranceExpiresAt)}
+          placeholder="Insurance expiration"
         />
       </label>
       <label className="grid gap-1 sm:col-span-2">
@@ -339,29 +333,26 @@ export function TrailerForm({
       </label>
       <label className="grid gap-1">
         <span className="label">Registration expiration</span>
-        <input
-          className="input"
+        <DatePicker
           name="registrationExpiresAt"
-          type="date"
           defaultValue={dateInputValue(trailer?.registrationExpiresAt)}
+          placeholder="Registration expiration"
         />
       </label>
       <label className="grid gap-1">
         <span className="label">Annual inspection expiration</span>
-        <input
-          className="input"
+        <DatePicker
           name="annualInspectionExpiresAt"
-          type="date"
           defaultValue={dateInputValue(trailer?.annualInspectionExpiresAt)}
+          placeholder="Annual inspection expiration"
         />
       </label>
       <label className="grid gap-1">
         <span className="label">Insurance expiration</span>
-        <input
-          className="input"
+        <DatePicker
           name="insuranceExpiresAt"
-          type="date"
           defaultValue={dateInputValue(trailer?.insuranceExpiresAt)}
+          placeholder="Insurance expiration"
         />
       </label>
       <label className="grid gap-1 sm:col-span-2">

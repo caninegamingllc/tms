@@ -1,5 +1,6 @@
 import Link from "next/link";
 import { PageHeader } from "@/components/page-header";
+import { DatePicker } from "@/components/ui/date-picker";
 import {
   createDriverSettlement,
   updateDriverSettlementStatus
@@ -195,11 +196,11 @@ export default async function FleetSettlementsPage({
               </label>
               <label className="grid gap-1">
                 <span className="label">Period start</span>
-                <input className="input" name="periodStart" type="date" />
+                <DatePicker name="periodStart" placeholder="Period start" />
               </label>
               <label className="grid gap-1">
                 <span className="label">Period end</span>
-                <input className="input" name="periodEnd" type="date" />
+                <DatePicker name="periodEnd" placeholder="Period end" />
               </label>
             </div>
             <label className="grid gap-1">

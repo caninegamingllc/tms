@@ -1,4 +1,5 @@
 import { parsePaymentTermsDays } from "@/lib/accounting-aging";
+import { formatLocalDate, parseLocalDate } from "@/lib/dates";
 
 export type CarrierBillLineItem = {
   id: string;
@@ -49,16 +50,19 @@ function dateInputValue(value?: string | Date | null) {
   if (Number.isNaN(date.getTime())) {
     return "";
   }
-  return date.toISOString().slice(0, 10);
+  return formatLocalDate(date);
 }
 
 function addDays(isoDate: string, days: number) {
   if (!isoDate) {
     return "";
   }
-  const date = new Date(`${isoDate}T12:00:00`);
+  const date = parseLocalDate(isoDate);
+  if (!date) {
+    return "";
+  }
   date.setDate(date.getDate() + days);
-  return date.toISOString().slice(0, 10);
+  return formatLocalDate(date);
 }
 
 export function buildDefaultCarrierBillForm(input: {

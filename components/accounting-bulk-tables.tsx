@@ -14,6 +14,7 @@ import {
 } from "@/components/sortable-table";
 import { TablePagination } from "@/components/table-pagination";
 import { StatusBadge } from "@/components/status-badge";
+import { DatePicker } from "@/components/ui/date-picker";
 import { formatDate, formatMoney } from "@/lib/format";
 import {
   bulkEmailInvoicesAction,
@@ -343,7 +344,7 @@ export function AccountingInvoicesPanel({
                       className="input"
                       placeholder={`Amount (default ${formatMoney(openBalance)})`}
                     />
-                    <input name="paidAt" className="input" type="date" />
+                    <DatePicker name="paidAt" placeholder="Payment date" />
                     <select name="method" className="select" defaultValue="CHECK">
                       <option value="CHECK">Check</option>
                       <option value="ACH">ACH</option>
@@ -684,7 +685,7 @@ export function AccountingBillsPanel({
                       className="input"
                       placeholder={`Amount (default ${formatMoney(openBalance)})`}
                     />
-                    <input name="paidAt" className="input" type="date" />
+                    <DatePicker name="paidAt" placeholder="Payment date" />
                     <select name="method" className="select" defaultValue="CHECK">
                       <option value="CHECK">Check</option>
                       <option value="ACH">ACH</option>

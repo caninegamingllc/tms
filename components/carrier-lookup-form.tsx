@@ -3,6 +3,7 @@
 import Link from "next/link";
 import { useEffect, useMemo, useState } from "react";
 import type { CarrierLookupResult } from "@/lib/carrier-lookup";
+import { DatePicker } from "@/components/ui/date-picker";
 
 type CarrierLookupFormProps = {
   action: (formData: FormData) => void | Promise<void>;
@@ -401,13 +402,11 @@ export function CarrierLookupForm({
           value={safetyRating}
           onChange={(event) => setSafetyRating(event.target.value)}
         />
-        <input
+        <DatePicker
           name="insuranceExpiresAt"
-          className="input"
-          type="date"
           value={insuranceExpiresAt}
-          onChange={(event) => setInsuranceExpiresAt(event.target.value)}
-          title="Auto-fills from FMCSA when available; otherwise enter manually"
+          onChange={setInsuranceExpiresAt}
+          placeholder="Insurance expiration"
         />
       </div>
       <p className="-mt-1 text-xs text-muted-foreground">

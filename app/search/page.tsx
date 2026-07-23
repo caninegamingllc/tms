@@ -25,7 +25,7 @@ import {
 } from "@/lib/load-search";
 import { parsePaginationParams } from "@/lib/pagination";
 import { SEARCH_PAGE_TILES } from "@/lib/tile-defaults";
-import { loadPageLayouts } from "@/lib/ui-preferences-load";
+import { loadPageLayoutContext } from "@/lib/ui-preferences-load";
 
 type SearchPageProps = {
   searchParams: Promise<Record<string, string | string[] | undefined>>;
@@ -40,12 +40,12 @@ export default async function SearchPage({ searchParams }: SearchPageProps) {
   const showResults = isSearchSubmitted(resolvedSearchParams);
 
   const scope = await getBranchScope(user);
-  const [loadsResult, options, layouts, revenueSummary] = await Promise.all([
+  const [loadsResult, options, layoutContext, revenueSummary] = await Promise.all([
     showResults && view === "loads"
       ? searchLoads(scope, filters, pagination)
       : Promise.resolve({ items: [], total: 0, page: 1, pageSize: pagination.pageSize, totalPages: 0 }),
     getLoadSearchOptions(scope),
-    loadPageLayouts("search"),
+    loadPageLayoutContext("search"),
     showResults && view === "revenue" ? getRevenueSummary(scope, filters) : Promise.resolve(null)
   ]);
 
@@ -62,7 +62,13 @@ export default async function SearchPage({ searchParams }: SearchPageProps) {
         description="Search loads with flexible filters, review results, and export load or revenue reports."
       />
 
-      <TileBoard pageId="search" tiles={SEARCH_PAGE_TILES} initialLayouts={layouts}>
+      <TileBoard
+        pageId="search"
+        tiles={SEARCH_PAGE_TILES}
+        initialLayouts={layoutContext.layouts}
+        orgDefaultLayouts={layoutContext.orgDefaultLayouts}
+        canSetOrgDefault={layoutContext.canSetOrgDefault}
+      >
         <Tile id="filters">
           <div className="grid gap-4">
             <LoadSearchFilters

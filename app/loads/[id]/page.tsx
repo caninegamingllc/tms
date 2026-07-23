@@ -10,7 +10,7 @@ import { LoadDetailsEditor } from "@/components/load-details-editor";
 import { StatusBadge } from "@/components/status-badge";
 import { Tile, TileBoard } from "@/components/tile-board";
 import { LOAD_DETAIL_TILES } from "@/lib/tile-defaults";
-import { loadPageLayouts } from "@/lib/ui-preferences-load";
+import { loadPageLayoutContext } from "@/lib/ui-preferences-load";
 import {
   addCheckCall,
   addLoadActivityNote,
@@ -81,7 +81,7 @@ export default async function LoadDetailPage({
     commissionProfiles,
     mailbox,
     payLineTypes,
-    layouts,
+    layoutContext,
     customers,
     facilities,
     branches,
@@ -142,7 +142,7 @@ export default async function LoadDetailPage({
       where: { companyId: user.companyId, active: true },
       orderBy: [{ sortOrder: "asc" }, { name: "asc" }]
     }),
-    loadPageLayouts("load-detail"),
+    loadPageLayoutContext("load-detail"),
     prisma.customer.findMany({
       where: scope,
       orderBy: { name: "asc" }
@@ -355,7 +355,13 @@ export default async function LoadDetailPage({
         </div>
       ) : null}
 
-      <TileBoard pageId="load-detail" tiles={detailTiles} initialLayouts={layouts ?? null}>
+      <TileBoard
+        pageId="load-detail"
+        tiles={detailTiles}
+        initialLayouts={layoutContext.layouts ?? null}
+        orgDefaultLayouts={layoutContext.orgDefaultLayouts}
+        canSetOrgDefault={layoutContext.canSetOrgDefault}
+      >
         <Tile id="summary">
           <div className="grid gap-8">
             <LoadDetailsEditor

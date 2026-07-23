@@ -7,13 +7,13 @@ import { requireAdmin } from "@/lib/auth";
 import { requirePlanFeature } from "@/lib/permissions";
 import { prisma } from "@/lib/db";
 import { COMMISSION_PROFILES_TILES } from "@/lib/tile-defaults";
-import { loadPageLayouts } from "@/lib/ui-preferences-load";
+import { loadPageLayoutContext } from "@/lib/ui-preferences-load";
 
 export default async function CommissionProfilesPage() {
   await requirePlanFeature("commissions");
   const user = await requireAdmin();
 
-  const [profiles, branches, layouts] = await Promise.all([
+  const [profiles, branches, layoutContext] = await Promise.all([
     prisma.commissionProfile.findMany({
       where: { companyId: user.companyId },
       include: { rule: true, branches: true },
@@ -24,7 +24,7 @@ export default async function CommissionProfilesPage() {
       include: { commissionProfile: true },
       orderBy: { name: "asc" }
     }),
-    loadPageLayouts("commission-profiles")
+    loadPageLayoutContext("commission-profiles")
   ]);
 
   const profileRows = profiles.map((profile) => ({
@@ -54,7 +54,13 @@ export default async function CommissionProfilesPage() {
         }
       />
 
-      <TileBoard pageId="commission-profiles" tiles={tiles} initialLayouts={layouts}>
+      <TileBoard
+        pageId="commission-profiles"
+        tiles={tiles}
+        initialLayouts={layoutContext.layouts}
+        orgDefaultLayouts={layoutContext.orgDefaultLayouts}
+        canSetOrgDefault={layoutContext.canSetOrgDefault}
+      >
         <Tile id="profiles">
           <p className="muted mb-3">
             Default rule: branch earns 60% of gross profit when company 40% meets the 10% expense floor.

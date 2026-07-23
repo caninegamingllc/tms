@@ -243,6 +243,14 @@ export function getPageLayouts(
   return parsed.layouts?.[pageId];
 }
 
+/** Personal override wins; otherwise fall back to the org default. */
+export function resolvePageLayouts(
+  personal: PageLayouts | undefined,
+  orgDefault: PageLayouts | undefined
+): PageLayouts | undefined {
+  return personal ?? orgDefault;
+}
+
 export function setPageLayouts(
   preferences: UiPreferences | unknown,
   pageId: string,

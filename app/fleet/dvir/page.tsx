@@ -1,5 +1,7 @@
 import { PageHeader } from "@/components/page-header";
+import { DateTimePicker } from "@/components/ui/date-picker";
 import { createDvirReport } from "@/lib/dvir-settlement-actions";
+import { formatLocalDateTime } from "@/lib/dates";
 import { driverDisplayName } from "@/lib/fleet-constants";
 import { prisma } from "@/lib/db";
 import { formatDate, formatDateTime, humanize } from "@/lib/format";
@@ -127,11 +129,10 @@ export default async function FleetDvirPage({
             </label>
             <label className="grid gap-1">
               <span className="label">Date / time</span>
-              <input
-                className="input"
+              <DateTimePicker
                 name="inspectedAt"
-                type="datetime-local"
-                defaultValue={new Date().toISOString().slice(0, 16)}
+                defaultValue={formatLocalDateTime(new Date())}
+                placeholder="Inspection date & time"
               />
             </label>
             <label className="grid gap-1">

@@ -1,6 +1,7 @@
 import Link from "next/link";
 import { notFound } from "next/navigation";
 import { PageHeader } from "@/components/page-header";
+import { DatePicker } from "@/components/ui/date-picker";
 import {
   addIftaFuelPurchase,
   addIftaTrip,
@@ -11,6 +12,7 @@ import {
 } from "@/lib/ifta-actions";
 import { IFTA_JURISDICTIONS, buildIftaWorksheet } from "@/lib/ifta-worksheet";
 import { driverDisplayName } from "@/lib/fleet-constants";
+import { formatLocalDate } from "@/lib/dates";
 import { prisma } from "@/lib/db";
 import { formatDate, formatMoney, humanize } from "@/lib/format";
 import { requirePlanFeature } from "@/lib/permissions";
@@ -252,11 +254,10 @@ export default async function IftaQuarterDetailPage({
                   </label>
                   <label className="grid gap-1">
                     <span className="label">Date</span>
-                    <input
-                      className="input"
+                    <DatePicker
                       name="startAt"
-                      type="date"
-                      defaultValue={new Date().toISOString().slice(0, 10)}
+                      defaultValue={formatLocalDate(new Date())}
+                      placeholder="Trip date"
                     />
                   </label>
                   <label className="grid gap-1">
@@ -371,11 +372,10 @@ export default async function IftaQuarterDetailPage({
                 </label>
                 <label className="grid gap-1">
                   <span className="label">Date</span>
-                  <input
-                    className="input"
+                  <DatePicker
                     name="purchasedAt"
-                    type="date"
-                    defaultValue={new Date().toISOString().slice(0, 10)}
+                    defaultValue={formatLocalDate(new Date())}
+                    placeholder="Purchase date"
                   />
                 </label>
                 <label className="grid gap-1">

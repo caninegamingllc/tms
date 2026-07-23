@@ -19,7 +19,7 @@ import { parsePaginationParams } from "@/lib/pagination";
 import { requireTmsAccess } from "@/lib/permissions";
 import { prisma } from "@/lib/db";
 import { LIST_SEARCH_ADD_TILES } from "@/lib/tile-defaults";
-import { loadPageLayouts } from "@/lib/ui-preferences-load";
+import { loadPageLayoutContext } from "@/lib/ui-preferences-load";
 
 const tiles = LIST_SEARCH_ADD_TILES.map((t) => ({
   ...t,
@@ -39,7 +39,7 @@ export default async function CarriersPage({
   const showResults = isSearchSubmitted(params);
 
   const scope = await getBranchScope(user);
-  const [carriersResult, factoringCompanies, layouts] = await Promise.all([
+  const [carriersResult, factoringCompanies, layoutContext] = await Promise.all([
     showResults
       ? searchCarriers(scope, filters, pagination)
       : Promise.resolve({ items: [], total: 0, page: 1, pageSize: pagination.pageSize, totalPages: 0 }),
@@ -48,7 +48,7 @@ export default async function CarriersPage({
       orderBy: { name: "asc" },
       select: { id: true, name: true, nameOnCheck: true }
     }),
-    loadPageLayouts("carriers")
+    loadPageLayoutContext("carriers")
   ]);
 
   const rows = carriersResult.items.map((carrier) => {
@@ -99,7 +99,13 @@ export default async function CarriersPage({
         </div>
       ) : null}
 
-      <TileBoard pageId="carriers" tiles={tiles} initialLayouts={layouts}>
+      <TileBoard
+        pageId="carriers"
+        tiles={tiles}
+        initialLayouts={layoutContext.layouts}
+        orgDefaultLayouts={layoutContext.orgDefaultLayouts}
+        canSetOrgDefault={layoutContext.canSetOrgDefault}
+      >
         <Tile id="search">
           <CarrierSearchFilters filters={filters} />
         </Tile>

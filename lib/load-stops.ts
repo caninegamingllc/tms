@@ -1,4 +1,5 @@
 import { prisma } from "@/lib/db";
+import { parseLocalDateTime } from "@/lib/dates";
 
 export type StopFacilitySnapshot = {
   facilityId?: string;
@@ -37,8 +38,8 @@ function parseAppointment(value: string | undefined, label: string) {
   if (!trimmed) {
     throw new Error(`${label} appointment is required`);
   }
-  const date = new Date(trimmed);
-  if (Number.isNaN(date.getTime())) {
+  const date = parseLocalDateTime(trimmed);
+  if (!date) {
     throw new Error(`Invalid ${label} appointment`);
   }
   return date;

@@ -1,6 +1,8 @@
 import { PageHeader } from "@/components/page-header";
+import { DatePicker } from "@/components/ui/date-picker";
 import { createSafetyEvent } from "@/lib/safety-actions";
 import { SAFETY_EVENT_TYPES, driverDisplayName } from "@/lib/fleet-constants";
+import { formatLocalDate } from "@/lib/dates";
 import { prisma } from "@/lib/db";
 import { formatDate, humanize } from "@/lib/format";
 import { requirePlanFeature } from "@/lib/permissions";
@@ -113,11 +115,10 @@ export default async function FleetSafetyPage({
             </label>
             <label className="grid gap-1">
               <span className="label">Date</span>
-              <input
-                className="input"
+              <DatePicker
                 name="occurredAt"
-                type="date"
-                defaultValue={new Date().toISOString().slice(0, 10)}
+                defaultValue={formatLocalDate(new Date())}
+                placeholder="Event date"
               />
             </label>
             <label className="grid gap-1">

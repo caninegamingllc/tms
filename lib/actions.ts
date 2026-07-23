@@ -68,6 +68,7 @@ import {
   primaryAssignment,
   sumAssignmentRateCents
 } from "@/lib/dispatch-assignment";
+import { parseLocalDateTime } from "@/lib/dates";
 
 function requiredString(formData: FormData, key: string) {
   const value = String(formData.get(key) ?? "").trim();
@@ -85,7 +86,10 @@ function optionalString(formData: FormData, key: string) {
 
 function optionalDate(formData: FormData, key: string) {
   const value = String(formData.get(key) ?? "").trim();
-  return value ? new Date(value) : undefined;
+  if (!value) {
+    return undefined;
+  }
+  return parseLocalDateTime(value) ?? undefined;
 }
 
 function optionalFloat(formData: FormData, key: string) {

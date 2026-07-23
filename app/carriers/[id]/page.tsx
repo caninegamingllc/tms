@@ -20,15 +20,20 @@ import { insuranceCoverageTypes } from "@/lib/constants";
 import { toDocumentTableRows } from "@/lib/document-rows";
 import { prisma } from "@/lib/db";
 import { formatDate, formatDateTime, formatMoney, humanize } from "@/lib/format";
+import { formatLocalDate } from "@/lib/dates";
 import { CARRIER_DETAIL_TILES } from "@/lib/tile-defaults";
-import { loadPageLayouts } from "@/lib/ui-preferences-load";
+import { loadPageLayoutContext } from "@/lib/ui-preferences-load";
+import { DatePicker } from "@/components/ui/date-picker";
 
 function dateInputValue(date?: Date | string | null) {
   if (!date) {
     return "";
   }
-
-  return new Date(date).toISOString().slice(0, 10);
+  const d = typeof date === "string" ? new Date(date) : date;
+  if (Number.isNaN(d.getTime())) {
+    return "";
+  }
+  return formatLocalDate(d);
 }
 
 export default async function CarrierDetailPage({
@@ -47,7 +52,7 @@ export default async function CarrierDetailPage({
     if (tile.id === "activity" || tile.id === "documents") return canCrmDocs;
     return true;
   });
-  const [carrier, layouts] = await Promise.all([
+  const [carrier, layoutContext] = await Promise.all([
     prisma.carrier.findUnique({
       where: { id, companyId: user.companyId },
       include: {
@@ -60,7 +65,7 @@ export default async function CarrierDetailPage({
         activities: { orderBy: { createdAt: "desc" }, include: { user: true } }
       }
     }),
-    loadPageLayouts("carrier-detail")
+    loadPageLayoutContext("carrier-detail")
   ]);
 
   if (!carrier) {
@@ -101,7 +106,13 @@ export default async function CarrierDetailPage({
         </div>
       ) : null}
 
-      <TileBoard pageId="carrier-detail" tiles={carrierTiles} initialLayouts={layouts}>
+      <TileBoard
+        pageId="carrier-detail"
+        tiles={carrierTiles}
+        initialLayouts={layoutContext.layouts}
+        orgDefaultLayouts={layoutContext.orgDefaultLayouts}
+        canSetOrgDefault={layoutContext.canSetOrgDefault}
+      >
         <Tile id="profile">
           {writable ? (
             <form action={updateCarrier} className="grid gap-3">
@@ -311,8 +322,16 @@ export default async function CarrierDetailPage({
                 <div className="grid gap-3 md:grid-cols-4">
                   <input name="policyNumber" className="input" defaultValue={coverage.policyNumber ?? ""} placeholder="Policy number" />
                   <input name="limitAmount" className="input" defaultValue={coverage.limitAmount ?? ""} placeholder="Policy amount" />
-                  <input name="effectiveAt" className="input" type="date" defaultValue={dateInputValue(coverage.effectiveAt)} title="Policy start" />
-                  <input name="expiresAt" className="input" type="date" defaultValue={dateInputValue(coverage.expiresAt)} title="Policy expiration" />
+                  <DatePicker
+                    name="effectiveAt"
+                    defaultValue={dateInputValue(coverage.effectiveAt)}
+                    placeholder="Policy start"
+                  />
+                  <DatePicker
+                    name="expiresAt"
+                    defaultValue={dateInputValue(coverage.expiresAt)}
+                    placeholder="Policy expiration"
+                  />
                 </div>
                 <div className="grid gap-3 md:grid-cols-1">
                   <input name="notes" className="input" defaultValue={coverage.notes ?? ""} placeholder="Notes" />
@@ -346,8 +365,8 @@ export default async function CarrierDetailPage({
             <div className="grid gap-3 md:grid-cols-4">
               <input name="policyNumber" className="input" placeholder="Policy number" />
               <input name="limitAmount" className="input" placeholder="Policy amount" />
-              <input name="effectiveAt" className="input" type="date" title="Policy start" />
-              <input name="expiresAt" className="input" type="date" title="Policy expiration" />
+              <DatePicker name="effectiveAt" placeholder="Policy start" />
+              <DatePicker name="expiresAt" placeholder="Policy expiration" />
             </div>
             <div className="grid gap-3 md:grid-cols-1">
               <input name="notes" className="input" placeholder="Notes" />

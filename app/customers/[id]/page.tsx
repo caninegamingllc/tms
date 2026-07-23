@@ -24,7 +24,7 @@ import {
   revokeCustomerPortalLink,
   updateCustomerPaymentUrl
 } from "@/lib/portal-admin-actions";
-import { loadPageLayouts } from "@/lib/ui-preferences-load";
+import { loadPageLayoutContext } from "@/lib/ui-preferences-load";
 
 export default async function CustomerDetailPage({
   params,
@@ -41,7 +41,7 @@ export default async function CustomerDetailPage({
   const { id } = await params;
   const { saved, portalInvite, portalLink, error } = await searchParams;
   const user = await requireTmsAccess();
-  const [customer, layouts, portalUsers, portalLinks] = await Promise.all([
+  const [customer, layoutContext, portalUsers, portalLinks] = await Promise.all([
     prisma.customer.findUnique({
       where: { id, companyId: user.companyId },
       include: {
@@ -53,7 +53,7 @@ export default async function CustomerDetailPage({
         activities: { orderBy: { createdAt: "desc" }, include: { user: true } }
       }
     }),
-    loadPageLayouts("customer-detail"),
+    loadPageLayoutContext("customer-detail"),
     prisma.customerPortalUser.findMany({
       where: { customerId: id, companyId: user.companyId },
       orderBy: { createdAt: "desc" }
@@ -129,7 +129,13 @@ export default async function CustomerDetailPage({
         </div>
       ) : null}
 
-      <TileBoard pageId="customer-detail" tiles={customerTiles} initialLayouts={layouts}>
+      <TileBoard
+        pageId="customer-detail"
+        tiles={customerTiles}
+        initialLayouts={layoutContext.layouts}
+        orgDefaultLayouts={layoutContext.orgDefaultLayouts}
+        canSetOrgDefault={layoutContext.canSetOrgDefault}
+      >
         <Tile id="profile">
           {writable ? (
             <form action={updateCustomer} className="grid gap-3">

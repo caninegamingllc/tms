@@ -13,7 +13,7 @@ import { canManageUsers, canSettleCommission } from "@/lib/scope";
 import { prisma } from "@/lib/db";
 import { commissionMethodLabel, formatDate, formatMoney, humanize } from "@/lib/format";
 import { COMMISSIONS_TILES } from "@/lib/tile-defaults";
-import { loadPageLayouts } from "@/lib/ui-preferences-load";
+import { loadPageLayoutContext } from "@/lib/ui-preferences-load";
 
 export default async function CommissionsPage({
   searchParams
@@ -34,7 +34,7 @@ export default async function CommissionsPage({
   const where = buildCommissionWhere(loadScope, filters);
   const manageProfiles = canManageUsers(user);
 
-  const [commissions, profileCount, layouts] = await Promise.all([
+  const [commissions, profileCount, layoutContext] = await Promise.all([
     prisma.loadCommission.findMany({
       where,
       orderBy: [{ load: { pickupDate: "desc" } }, { load: { loadNumber: "desc" } }],
@@ -51,7 +51,7 @@ export default async function CommissionsPage({
     manageProfiles
       ? prisma.commissionProfile.count({ where: { companyId: user.companyId } })
       : Promise.resolve(0),
-    loadPageLayouts("commissions")
+    loadPageLayoutContext("commissions")
   ]);
 
   const totalPayable = commissions
@@ -110,7 +110,13 @@ export default async function CommissionsPage({
         }
       />
 
-      <TileBoard pageId="commissions" tiles={tiles} initialLayouts={layouts}>
+      <TileBoard
+        pageId="commissions"
+        tiles={tiles}
+        initialLayouts={layoutContext.layouts}
+        orgDefaultLayouts={layoutContext.orgDefaultLayouts}
+        canSetOrgDefault={layoutContext.canSetOrgDefault}
+      >
         <Tile id="metrics">
           <div className="overflow-hidden rounded-lg border border-border bg-card">
             <div className="grid md:grid-cols-3 md:[&>*:nth-child(3n)]:border-r-0">

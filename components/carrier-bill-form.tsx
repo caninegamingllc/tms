@@ -1,16 +1,21 @@
 "use client";
 
 import { useMemo, useState } from "react";
+import { DatePicker } from "@/components/ui/date-picker";
 import { formatMoney } from "@/lib/format";
+import { formatLocalDate, parseLocalDate } from "@/lib/dates";
 import type { CarrierBillFormValues } from "@/lib/carrier-bill-form";
 
 function addDays(isoDate: string, days: number) {
   if (!isoDate) {
     return "";
   }
-  const date = new Date(`${isoDate}T12:00:00`);
+  const date = parseLocalDate(isoDate);
+  if (!date) {
+    return "";
+  }
   date.setDate(date.getDate() + days);
-  return date.toISOString().slice(0, 10);
+  return formatLocalDate(date);
 }
 
 export function CarrierBillForm({
@@ -117,13 +122,12 @@ export function CarrierBillForm({
       <div className="grid gap-4 md:grid-cols-2">
         <label className="grid gap-2">
           <span className="label">Bill Date</span>
-          <input
+          <DatePicker
             name="receivedAt"
-            className="input"
-            type="date"
             value={receivedAt}
-            onChange={(event) => onBillDateChange(event.target.value)}
+            onChange={onBillDateChange}
             required
+            placeholder="Bill date"
           />
         </label>
         <label className="grid gap-2">
@@ -209,13 +213,7 @@ export function CarrierBillForm({
         </label>
         <label className="grid gap-2">
           <span className="label">Due Date</span>
-          <input
-            name="dueAt"
-            className="input"
-            type="date"
-            value={dueAt}
-            onChange={(event) => setDueAt(event.target.value)}
-          />
+          <DatePicker name="dueAt" value={dueAt} onChange={setDueAt} placeholder="Due date" />
         </label>
         <label className="grid gap-2">
           <span className="label">Payment Method</span>

@@ -6,6 +6,7 @@ import { prisma } from "@/lib/db";
 import { DQF_CATEGORIES } from "@/lib/fleet-constants";
 import { deleteStoredFile, saveUploadedFile } from "@/lib/document-storage";
 import { assertPlanFeature, requireWriteUser } from "@/lib/permissions";
+import { parseLocalDateTime } from "@/lib/dates";
 
 function requiredString(formData: FormData, key: string) {
   const value = String(formData.get(key) ?? "").trim();
@@ -20,7 +21,8 @@ function optionalString(formData: FormData, key: string) {
 
 function optionalDate(formData: FormData, key: string) {
   const value = String(formData.get(key) ?? "").trim();
-  return value ? new Date(value) : null;
+  if (!value) return null;
+  return parseLocalDateTime(value);
 }
 
 function resolveDqfStatus(expiresAt: Date | null, hasFile: boolean): string {

@@ -6,6 +6,7 @@ import type { CommissionFilters } from "@/lib/commission-search";
 import { buildCommissionQueryString } from "@/lib/commission-search";
 import { commissionStatuses } from "@/lib/constants";
 import { humanize } from "@/lib/format";
+import { DatePicker } from "@/components/ui/date-picker";
 
 export function CommissionFilters({ filters }: { filters: CommissionFilters }) {
   const router = useRouter();
@@ -57,12 +58,12 @@ export function CommissionFilters({ filters }: { filters: CommissionFilters }) {
 
           <label className="grid gap-2">
             <span className="label">Pickup From</span>
-            <input type="date" name="dateFrom" className="input" defaultValue={filters.dateFrom ?? ""} />
+            <DatePicker name="dateFrom" defaultValue={filters.dateFrom ?? ""} placeholder="Pickup from" />
           </label>
 
           <label className="grid gap-2">
             <span className="label">Pickup To</span>
-            <input type="date" name="dateTo" className="input" defaultValue={filters.dateTo ?? ""} />
+            <DatePicker name="dateTo" defaultValue={filters.dateTo ?? ""} placeholder="Pickup to" />
           </label>
         </div>
 

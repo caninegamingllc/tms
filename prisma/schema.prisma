@@ -30,6 +30,8 @@ model Company {
   website              String?
   /// Optional remittance / pay-portal URL shown on customer portal invoices
   customerPaymentUrl   String?
+  /// Org-wide tile layout defaults (same shape as User.uiPreferences). Used when a user has no personal override.
+  uiDefaults           Json?
   memberships          CompanyMembership[]
   seatSubscription     SeatSubscription?
   branches             Branch[]

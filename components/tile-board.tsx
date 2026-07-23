@@ -20,12 +20,25 @@ import {
 import { Coachmark } from "@/components/onboarding/Coachmark";
 import { COACHMARK_IDS } from "@/components/onboarding/tour-steps";
 
-async function persistLayout(pageId: string, layouts: PageLayouts | null, reset = false) {
-  await fetch("/api/ui-layout", {
+async function persistLayout(
+  pageId: string,
+  layouts: PageLayouts | null,
+  options: { reset?: boolean; setOrgDefault?: boolean } = {}
+) {
+  const response = await fetch("/api/ui-layout", {
     method: "POST",
     headers: { "Content-Type": "application/json" },
-    body: JSON.stringify({ pageId, layouts, reset })
+    body: JSON.stringify({
+      pageId,
+      layouts,
+      reset: options.reset === true,
+      setOrgDefault: options.setOrgDefault === true
+    })
   });
+
+  if (!response.ok) {
+    throw new Error("Unable to save layout");
+  }
 }
 
 const COLS = 12;
@@ -38,6 +51,9 @@ type TileBoardProps = {
   pageId: string;
   tiles: TileDefinition[];
   initialLayouts?: PageLayouts | null;
+  /** Org default used when the user resets their personal layout. */
+  orgDefaultLayouts?: PageLayouts | null;
+  canSetOrgDefault?: boolean;
   children: ReactNode;
 };
 
@@ -231,10 +247,25 @@ function TileShell({
   );
 }
 
-export function TileBoard({ pageId, tiles, initialLayouts = null, children }: TileBoardProps) {
+export function TileBoard({
+  pageId,
+  tiles,
+  initialLayouts = null,
+  orgDefaultLayouts = null,
+  canSetOrgDefault = false,
+  children
+}: TileBoardProps) {
   const tileById = useMemo(() => new Map(tiles.map((tile) => [tile.id, tile])), [tiles]);
   const containerRef = useRef<HTMLDivElement>(null);
   const [containerWidth, setContainerWidth] = useState(1200);
+  const [orgDefaultStatus, setOrgDefaultStatus] = useState<"idle" | "saving" | "saved" | "error">(
+    "idle"
+  );
+  const [activeOrgDefault, setActiveOrgDefault] = useState<PageLayouts | null>(orgDefaultLayouts);
+
+  useEffect(() => {
+    setActiveOrgDefault(orgDefaultLayouts);
+  }, [orgDefaultLayouts]);
 
   const childById = useMemo(() => {
     const map = new Map<string, ReactNode>();
@@ -537,11 +568,29 @@ export function TileBoard({ pageId, tiles, initialLayouts = null, children }: Ti
   );
 
   const handleReset = () => {
-    const defaults = compactVertical(mergePageLayouts(undefined, activeTiles).lg);
+    const fallback = activeOrgDefault ?? undefined;
+    const defaults = compactVertical(mergePageLayouts(fallback, activeTiles).lg);
     heightCache.current = {};
-    setUserSizedIds(new Set());
+    setUserSizedIds(
+      fallback?.lg && fallback.lg.length > 0 ? new Set(defaults.map((item) => item.i)) : new Set()
+    );
     setLayout(defaults);
-    void persistLayout(pageId, null, true);
+    void persistLayout(pageId, null, { reset: true });
+  };
+
+  const handleSetOrgDefault = () => {
+    const layouts = { lg: layout, md: layout, sm: layout };
+    setOrgDefaultStatus("saving");
+    void persistLayout(pageId, layouts, { setOrgDefault: true })
+      .then(() => {
+        setActiveOrgDefault(layouts);
+        setOrgDefaultStatus("saved");
+        window.setTimeout(() => setOrgDefaultStatus("idle"), 2500);
+      })
+      .catch(() => {
+        setOrgDefaultStatus("error");
+        window.setTimeout(() => setOrgDefaultStatus("idle"), 3500);
+      });
   };
 
   const boardHeight = useMemo(() => {
@@ -556,15 +605,36 @@ export function TileBoard({ pageId, tiles, initialLayouts = null, children }: Ti
   return (
     <div className="tile-board relative">
       <div className="mb-3 flex flex-wrap items-center justify-between gap-2">
-        <p className="muted mb-0">Drag tiles to move, edges to resize. Reset restores the default layout.</p>
-        <button
-          type="button"
-          className="btn-secondary"
-          onClick={handleReset}
-          title="Restore the original tile layout for this page"
-        >
-          Reset to default
-        </button>
+        <p className="muted mb-0">
+          Drag tiles to move, edges to resize. Reset restores the organization default layout.
+        </p>
+        <div className="flex flex-wrap items-center gap-2">
+          {canSetOrgDefault ? (
+            <button
+              type="button"
+              className="btn-secondary"
+              onClick={handleSetOrgDefault}
+              disabled={orgDefaultStatus === "saving"}
+              title="Save the current layout as the default for everyone who has not customized their own"
+            >
+              {orgDefaultStatus === "saving"
+                ? "Saving…"
+                : orgDefaultStatus === "saved"
+                  ? "Saved as org default"
+                  : orgDefaultStatus === "error"
+                    ? "Could not save"
+                    : "Set as org default"}
+            </button>
+          ) : null}
+          <button
+            type="button"
+            className="btn-secondary"
+            onClick={handleReset}
+            title="Clear your personal layout and restore the organization default"
+          >
+            Reset to default
+          </button>
+        </div>
       </div>
       {pageId === "dashboard" ? (
         <Coachmark
@@ -573,7 +643,7 @@ export function TileBoard({ pageId, tiles, initialLayouts = null, children }: Ti
           arrow="top-right"
           className="right-0 top-10 sm:right-2"
         >
-          Drag tiles to rearrange your command center. Reset restores the default layout.
+          Drag tiles to rearrange your command center. Reset restores the organization default layout.
         </Coachmark>
       ) : null}
       <div ref={containerRef} className="relative w-full" style={{ height: boardHeight }}>

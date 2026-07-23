@@ -13,7 +13,7 @@ import { planHasFeature } from "@/lib/plans";
 import { requireTmsAccess } from "@/lib/permissions";
 import { getDashboardData } from "@/lib/queries";
 import { DASHBOARD_TILES } from "@/lib/tile-defaults";
-import { loadPageLayouts } from "@/lib/ui-preferences-load";
+import { loadPageLayoutContext } from "@/lib/ui-preferences-load";
 
 export default async function HomePage({
   searchParams
@@ -30,10 +30,10 @@ export default async function HomePage({
   const showFuel = planHasFeature(user.plan, "dashboard_fuel_index");
   const firstName = user.name.trim().split(/\s+/)[0] || user.name;
 
-  const [data, dieselPrices, layouts] = await Promise.all([
+  const [data, dieselPrices, layoutContext] = await Promise.all([
     getDashboardData(),
     showFuel ? getDieselPrices() : Promise.resolve(null),
-    loadPageLayouts("dashboard")
+    loadPageLayoutContext("dashboard")
   ]);
 
   const tiles = showFuel
@@ -69,7 +69,13 @@ export default async function HomePage({
         </div>
       ) : null}
 
-      <TileBoard pageId="dashboard" tiles={tiles} initialLayouts={layouts}>
+      <TileBoard
+        pageId="dashboard"
+        tiles={tiles}
+        initialLayouts={layoutContext.layouts}
+        orgDefaultLayouts={layoutContext.orgDefaultLayouts}
+        canSetOrgDefault={layoutContext.canSetOrgDefault}
+      >
         <Tile id="metrics">
           <div className="overflow-hidden rounded-lg border border-border bg-card">
             <div className="grid md:grid-cols-2 xl:grid-cols-4 xl:[&>*:nth-child(4n)]:border-r-0">

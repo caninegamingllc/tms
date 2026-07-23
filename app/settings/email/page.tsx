@@ -10,7 +10,7 @@ import { isMicrosoftOAuthConfigured } from "@/lib/oauth/microsoft";
 import { formatDateTime, humanize } from "@/lib/format";
 import { getSettingsNavItems } from "@/lib/settings-nav";
 import { SETTINGS_EMAIL_TILES } from "@/lib/tile-defaults";
-import { loadPageLayouts } from "@/lib/ui-preferences-load";
+import { loadPageLayoutContext } from "@/lib/ui-preferences-load";
 
 export default async function EmailSettingsPage({
   searchParams
@@ -25,9 +25,9 @@ export default async function EmailSettingsPage({
   await requirePlanFeature("email_mailbox");
   const user = await requireUser();
   const params = await searchParams;
-  const [mailboxes, layouts] = await Promise.all([
+  const [mailboxes, layoutContext] = await Promise.all([
     listUserMailboxes(user.id),
-    loadPageLayouts("settings-email")
+    loadPageLayoutContext("settings-email")
   ]);
   const googleConfigured = isGoogleOAuthConfigured();
   const microsoftConfigured = isMicrosoftOAuthConfigured();
@@ -52,7 +52,13 @@ export default async function EmailSettingsPage({
         </div>
       ) : null}
 
-      <TileBoard pageId="settings-email" tiles={SETTINGS_EMAIL_TILES} initialLayouts={layouts}>
+      <TileBoard
+        pageId="settings-email"
+        tiles={SETTINGS_EMAIL_TILES}
+        initialLayouts={layoutContext.layouts}
+        orgDefaultLayouts={layoutContext.orgDefaultLayouts}
+        canSetOrgDefault={layoutContext.canSetOrgDefault}
+      >
         <Tile id="gmail">
           <p className="muted">Send and sync using your Google Workspace or Gmail account.</p>
           {googleConfigured ? (

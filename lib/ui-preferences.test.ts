@@ -3,6 +3,7 @@ import { describe, it } from "node:test";
 import {
   mergeOnboarding,
   parseUiPreferences,
+  resolvePageLayouts,
   setPageLayouts,
   type PageLayouts
 } from "@/lib/ui-preferences";
@@ -10,6 +11,24 @@ import {
 const personal: PageLayouts = {
   lg: [{ i: "a", x: 0, y: 0, w: 4, h: 4 }]
 };
+
+const orgDefault: PageLayouts = {
+  lg: [{ i: "b", x: 0, y: 0, w: 6, h: 3 }]
+};
+
+describe("resolvePageLayouts", () => {
+  it("prefers a personal layout over the org default", () => {
+    assert.equal(resolvePageLayouts(personal, orgDefault), personal);
+  });
+
+  it("falls back to the org default when personal is missing", () => {
+    assert.equal(resolvePageLayouts(undefined, orgDefault), orgDefault);
+  });
+
+  it("returns undefined when neither personal nor org default exists", () => {
+    assert.equal(resolvePageLayouts(undefined, undefined), undefined);
+  });
+});
 
 describe("onboarding preferences", () => {
   it("parses onboarding alongside layouts", () => {

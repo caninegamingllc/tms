@@ -13,7 +13,7 @@ import { isQuickbooksOnlineConfigured } from "@/lib/quickbooks/online";
 import { parseQuickbooksConfig } from "@/lib/quickbooks/types";
 import { getSettingsNavItems } from "@/lib/settings-nav";
 import { ADMIN_ACCOUNTING_TILES } from "@/lib/tile-defaults";
-import { loadPageLayouts } from "@/lib/ui-preferences-load";
+import { loadPageLayoutContext } from "@/lib/ui-preferences-load";
 
 export default async function AdminAccountingPage({
   searchParams
@@ -30,7 +30,7 @@ export default async function AdminAccountingPage({
   const admin = await requireAdmin();
   const params = await searchParams;
 
-  const [company, qboAccount, factoringCompanies, layouts] = await Promise.all([
+  const [company, qboAccount, factoringCompanies, layoutContext] = await Promise.all([
     prisma.company.findUniqueOrThrow({ where: { id: admin.companyId } }),
     prisma.integrationAccount.findUnique({
       where: {
@@ -42,7 +42,7 @@ export default async function AdminAccountingPage({
       orderBy: { name: "asc" },
       include: { _count: { select: { carriers: true } } }
     }),
-    loadPageLayouts("admin-accounting")
+    loadPageLayoutContext("admin-accounting")
   ]);
 
   const config = parseQuickbooksConfig(company.quickbooksConfigJson);
@@ -86,7 +86,13 @@ export default async function AdminAccountingPage({
         </div>
       ) : null}
 
-      <TileBoard pageId="admin-accounting" tiles={ADMIN_ACCOUNTING_TILES} initialLayouts={layouts}>
+      <TileBoard
+        pageId="admin-accounting"
+        tiles={ADMIN_ACCOUNTING_TILES}
+        initialLayouts={layoutContext.layouts}
+        orgDefaultLayouts={layoutContext.orgDefaultLayouts}
+        canSetOrgDefault={layoutContext.canSetOrgDefault}
+      >
         <Tile id="export-method">
           <p className="muted">
             The Accounting screens show export status for the selected method only. Switching methods does
