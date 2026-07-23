@@ -84,22 +84,24 @@ function buildDriverSteps() {
 
 function ProductTourAutoStart({
   autoStart,
-  tourCompletedAt,
+  hasCompletedTour,
   startTour
 }: {
   autoStart: boolean;
-  tourCompletedAt: string | null | undefined;
+  /** True when this session loaded with tour already completed — replay must not auto-start. */
+  hasCompletedTour: boolean;
   startTour: () => void;
 }) {
   const router = useRouter();
   const pathname = usePathname();
   const searchParams = useSearchParams();
   const autoStartedRef = useRef(false);
+  const skipAutoStartRef = useRef(hasCompletedTour);
 
   useEffect(() => {
     if (!autoStart) return;
     if (autoStartedRef.current) return;
-    if (tourCompletedAt) return;
+    if (skipAutoStartRef.current) return;
 
     const welcome = searchParams.get("welcome") === "1";
     let cancelled = false;
@@ -132,7 +134,7 @@ function ProductTourAutoStart({
       cancelled = true;
       window.clearTimeout(timer);
     };
-  }, [autoStart, tourCompletedAt, pathname, router, searchParams, startTour]);
+  }, [autoStart, pathname, router, searchParams, startTour]);
 
   return null;
 }
@@ -152,6 +154,7 @@ export function ProductTourProvider({
   const driverRef = useRef<Driver | null>(null);
   const completingRef = useRef(false);
   const skipCompleteRef = useRef(false);
+  const hasCompletedTourOnLoad = Boolean(initialOnboarding?.tourCompletedAt);
 
   const [tourCompletedAt, setTourCompletedAt] = useState<string | null | undefined>(
     initialOnboarding?.tourCompletedAt
@@ -178,8 +181,9 @@ export function ProductTourProvider({
     if (completingRef.current) return;
     completingRef.current = true;
     const completedAt = new Date().toISOString();
+    // Persist as soon as the tour has been shown; do not clear tourActive here so
+    // in-progress tours still suppress coachmarks until onDestroyed.
     setTourCompletedAt(completedAt);
-    setTourActive(false);
     try {
       await persistOnboarding({ tourCompletedAt: completedAt });
     } catch {
@@ -239,6 +243,8 @@ export function ProductTourProvider({
       driverRef.current = instance;
       setTourActive(true);
       instance.drive();
+      // Persist as soon as the user has seen the tour so later logins do not auto-start again.
+      void markTourFinished();
     };
 
     // Wait a frame so sidebar / page anchors are mounted.
@@ -250,17 +256,21 @@ export function ProductTourProvider({
   const replayTour = useCallback(() => {
     setTourCompletedAt(null);
     setDismissed([]);
-    void persistOnboarding({ replay: true }).catch(() => {
-      // Local state already cleared for immediate UX.
-    });
 
     const go = () => startTour();
-    if (pathname !== DASHBOARD_PATH) {
-      router.push(DASHBOARD_PATH);
-      window.setTimeout(go, 400);
-      return;
-    }
-    go();
+    void (async () => {
+      try {
+        await persistOnboarding({ replay: true });
+      } catch {
+        // Local state already cleared for immediate UX.
+      }
+      if (pathname !== DASHBOARD_PATH) {
+        router.push(DASHBOARD_PATH);
+        window.setTimeout(go, 400);
+        return;
+      }
+      go();
+    })();
   }, [pathname, router, startTour]);
 
   const dismissCoachmark = useCallback((id: string) => {
@@ -302,7 +312,7 @@ export function ProductTourProvider({
     <ProductTourContext.Provider value={value}>
       <ProductTourAutoStart
         autoStart={autoStart}
-        tourCompletedAt={tourCompletedAt}
+        hasCompletedTour={hasCompletedTourOnLoad}
         startTour={startTour}
       />
       {children}
