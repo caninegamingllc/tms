@@ -1,10 +1,11 @@
-import { PageHeader } from "@/components/page-header";
+import { SettingsLayout, SettingsSectionHeading } from "@/components/settings-layout";
 import { OAuthButtons } from "@/components/oauth-buttons";
 import { requireUser } from "@/lib/auth";
 import { prisma } from "@/lib/db";
 import { isGoogleOAuthConfigured } from "@/lib/oauth/google";
 import { isMicrosoftOAuthConfigured } from "@/lib/oauth/microsoft";
 import { formatDateTime, humanize } from "@/lib/format";
+import { getSettingsNavItems } from "@/lib/settings-nav";
 
 export default async function AccountSettingsPage({
   searchParams
@@ -28,8 +29,8 @@ export default async function AccountSettingsPage({
     (microsoftConfigured && !linkedProviders.includes("MICROSOFT"));
 
   return (
-    <>
-      <PageHeader
+    <SettingsLayout items={getSettingsNavItems(user)}>
+      <SettingsSectionHeading
         title="Account"
         description="Manage how you sign in. Connect Google or Microsoft to your existing account."
       />
@@ -109,6 +110,6 @@ export default async function AccountSettingsPage({
           </p>
         )}
       </div>
-    </>
+    </SettingsLayout>
   );
 }

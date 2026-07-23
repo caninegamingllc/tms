@@ -1,5 +1,5 @@
 import Link from "next/link";
-import { PageHeader } from "@/components/page-header";
+import { SettingsLayout, SettingsSectionHeading } from "@/components/settings-layout";
 import { TileBoard, Tile } from "@/components/tile-board";
 import { requireUser } from "@/lib/auth";
 import { requirePlanFeature } from "@/lib/permissions";
@@ -8,6 +8,7 @@ import { listUserMailboxes } from "@/lib/mail/user-mailbox";
 import { isGoogleOAuthConfigured } from "@/lib/oauth/google";
 import { isMicrosoftOAuthConfigured } from "@/lib/oauth/microsoft";
 import { formatDateTime, humanize } from "@/lib/format";
+import { getSettingsNavItems } from "@/lib/settings-nav";
 import { SETTINGS_EMAIL_TILES } from "@/lib/tile-defaults";
 import { loadPageLayouts } from "@/lib/ui-preferences-load";
 
@@ -32,9 +33,9 @@ export default async function EmailSettingsPage({
   const microsoftConfigured = isMicrosoftOAuthConfigured();
 
   return (
-    <>
-      <PageHeader
-        title="Email settings"
+    <SettingsLayout items={getSettingsNavItems(user)}>
+      <SettingsSectionHeading
+        title="Email"
         description="Connect your personal Gmail or Microsoft 365 mailbox to send load emails and sync replies as yourself."
       />
 
@@ -123,6 +124,6 @@ export default async function EmailSettingsPage({
           )}
         </Tile>
       </TileBoard>
-    </>
+    </SettingsLayout>
   );
 }

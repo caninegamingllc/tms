@@ -2,7 +2,7 @@ import { AdminBranchesTable } from "@/components/admin-branches-table";
 import { AdminCatalogSettings } from "@/components/admin-catalog-settings";
 import { AdminConsole } from "@/components/admin-console";
 import { AuditLogTable } from "@/components/audit-log-table";
-import { PageHeader } from "@/components/page-header";
+import { SettingsLayout, SettingsSectionHeading } from "@/components/settings-layout";
 import { TileBoard, Tile } from "@/components/tile-board";
 import { createBranch, updateCompanyBranding, updateLoadNumberSettings } from "@/lib/admin-actions";
 import { InviteLinkBanner } from "@/components/invite-link-banner";
@@ -12,6 +12,7 @@ import { ensureCompanyCatalogs } from "@/lib/catalogs";
 import { prisma } from "@/lib/db";
 import { planHasFeature } from "@/lib/plans";
 import { getSeatSummary } from "@/lib/seats";
+import { getSettingsNavItems } from "@/lib/settings-nav";
 import { ADMIN_TILES } from "@/lib/tile-defaults";
 import { loadPageLayouts } from "@/lib/ui-preferences-load";
 import Link from "next/link";
@@ -174,9 +175,9 @@ export default async function AdminPage({
   ];
 
   return (
-    <>
-      <PageHeader
-        title="Admin Console"
+    <SettingsLayout items={getSettingsNavItems(currentUser)}>
+      <SettingsSectionHeading
+        title="Admin"
         description="Manage users, branch assignments, billing seats, and organization settings."
       />
 
@@ -489,6 +490,6 @@ export default async function AdminPage({
           ) : null}
         </Tile>
       </TileBoard>
-    </>
+    </SettingsLayout>
   );
 }

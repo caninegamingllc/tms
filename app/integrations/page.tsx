@@ -1,5 +1,5 @@
 import Link from "next/link";
-import { PageHeader } from "@/components/page-header";
+import { SettingsLayout, SettingsSectionHeading } from "@/components/settings-layout";
 import { TileBoard, Tile } from "@/components/tile-board";
 import { connectEldProvider, disconnectEldProvider, syncEldProvider } from "@/lib/eld-actions";
 import { ELD_INTEGRATION_PROVIDERS } from "@/lib/fleet-constants";
@@ -9,6 +9,7 @@ import { canManageUsers } from "@/lib/scope";
 import { prisma } from "@/lib/db";
 import { formatDate, formatDateTime, humanize } from "@/lib/format";
 import { getCompanyQuickbooksMethod } from "@/lib/quickbooks/exports";
+import { getSettingsNavItems } from "@/lib/settings-nav";
 import { integrationsTiles } from "@/lib/tile-defaults";
 import { loadPageLayouts } from "@/lib/ui-preferences-load";
 
@@ -92,10 +93,10 @@ export default async function IntegrationsPage({
   })();
 
   return (
-    <>
-      <PageHeader
+    <SettingsLayout items={getSettingsNavItems(user)}>
+      <SettingsSectionHeading
         title="Integrations"
-        description="External services used by the brokerage. Connect personal email under Email settings. Configure QuickBooks export under Admin Accounting Settings."
+        description="External services used by the brokerage. Connect personal email under Email. Configure QuickBooks export under Accounting."
       />
       {params.saved ? (
         <div className="mb-6 rounded-2xl border border-emerald-200 bg-emerald-50 p-4 text-sm font-semibold text-emerald-800">
@@ -204,6 +205,6 @@ export default async function IntegrationsPage({
           );
         })}
       </TileBoard>
-    </>
+    </SettingsLayout>
   );
 }

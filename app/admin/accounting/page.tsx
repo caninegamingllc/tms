@@ -1,5 +1,4 @@
-import Link from "next/link";
-import { PageHeader } from "@/components/page-header";
+import { SettingsLayout, SettingsSectionHeading } from "@/components/settings-layout";
 import { FactoringCompaniesAdmin } from "@/components/factoring-companies-admin";
 import { TileBoard, Tile } from "@/components/tile-board";
 import { requireAdmin } from "@/lib/auth";
@@ -12,6 +11,7 @@ import {
 } from "@/lib/quickbooks/actions";
 import { isQuickbooksOnlineConfigured } from "@/lib/quickbooks/online";
 import { parseQuickbooksConfig } from "@/lib/quickbooks/types";
+import { getSettingsNavItems } from "@/lib/settings-nav";
 import { ADMIN_ACCOUNTING_TILES } from "@/lib/tile-defaults";
 import { loadPageLayouts } from "@/lib/ui-preferences-load";
 
@@ -54,17 +54,11 @@ export default async function AdminAccountingPage({
   const qboConnected = qboAccount?.status === "Connected";
 
   return (
-    <>
-      <PageHeader
-        title="Accounting Settings"
+    <SettingsLayout items={getSettingsNavItems(admin)}>
+      <SettingsSectionHeading
+        title="Accounting"
         description="Choose how this organization exports invoices and carrier bills to QuickBooks, and manage factoring payees."
       />
-
-      <div className="mb-6">
-        <Link href="/admin?tab=settings" className="text-sm font-semibold text-primary">
-          Back to Admin
-        </Link>
-      </div>
 
       {params.error ? (
         <div className="card mb-6 border-rose-200 bg-rose-50 text-sm font-semibold text-rose-700">
@@ -265,6 +259,6 @@ export default async function AdminAccountingPage({
           />
         </Tile>
       </TileBoard>
-    </>
+    </SettingsLayout>
   );
 }

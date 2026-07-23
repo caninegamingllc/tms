@@ -21,10 +21,8 @@ import {
   MapPin,
   Menu,
   Percent,
-  Plug,
   Radio,
   Search,
-  Settings,
   ShieldCheck,
   Truck,
   X
@@ -117,45 +115,12 @@ const navGroups: NavGroup[] = [
       },
       { href: "/reports", label: "Reports", icon: BarChart3, feature: "reports_summary" }
     ]
-  },
-  {
-    id: "admin",
-    label: "Admin",
-    icon: Settings,
-    items: [
-      { href: "/admin", label: "Admin", icon: Settings, adminOnly: true },
-      {
-        href: "/admin/accounting",
-        label: "Accounting Settings",
-        icon: Landmark,
-        adminOnly: true,
-        feature: "factoring_admin"
-      },
-      { href: "/admin/billing", label: "Billing", icon: Landmark, adminOnly: true },
-      {
-        href: "/integrations",
-        label: "Integrations",
-        icon: Plug,
-        feature: "marketplace_integrations"
-      },
-      { href: "/settings", label: "Settings", icon: Settings },
-      { href: "/settings/email", label: "Email settings", icon: FileText, feature: "email_mailbox" }
-    ]
   }
 ];
 
 function isNavActive(pathname: string, href: string) {
   if (href === "/") return pathname === "/";
-  if (href === "/admin") return pathname === "/admin";
   if (href === "/commissions") return pathname === "/commissions";
-  // Keep Settings highlighted for its hub + account page, but not Email settings (separate item).
-  if (href === "/settings") {
-    return (
-      pathname === "/settings" ||
-      pathname === "/settings/account" ||
-      pathname.startsWith("/settings/account/")
-    );
-  }
   return pathname === href || pathname.startsWith(`${href}/`);
 }
 

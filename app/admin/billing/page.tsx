@@ -1,5 +1,5 @@
 import Link from "next/link";
-import { PageHeader } from "@/components/page-header";
+import { SettingsLayout, SettingsSectionHeading } from "@/components/settings-layout";
 import { TileBoard, Tile } from "@/components/tile-board";
 import {
   activateFreePlan,
@@ -11,6 +11,7 @@ import { requireAdmin } from "@/lib/auth";
 import { PLAN_ORDER, planHighlights } from "@/lib/plan-marketing";
 import { formatPlanPrice, PLANS } from "@/lib/plans";
 import { getSeatSummary } from "@/lib/seats";
+import { getSettingsNavItems } from "@/lib/settings-nav";
 import { isStripeConfigured } from "@/lib/stripe";
 import { ADMIN_BILLING_TILES } from "@/lib/tile-defaults";
 import { loadPageLayouts } from "@/lib/ui-preferences-load";
@@ -38,9 +39,9 @@ export default async function BillingPage({
   const defaultQuantity = Math.max(1, seatSummary.purchased || 1);
 
   return (
-    <>
-      <PageHeader
-        title="Billing & Plans"
+    <SettingsLayout items={getSettingsNavItems(user)}>
+      <SettingsSectionHeading
+        title="Billing"
         description="Choose Free ($0), Lite ($20/seat/mo, max 5), Premium ($60/seat/mo), or Premium + Trucking ($100/seat/mo)."
       />
 
@@ -254,6 +255,6 @@ export default async function BillingPage({
           </p>
         </Tile>
       </TileBoard>
-    </>
+    </SettingsLayout>
   );
 }
