@@ -6,6 +6,7 @@ import { MarketingLanding } from "@/components/marketing-landing";
 import { MetricCard } from "@/components/metric-card";
 import { DashboardWelcome } from "@/components/dashboard-welcome";
 import { TileBoard, Tile } from "@/components/tile-board";
+import { UninvoicedLoadsBanner } from "@/components/uninvoiced-loads-banner";
 import { getCurrentUser } from "@/lib/auth";
 import { getDieselPrices } from "@/lib/eia-diesel";
 import { formatDateTime, formatMoney } from "@/lib/format";
@@ -68,6 +69,8 @@ export default async function HomePage({
           {params.error}
         </div>
       ) : null}
+
+      <UninvoicedLoadsBanner loads={data.uninvoicedLoads} />
 
       <TileBoard
         pageId="dashboard"

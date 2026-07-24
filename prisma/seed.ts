@@ -613,7 +613,7 @@ async function main() {
       companyId: company.id,
       loadNumber: "GLB-1002",
       title: "Retail fixtures to Nashville",
-      status: "AVAILABLE",
+      status: "PENDING",
       customerId: customerTwo.id,
       branchId: branch.id,
       referenceNumber: "SRG-33018",

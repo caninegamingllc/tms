@@ -15,8 +15,17 @@ export async function getDashboardData() {
     }
   } as const;
 
-  const [loads, customers, carriers, openArAgg, openApAgg, recentCheckCalls, nextCheckCalls, financialAgg] =
-    await Promise.all([
+  const [
+    loads,
+    customers,
+    carriers,
+    openArAgg,
+    openApAgg,
+    recentCheckCalls,
+    nextCheckCalls,
+    financialAgg,
+    uninvoicedLoads
+  ] = await Promise.all([
       prisma.load.findMany({
         where: loadScope,
         orderBy: [{ pickupDate: "desc" }, { loadNumber: "desc" }],
@@ -71,6 +80,15 @@ export async function getDashboardData() {
       prisma.load.aggregate({
         where: loadScope,
         _sum: { revenueCents: true, carrierCostCents: true }
+      }),
+      prisma.load.findMany({
+        where: {
+          ...loadScope,
+          status: "DELIVERED"
+        },
+        orderBy: [{ deliveredAt: "asc" }, { deliveryDate: "asc" }],
+        include: { customer: { select: { name: true } } },
+        take: 25
       })
     ]);
   const checkCalls = [
@@ -98,7 +116,7 @@ export async function getDashboardData() {
     .slice(0, 25);
 
   const activeLoads = loads.filter((load) =>
-    ["AVAILABLE", "COVERED", "DISPATCHED", "PICKED_UP"].includes(load.status)
+    ["PENDING", "AVAILABLE", "COVERED", "DISPATCHED", "PICKED_UP"].includes(load.status)
   );
   const revenueCents = financialAgg._sum.revenueCents ?? 0;
   const marginCents = revenueCents - (financialAgg._sum.carrierCostCents ?? 0);
@@ -116,7 +134,13 @@ export async function getDashboardData() {
     revenueCents,
     marginCents,
     openArCents,
-    openApCents
+    openApCents,
+    uninvoicedLoads: uninvoicedLoads.map((load) => ({
+      id: load.id,
+      loadNumber: load.loadNumber,
+      customerName: load.customer.name,
+      deliveredAt: load.deliveredAt ?? load.deliveryDate
+    }))
   };
 }
 

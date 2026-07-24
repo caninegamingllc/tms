@@ -1,5 +1,7 @@
 /** Helpers for multi-carrier DispatchAssignment rows (sequence 0 = primary). */
 
+import { pendingLoadStatuses, preDispatchLoadStatuses } from "@/lib/constants";
+
 export type AssignmentLike = {
   id: string;
   sequence: number;
@@ -100,6 +102,24 @@ export const DISPATCHED_COVERAGE_REQUIRED_MESSAGE =
 
 export const PENDING_REVERT_CONFIRM_MESSAGE =
   "Move this load to Pending? All assigned carriers, fleet resources, and pay line items will be removed.";
+
+export function isPendingLoadStatus(status: string): boolean {
+  return (pendingLoadStatuses as readonly string[]).includes(status);
+}
+
+/** When coverage is assigned, advance early statuses to DISPATCHED. */
+export function statusAfterCoverageAssigned(currentStatus: string): string {
+  return (preDispatchLoadStatuses as readonly string[]).includes(currentStatus)
+    ? "DISPATCHED"
+    : currentStatus;
+}
+
+/** When last coverage is removed, revert COVERED/DISPATCHED to PENDING. */
+export function statusAfterCoverageCleared(currentStatus: string): string {
+  return currentStatus === "COVERED" || currentStatus === "DISPATCHED"
+    ? "PENDING"
+    : currentStatus;
+}
 
 /** Shared Prisma include for load detail / documents. */
 export const dispatchAssignmentsDocumentInclude = {

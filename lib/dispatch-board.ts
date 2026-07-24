@@ -127,25 +127,13 @@ export function getLoadBoardStage(load: BoardStageInput): DispatchBoardStage | n
     return "active";
   }
 
-  if (["QUOTE", "AVAILABLE"].includes(load.status)) {
+  if (load.status === "PENDING") {
     return hasAssignment ? "active" : "pending";
   }
 
-  // #region agent log
-  fetch("http://127.0.0.1:7361/ingest/81bab758-445f-494f-88d7-9f894e8b488d", {
-    method: "POST",
-    headers: { "Content-Type": "application/json", "X-Debug-Session-Id": "9ca083" },
-    body: JSON.stringify({
-      sessionId: "9ca083",
-      runId: "post-fix",
-      hypothesisId: "A",
-      location: "lib/dispatch-board.ts:getLoadBoardStage",
-      message: "Unmapped load status for board stage",
-      data: { status: load.status, hasAssignment, assignmentCount: load.dispatchAssignments?.length ?? 0 },
-      timestamp: Date.now()
-    })
-  }).catch(() => {});
-  // #endregion
+  if (["QUOTE", "AVAILABLE"].includes(load.status)) {
+    return hasAssignment ? "active" : "pending";
+  }
 
   return null;
 }

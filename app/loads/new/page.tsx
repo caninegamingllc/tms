@@ -262,7 +262,7 @@ export default async function NewLoadPage({
             />
             <label className="grid gap-2 sm:col-span-3">
               <span className="label">Status</span>
-              <select name="status" className="select" defaultValue="AVAILABLE">
+              <select name="status" className="select" defaultValue="PENDING">
                 {loadStatuses.map((status) => (
                   <option key={status} value={status}>
                     {humanize(status)}

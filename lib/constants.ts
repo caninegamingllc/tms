@@ -1,5 +1,6 @@
 export const loadStatuses = [
   "QUOTE",
+  "PENDING",
   "AVAILABLE",
   "COVERED",
   "DISPATCHED",
@@ -9,6 +10,12 @@ export const loadStatuses = [
   "PAID",
   "CANCELED"
 ] as const;
+
+/** Statuses that clear coverage when chosen manually (board “Pending”). */
+export const pendingLoadStatuses = ["QUOTE", "PENDING", "AVAILABLE"] as const;
+
+/** Pre-pickup statuses that become DISPATCHED when coverage is assigned. */
+export const preDispatchLoadStatuses = ["QUOTE", "PENDING", "AVAILABLE", "COVERED"] as const;
 
 export const equipmentTypes = [
   "Dry Van",

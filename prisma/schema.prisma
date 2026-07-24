@@ -656,6 +656,8 @@ model Load {
   deliveryState     String
   pickupDate        DateTime
   deliveryDate      DateTime
+  /// Set when status first becomes DELIVERED (invoice-aging clock).
+  deliveredAt       DateTime?
   revenueCents         Int                 @default(0)
   carrierCostCents     Int                 @default(0)
   /// Sum of DriverPayLine.amountCents

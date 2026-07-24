@@ -213,7 +213,7 @@ export function mapLoadStatus(input: {
 }): string {
   const status = input.ascendStatus.trim().toLowerCase();
 
-  let mapped = "AVAILABLE";
+  let mapped = "PENDING";
   if (status === "completed" || status === "delivered") {
     mapped = "DELIVERED";
   } else if (status === "to be billed") {
@@ -228,7 +228,7 @@ export function mapLoadStatus(input: {
     status === "open" ||
     status === "booked"
   ) {
-    mapped = "AVAILABLE";
+    mapped = "PENDING";
   }
 
   if (

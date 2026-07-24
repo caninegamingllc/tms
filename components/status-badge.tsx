@@ -3,6 +3,7 @@ import { humanize } from "@/lib/format";
 
 const tones: Record<string, string> = {
   QUOTE: "border-slate-200 bg-slate-100 text-slate-700",
+  PENDING: "border-slate-200 bg-slate-100 text-slate-700",
   AVAILABLE: "border-sky-200 bg-sky-50 text-sky-700",
   COVERED: "border-indigo-200 bg-indigo-50 text-indigo-700",
   DISPATCHED: "border-cyan-200 bg-cyan-50 text-cyan-800",
@@ -17,7 +18,6 @@ const tones: Record<string, string> = {
   DRAFT: "border-slate-200 bg-slate-100 text-slate-700",
   PARTIAL: "border-amber-200 bg-amber-50 text-amber-800",
   VOID: "border-zinc-200 bg-zinc-100 text-zinc-700",
-  PENDING: "border-amber-200 bg-amber-50 text-amber-800",
   PAYABLE: "border-sky-200 bg-sky-50 text-sky-700",
   SETTLED: "border-green-200 bg-green-50 text-green-700",
   INELIGIBLE: "border-zinc-200 bg-zinc-100 text-zinc-700"

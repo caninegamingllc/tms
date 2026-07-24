@@ -14,6 +14,11 @@ import {
 import { parseLocalDateTime } from "@/lib/dates";
 import { driverPayCalculationMethods } from "@/lib/constants";
 import { seedDriverPayLinesFromProfile } from "@/lib/driver-pay";
+import {
+  loadHasDispatchedCoverage,
+  statusAfterCoverageAssigned,
+  statusAfterCoverageCleared
+} from "@/lib/dispatch-assignment";
 
 function requiredString(formData: FormData, key: string) {
   const value = String(formData.get(key) ?? "").trim();
@@ -363,13 +368,23 @@ export async function assignFleetToLoad(formData: FormData) {
     trailerNumber = trailer.unitNumber;
   }
 
-  const nextStatus =
-    load.status === "AVAILABLE" || load.status === "QUOTE" ? "COVERED" : load.status;
-
   const primary =
     load.dispatchAssignments.find((row) => row.sequence === 0) ??
     load.dispatchAssignments[0] ??
     null;
+
+  const coverageRows = [
+    ...load.dispatchAssignments.filter((row) => row.id !== primary?.id),
+    {
+      sequence: 0,
+      carrierId: primary?.carrierId ?? null,
+      driverId,
+      truckId
+    }
+  ];
+  const nextStatus = loadHasDispatchedCoverage(coverageRows)
+    ? statusAfterCoverageAssigned(load.status)
+    : load.status;
 
   await prisma.$transaction(async (tx) => {
     let assignmentId: string;
@@ -484,8 +499,7 @@ export async function clearFleetAssignment(formData: FormData) {
       });
     } else {
       await tx.dispatchAssignment.delete({ where: { id: primary.id } });
-      const nextStatus =
-        load.status === "COVERED" || load.status === "DISPATCHED" ? "AVAILABLE" : load.status;
+      const nextStatus = statusAfterCoverageCleared(load.status);
       await tx.load.update({
         where: { id: loadId },
         data: {

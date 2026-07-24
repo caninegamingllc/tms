@@ -64,10 +64,13 @@ import {
   DISPATCHED_COVERAGE_REQUIRED_MESSAGE,
   dispatchAssignmentsDocumentInclude,
   hasAssignmentOriginDestination,
+  isPendingLoadStatus,
   loadHasDispatchedCoverage,
   nextAssignmentSequence,
   parseAssignmentLaneFields,
   primaryAssignment,
+  statusAfterCoverageAssigned,
+  statusAfterCoverageCleared,
   sumAssignmentRateCents
 } from "@/lib/dispatch-assignment";
 import { parseLocalDateTime } from "@/lib/dates";
@@ -1198,8 +1201,8 @@ async function createLoadUnchecked(formData: FormData) {
   }
 
   const requestedStatus = requiredString(formData, "status");
-  const initialStatus = cloneCarrierId ? "COVERED" : requestedStatus;
-  if (initialStatus === "DISPATCHED") {
+  const initialStatus = cloneCarrierId ? "DISPATCHED" : requestedStatus;
+  if (initialStatus === "DISPATCHED" && !cloneCarrierId) {
     throw new Error(DISPATCHED_COVERAGE_REQUIRED_MESSAGE);
   }
   const activityDetails = sourceLoad
@@ -1476,7 +1479,7 @@ export async function updateLoadStatus(formData: FormData) {
   const user = await requireWriteUser();
   const loadId = requiredString(formData, "loadId");
   const status = requiredString(formData, "status");
-  await requireCompanyLoad(loadId, user);
+  const load = await requireCompanyLoad(loadId, user);
 
   const fullStatuses = new Set(["INVOICED", "PAID", "CANCELED"]);
   if (fullStatuses.has(status)) {
@@ -1502,8 +1505,10 @@ export async function updateLoadStatus(formData: FormData) {
     );
   }
 
-  const isPendingStatus = status === "QUOTE" || status === "AVAILABLE";
+  const isPendingStatus = isPendingLoadStatus(status);
   const shouldClearCoverage = isPendingStatus && (assignments.length > 0 || payLineCount > 0);
+  const deliveredAt =
+    status === "DELIVERED" && !load.deliveredAt ? new Date() : undefined;
 
   if (shouldClearCoverage) {
     await prisma.$transaction(async (tx) => {
@@ -1512,6 +1517,7 @@ export async function updateLoadStatus(formData: FormData) {
         where: { id: loadId },
         data: {
           status,
+          ...(deliveredAt ? { deliveredAt } : {}),
           activities: {
             create: {
               userId: user.id,
@@ -1527,6 +1533,7 @@ export async function updateLoadStatus(formData: FormData) {
       where: { id: loadId },
       data: {
         status,
+        ...(deliveredAt ? { deliveredAt } : {}),
         activities: {
           create: {
             userId: user.id,
@@ -1549,6 +1556,7 @@ export async function updateLoadStatus(formData: FormData) {
   revalidatePath("/loads");
   revalidatePath("/commissions");
   revalidatePath(`/loads/${loadId}`);
+  revalidatePath("/");
   revalidatePath("/portal");
 }
 
@@ -1845,10 +1853,15 @@ export async function assignCarrier(formData: FormData) {
 
     const totalCost = await syncLoadCarrierCost(tx, loadId);
 
+    const current = await tx.load.findUniqueOrThrow({
+      where: { id: loadId },
+      select: { status: true }
+    });
+
     await tx.load.update({
       where: { id: loadId },
       data: {
-        status: "COVERED",
+        status: statusAfterCoverageAssigned(current.status),
         activities: {
           create: {
             userId: user.id,
@@ -1923,10 +1936,9 @@ export async function unassignCarrier(formData: FormData) {
       (row) =>
         Boolean(row.carrierId) || Boolean(row.driverId || row.truckId || row.trailerId)
     );
-    const nextStatus =
-      !stillCovered && (load.status === "COVERED" || load.status === "DISPATCHED")
-        ? "AVAILABLE"
-        : load.status;
+    const nextStatus = !stillCovered
+      ? statusAfterCoverageCleared(load.status)
+      : load.status;
 
     await tx.load.update({
       where: { id: loadId },

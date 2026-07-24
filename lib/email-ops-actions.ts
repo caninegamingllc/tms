@@ -678,12 +678,36 @@ export async function sendPreparedEmail(formData: FormData) {
         issuedAt: new Date()
       }
     });
+
+    if (purpose === "INVOICE") {
+      const loadRow = await prisma.load.findFirst({
+        where: { id: loadId, companyId: user.companyId },
+        select: { status: true }
+      });
+      if (loadRow && !["PAID", "CANCELED", "INVOICED"].includes(loadRow.status)) {
+        await prisma.load.update({
+          where: { id: loadId },
+          data: {
+            status: "INVOICED",
+            activities: {
+              create: {
+                userId: user.id,
+                action: "Status changed",
+                details: "Load moved to INVOICED after invoice was emailed."
+              }
+            }
+          }
+        });
+      }
+    }
   }
 
   revalidatePath(`/loads/${loadId}`);
   revalidatePath("/documents");
   revalidatePath("/accounting");
-
+  revalidatePath("/");
+  revalidatePath("/dispatch");
+  revalidatePath("/loads");
   if (String(formData.get("skipRedirect") ?? "").trim() === "1") {
     return;
   }

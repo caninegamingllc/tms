@@ -20,7 +20,7 @@ export function LoadStatusForm({
   function handleSubmit(event: FormEvent<HTMLFormElement>) {
     const form = event.currentTarget;
     const selected = String(new FormData(form).get("status") ?? "").trim();
-    const movingToPending = selected === "QUOTE" || selected === "AVAILABLE";
+    const movingToPending = selected === "QUOTE" || selected === "PENDING" || selected === "AVAILABLE";
     const willClearCoverage = movingToPending && (hasAssignments || hasPayLines);
 
     if (!willClearCoverage) {
