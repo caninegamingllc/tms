@@ -78,6 +78,29 @@ export function nextAssignmentSequence(assignments: Array<{ sequence: number }>)
   return Math.max(...assignments.map((a) => a.sequence)) + 1;
 }
 
+export type DispatchedCoverageAssignment = {
+  sequence: number;
+  carrierId?: string | null;
+  driverId?: string | null;
+  truckId?: string | null;
+};
+
+/** True if the load may be marked DISPATCHED: any carrier, or fleet driver+truck on primary. */
+export function loadHasDispatchedCoverage(
+  assignments: DispatchedCoverageAssignment[] | undefined | null
+): boolean {
+  if (!assignments?.length) return false;
+  if (assignments.some((row) => Boolean(row.carrierId))) return true;
+  const primary = primaryAssignment(assignments);
+  return Boolean(primary?.driverId && primary?.truckId);
+}
+
+export const DISPATCHED_COVERAGE_REQUIRED_MESSAGE =
+  "Cannot mark a load as Dispatched without a carrier assigned, or a driver and truck assigned for fleet.";
+
+export const PENDING_REVERT_CONFIRM_MESSAGE =
+  "Move this load to Pending? All assigned carriers, fleet resources, and pay line items will be removed.";
+
 /** Shared Prisma include for load detail / documents. */
 export const dispatchAssignmentsDocumentInclude = {
   orderBy: { sequence: "asc" as const },

@@ -61,8 +61,10 @@ import {
   stopsCreateData
 } from "@/lib/load-stops";
 import {
+  DISPATCHED_COVERAGE_REQUIRED_MESSAGE,
   dispatchAssignmentsDocumentInclude,
   hasAssignmentOriginDestination,
+  loadHasDispatchedCoverage,
   nextAssignmentSequence,
   parseAssignmentLaneFields,
   primaryAssignment,
@@ -82,6 +84,15 @@ function requiredString(formData: FormData, key: string) {
 function optionalString(formData: FormData, key: string) {
   const value = String(formData.get(key) ?? "").trim();
   return value || undefined;
+}
+
+async function clearLoadAssignmentsAndPayLines(
+  tx: Prisma.TransactionClient,
+  loadId: string
+): Promise<void> {
+  await tx.carrierPayLine.deleteMany({ where: { loadId } });
+  await tx.dispatchAssignment.deleteMany({ where: { loadId } });
+  await syncLoadCarrierCost(tx, loadId);
 }
 
 function optionalDate(formData: FormData, key: string) {
@@ -1188,6 +1199,9 @@ async function createLoadUnchecked(formData: FormData) {
 
   const requestedStatus = requiredString(formData, "status");
   const initialStatus = cloneCarrierId ? "COVERED" : requestedStatus;
+  if (initialStatus === "DISPATCHED") {
+    throw new Error(DISPATCHED_COVERAGE_REQUIRED_MESSAGE);
+  }
   const activityDetails = sourceLoad
     ? `Cloned from load ${sourceLoad.loadNumber}.`
     : "Created from the TMS load entry form.";
@@ -1466,19 +1480,60 @@ export async function updateLoadStatus(formData: FormData) {
     await assertPlanFeature(user.companyId, "loads_full_status");
   }
 
-  await prisma.load.update({
-    where: { id: loadId },
-    data: {
-      status,
-      activities: {
-        create: {
-          userId: user.id,
-          action: "Status changed",
-          details: `Load moved to ${status}.`
+  const [assignments, payLineCount] = await Promise.all([
+    prisma.dispatchAssignment.findMany({
+      where: { loadId },
+      select: {
+        sequence: true,
+        carrierId: true,
+        driverId: true,
+        truckId: true
+      }
+    }),
+    prisma.carrierPayLine.count({ where: { loadId } })
+  ]);
+
+  if (status === "DISPATCHED" && !loadHasDispatchedCoverage(assignments)) {
+    redirect(
+      `/loads/${loadId}?error=${encodeURIComponent(DISPATCHED_COVERAGE_REQUIRED_MESSAGE)}`
+    );
+  }
+
+  const isPendingStatus = status === "QUOTE" || status === "AVAILABLE";
+  const shouldClearCoverage = isPendingStatus && (assignments.length > 0 || payLineCount > 0);
+
+  if (shouldClearCoverage) {
+    await prisma.$transaction(async (tx) => {
+      await clearLoadAssignmentsAndPayLines(tx, loadId);
+      await tx.load.update({
+        where: { id: loadId },
+        data: {
+          status,
+          activities: {
+            create: {
+              userId: user.id,
+              action: "Status changed",
+              details: `Load moved to ${status}. All assigned carriers, fleet resources, and pay line items were removed.`
+            }
+          }
+        }
+      });
+    });
+  } else {
+    await prisma.load.update({
+      where: { id: loadId },
+      data: {
+        status,
+        activities: {
+          create: {
+            userId: user.id,
+            action: "Status changed",
+            details: `Load moved to ${status}.`
+          }
         }
       }
-    }
-  });
+    });
+  }
 
   if (status === "DELIVERED" || status === "INVOICED" || status === "PAID") {
     const { ensureDeliveryStopGeocoded } = await import("@/lib/customer-load-map");
@@ -1487,6 +1542,7 @@ export async function updateLoadStatus(formData: FormData) {
 
   await recalculateLoadCommission(loadId);
 
+  revalidatePath("/dispatch");
   revalidatePath("/loads");
   revalidatePath("/commissions");
   revalidatePath(`/loads/${loadId}`);

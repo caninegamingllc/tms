@@ -18,8 +18,7 @@ import {
   generateBillOfLading,
   generateCustomerInvoice,
   generateRateConfirmation,
-  updateLoadRateConfirmationTerms,
-  updateLoadStatus
+  updateLoadRateConfirmationTerms
 } from "@/lib/actions";
 import {
   generateCustomerLoadConfirmation,
@@ -29,6 +28,7 @@ import { EmailComposeButton } from "@/components/email-compose-button";
 import { getUserMailbox } from "@/lib/mail/user-mailbox";
 import { CloneLoadButton } from "@/components/clone-load-button";
 import { DeleteLoadButton } from "@/components/delete-load-button";
+import { LoadStatusForm } from "@/components/load-status-form";
 import {
   addLoadExpense,
   assignLoadCommissionProfile,
@@ -41,7 +41,7 @@ import { toDocumentTableRows } from "@/lib/document-rows";
 import { requireTmsAccess, userHasPlanFeature } from "@/lib/permissions";
 import { canAccessRecord, getBranchScope } from "@/lib/branch-filter-server";
 import { canManageUsers, canPickBranch, canSettleCommission, canWrite, isAdminRole } from "@/lib/scope";
-import { expenseTypes, loadStatuses } from "@/lib/constants";
+import { expenseTypes } from "@/lib/constants";
 import { ensureCompanyCatalogs } from "@/lib/catalogs";
 import { prisma } from "@/lib/db";
 import { carrierDisplayName, primaryAssignment } from "@/lib/dispatch-assignment";
@@ -246,6 +246,10 @@ export default async function LoadDetailPage({
   const primaryDispatch = primaryAssignment(load.dispatchAssignments);
   const carrierAssignments = load.dispatchAssignments.filter((row) => row.carrierId);
   const hasAnyCarrier = carrierAssignments.length > 0;
+  const hasAssignments = load.dispatchAssignments.length > 0;
+  const hasPayLines =
+    load.carrierPayLines.length > 0 ||
+    load.dispatchAssignments.some((row) => (row.payLines?.length ?? 0) > 0);
 
   const latestReportedLocation = load.dispatchAssignments
     .flatMap((row) => row.checkCalls)
@@ -589,24 +593,12 @@ export default async function LoadDetailPage({
         </Tile>
 
         <Tile id="workflow">
-          <form action={updateLoadStatus} className="mt-4 grid gap-3">
-            <input type="hidden" name="loadId" value={load.id} />
-            <select
-              key={load.status}
-              name="status"
-              className="select"
-              defaultValue={load.status}
-            >
-              {loadStatuses.map((status) => (
-                <option key={status} value={status}>
-                  {humanize(status)}
-                </option>
-              ))}
-            </select>
-            <button type="submit" className="btn">
-              Update Status
-            </button>
-          </form>
+          <LoadStatusForm
+            loadId={load.id}
+            currentStatus={load.status}
+            hasAssignments={hasAssignments}
+            hasPayLines={hasPayLines}
+          />
         </Tile>
 
         {canRoute ? (
