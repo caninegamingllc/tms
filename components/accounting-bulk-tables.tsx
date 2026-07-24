@@ -310,9 +310,17 @@ export function AccountingInvoicesPanel({
                   <input key={id} type="hidden" name="invoiceIds" value={id} />
                 ))}
                 <button type="submit" className="btn">
-                  Export Invoices to QB
+                  Send to Accounting
                 </button>
               </form>
+            ) : null}
+            {quickbooksMethod === "IIF" ? (
+              <a
+                href={`/api/integrations/quickbooks-desktop/export?invoiceIds=${[...selection.selected].join(",")}`}
+                className="btn"
+              >
+                Send to Accounting
+              </a>
             ) : null}
             {selectedRows.length === 1 && selectedRows[0].canMarkPaid ? (
               <form action={markInvoicePaid}>
@@ -649,9 +657,17 @@ export function AccountingBillsPanel({
                   <input key={id} type="hidden" name="billIds" value={id} />
                 ))}
                 <button type="submit" className="btn">
-                  Export Bill to QB
+                  Send to Accounting
                 </button>
               </form>
+            ) : null}
+            {quickbooksMethod === "IIF" ? (
+              <a
+                href={`/api/integrations/quickbooks-desktop/export?billIds=${[...selection.selected].join(",")}`}
+                className="btn"
+              >
+                Send to Accounting
+              </a>
             ) : null}
             <button type="button" className="btn" onClick={() => setShowPayment(true)}>
               Record a Bill Payment

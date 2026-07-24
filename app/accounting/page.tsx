@@ -393,27 +393,22 @@ export default async function AccountingPage({
         {showQuickbooks ? (
           <Tile id="quickbooks">
             <div className="flex flex-wrap items-start justify-between gap-3">
-              <p className="muted">
-                Active method:{" "}
-                <span className="font-semibold text-foreground">
-                  {method === "ONLINE" ? "QuickBooks Online" : "IIF (Desktop)"}
-                </span>
-                .
-              </p>
-              <div className="flex flex-wrap gap-2">
+              <div>
+                <p className="muted">
+                  Active method:{" "}
+                  <span className="font-semibold text-foreground">
+                    {method === "ONLINE" ? "QuickBooks Online" : "IIF (Desktop)"}
+                  </span>
+                  .
+                </p>
                 {method === "IIF" ? (
-                  <>
-                    <a href="/api/integrations/quickbooks-desktop/export" className="btn">
-                      Download IIF (pending)
-                    </a>
-                    <a
-                      href="/api/integrations/quickbooks-desktop/export?includeExported=1"
-                      className="btn-secondary"
-                    >
-                      Download IIF (all)
-                    </a>
-                  </>
+                  <p className="muted mt-1 text-sm">
+                    Select invoices or bills below, then use Send to Accounting to download an IIF
+                    file.
+                  </p>
                 ) : null}
+              </div>
+              <div className="flex flex-wrap gap-2">
                 {method === "ONLINE" && qboConnected ? (
                   <form action={reconcileQuickbooksPaymentsAction}>
                     <button type="submit" className="btn-secondary">

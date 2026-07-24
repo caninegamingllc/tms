@@ -5,82 +5,68 @@ import { prisma } from "@/lib/db";
 import { getCompanyQuickbooksMethod, upsertAccountingExport } from "@/lib/quickbooks/exports";
 import { buildIifFile } from "@/lib/quickbooks/iif";
 
+function parseIds(param: string | null): string[] {
+  if (!param) return [];
+  return param.split(",").map((id) => id.trim()).filter(Boolean);
+}
+
+function redirectError(request: Request, message: string) {
+  return NextResponse.redirect(new URL(`/accounting?error=${encodeURIComponent(message)}`, request.url));
+}
+
 export async function GET(request: Request) {
   const user = await requireWriteUser();
   const method = await getCompanyQuickbooksMethod(user.companyId);
 
   if (method !== "IIF") {
-    return NextResponse.redirect(
-      new URL("/accounting?error=IIF%20export%20is%20not%20the%20active%20method", request.url)
-    );
+    return redirectError(request, "IIF export is not the active method");
   }
 
   const url = new URL(request.url);
-  const includeExported = url.searchParams.get("includeExported") === "1";
-  const invoiceIdsParam = url.searchParams.get("invoiceIds");
-  const billIdsParam = url.searchParams.get("billIds");
+  const invoiceIds = parseIds(url.searchParams.get("invoiceIds"));
+  const billIds = parseIds(url.searchParams.get("billIds"));
+
+  if (invoiceIds.length === 0 && billIds.length === 0) {
+    return redirectError(request, "Select invoices or bills to send to accounting");
+  }
+
+  if (invoiceIds.length > 0 && billIds.length > 0) {
+    return redirectError(request, "Export invoices or bills separately, not both in one IIF file");
+  }
 
   const company = await prisma.company.findUniqueOrThrow({
     where: { id: user.companyId },
     select: { quickbooksConfigJson: true, name: true }
   });
 
-  const invoiceWhere = {
-    companyId: user.companyId,
-    ...(invoiceIdsParam
-      ? { id: { in: invoiceIdsParam.split(",").filter(Boolean) } }
-      : { status: { notIn: ["VOID"] } })
-  };
-
-  const billWhere = {
-    companyId: user.companyId,
-    ...(billIdsParam
-      ? { id: { in: billIdsParam.split(",").filter(Boolean) } }
-      : { status: { notIn: ["VOID"] } })
-  };
-
-  const [invoices, bills, existingInvoiceExports, existingBillExports] = await Promise.all([
-    prisma.invoice.findMany({
-      where: invoiceWhere,
-      include: { customer: true, load: true }
-    }),
-    prisma.carrierBill.findMany({
-      where: billWhere,
-      include: { carrier: true, load: true, factoringCompany: true }
-    }),
-    prisma.accountingExport.findMany({
-      where: {
-        companyId: user.companyId,
-        method: "IIF",
-        entityType: "INVOICE",
-        status: "SYNCED"
-      }
-    }),
-    prisma.accountingExport.findMany({
-      where: {
-        companyId: user.companyId,
-        method: "IIF",
-        entityType: "CARRIER_BILL",
-        status: "SYNCED"
-      }
-    })
-  ]);
-
-  const exportedInvoiceIds = new Set(existingInvoiceExports.map((row) => row.entityId));
-  const exportedBillIds = new Set(existingBillExports.map((row) => row.entityId));
+  const exportInvoices = invoiceIds.length > 0;
+  const invoices = exportInvoices
+    ? await prisma.invoice.findMany({
+        where: { companyId: user.companyId, id: { in: invoiceIds } },
+        include: { customer: true, load: true }
+      })
+    : [];
+  const bills = !exportInvoices
+    ? await prisma.carrierBill.findMany({
+        where: { companyId: user.companyId, id: { in: billIds } },
+        include: { carrier: true, load: true, factoringCompany: true }
+      })
+    : [];
 
   const accessibleInvoices = [];
   for (const invoice of invoices) {
     if (!(await canAccessRecord(user, invoice.load.branchId))) continue;
-    if (!includeExported && exportedInvoiceIds.has(invoice.id) && !invoiceIdsParam) continue;
     accessibleInvoices.push(invoice);
   }
 
   const accessibleBills = [];
   for (const bill of bills) {
     if (!(await canAccessRecord(user, bill.load.branchId))) continue;
-    if (!includeExported && exportedBillIds.has(bill.id) && !billIdsParam) continue;
     accessibleBills.push(bill);
+  }
+
+  if (accessibleInvoices.length === 0 && accessibleBills.length === 0) {
+    return redirectError(request, "No accessible invoices or bills found for export");
   }
 
   const customerMap = new Map(
@@ -162,7 +148,8 @@ export async function GET(request: Request) {
   }
 
   const stamp = new Date().toISOString().slice(0, 10);
-  const filename = `tms-quickbooks-${stamp}.iif`;
+  const kind = exportInvoices ? "invoices" : "bills";
+  const filename = `tms-quickbooks-${kind}-${stamp}.iif`;
 
   return new NextResponse(content, {
     status: 200,
