@@ -6,11 +6,13 @@ import { createPortal } from "react-dom";
 import { useRouter } from "next/navigation";
 import {
   emailCustomerInvoiceBatch,
+  prepareInvoiceBatchReview
+} from "@/lib/email-ops-actions";
+import {
   INVOICE_BATCH_EMAIL_MAX,
-  prepareInvoiceBatchReview,
   type InvoiceBatchCustomerGroup,
   type InvoiceBatchReview
-} from "@/lib/email-ops-actions";
+} from "@/lib/invoice-batch";
 import { formatDate, formatMoney } from "@/lib/format";
 
 /** Above Leaflet panes/controls and app chrome. */

@@ -41,6 +41,11 @@ import {
   primaryAssignment
 } from "@/lib/dispatch-assignment";
 import { assertCarrierDocumentInsuranceReady } from "@/lib/carrier-compliance";
+import {
+  INVOICE_BATCH_EMAIL_MAX,
+  type InvoiceBatchCustomerGroup,
+  type InvoiceBatchReview
+} from "@/lib/invoice-batch";
 
 export type EmailPurpose =
   | "CARRIER_RATE_CONFIRMATION"
@@ -68,33 +73,6 @@ export type EmailDraft = {
   primaryAttachmentName: string | null;
   supportingDocuments: EmailDraftAttachment[];
   assignmentId?: string | null;
-};
-
-/** Max invoices (loads) attached to a single batch email. */
-export const INVOICE_BATCH_EMAIL_MAX = 5;
-
-export type InvoiceBatchReviewLine = {
-  loadId: string;
-  loadNumber: string;
-  invoiceNo: string;
-  totalCents: number;
-  referenceNumber: string | null;
-  deliveryAt: string | null;
-};
-
-export type InvoiceBatchCustomerGroup = {
-  customerId: string;
-  customerName: string;
-  fromAddress: string;
-  to: string;
-  subject: string;
-  body: string;
-  emailCount: number;
-  lines: InvoiceBatchReviewLine[];
-};
-
-export type InvoiceBatchReview = {
-  groups: InvoiceBatchCustomerGroup[];
 };
 
 async function loadForEmail(loadId: string, user: SessionUser) {
