@@ -30,6 +30,7 @@ import {
 } from "@/lib/mail/user-mailbox";
 import { generateDocumentPdf, pdfFilenameForDocument } from "@/lib/pdf-documents";
 import { dueDateFromTerms } from "@/lib/accounting-aging";
+import { nextInvoiceNumber } from "@/lib/invoice-numbers";
 import { enqueueJob } from "@/lib/jobs";
 import { applyLateFeesForInvoiceSend } from "@/lib/late-fees-apply";
 import {
@@ -99,14 +100,10 @@ async function nextDocumentNumber(companyId: string, prefix: string) {
   return `${prefix}-${String(count + 1001).padStart(4, "0")}`;
 }
 
-async function nextInvoiceNumber(companyId: string) {
-  const count = await prisma.invoice.count({ where: { companyId } });
-  return `INV-${String(count + 1001).padStart(4, "0")}`;
-}
-
 function customerEmail(load: Awaited<ReturnType<typeof loadForEmail>>) {
   const primary = load.customer.contacts.find((contact) => contact.isPrimary);
-  return (primary?.email || load.customer.email || "").trim();
+  const anyContact = load.customer.contacts.find((contact) => Boolean(contact.email?.trim()));
+  return (primary?.email || load.customer.email || anyContact?.email || "").trim();
 }
 
 function resolveCarrierAssignment(

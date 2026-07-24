@@ -47,6 +47,7 @@ import {
 } from "@/lib/customer-charges";
 import { dueDateFromTerms, parsePaymentTermsDays } from "@/lib/accounting-aging";
 import { resolveCarrierApPayee } from "@/lib/accounting-payee";
+import { nextInvoiceNumber } from "@/lib/invoice-numbers";
 import {
   commodityLinesCreateData,
   parseFreightLinesFromForm,
@@ -174,11 +175,6 @@ async function nextDocumentNumber(companyId: string, prefix: string) {
     where: { companyId, documentNumber: { startsWith: prefix } }
   });
   return `${prefix}-${String(count + 1001).padStart(4, "0")}`;
-}
-
-async function nextInvoiceNumber(companyId: string) {
-  const count = await prisma.invoice.count({ where: { companyId } });
-  return `INV-${String(count + 1001).padStart(4, "0")}`;
 }
 
 async function requireCompanyLoad(loadId: string, user: SessionUser) {
@@ -2371,65 +2367,73 @@ export async function generateCustomerInvoice(formData: FormData) {
   const user = await requireWriteUser();
   await assertPlanFeature(user.companyId, "generate_invoice_pdf");
   const loadId = requiredString(formData, "loadId");
-  const load = await loadForDocument(loadId, user);
-  const invoiceNumber = await nextInvoiceNumber(user.companyId);
-  const issuedAt = new Date();
-  const dueAt = dueDateFromTerms(issuedAt, load.customer.paymentTerms);
 
-  const invoice =
-    load.invoices[0] ??
-    (await prisma.invoice.create({
+  try {
+    const load = await loadForDocument(loadId, user);
+    const invoiceNumber = await nextInvoiceNumber(user.companyId);
+    const issuedAt = new Date();
+    const dueAt = dueDateFromTerms(issuedAt, load.customer.paymentTerms);
+
+    const invoice =
+      load.invoices[0] ??
+      (await prisma.invoice.create({
+        data: {
+          companyId: user.companyId,
+          invoiceNo: invoiceNumber,
+          loadId: load.id,
+          customerId: load.customerId,
+          status: "DRAFT",
+          totalCents: load.revenueCents,
+          balanceCents: load.revenueCents,
+          issuedAt,
+          dueAt
+        }
+      }));
+
+    const refreshedLoad = await loadForDocument(loadId, user);
+    const company = await getCompanyBranding(user.companyId);
+
+    const document = await prisma.loadDocument.create({
       data: {
         companyId: user.companyId,
-        invoiceNo: invoiceNumber,
         loadId: load.id,
         customerId: load.customerId,
-        status: "DRAFT",
-        totalCents: load.revenueCents,
-        balanceCents: load.revenueCents,
-        issuedAt,
-        dueAt
+        type: "INVOICE",
+        name: documentTitle("INVOICE", load.loadNumber),
+        documentNumber: invoice.invoiceNo,
+        generatedContent: plainTextForType("INVOICE", refreshedLoad, invoice.invoiceNo, company),
+        status: "PROCESSING",
+        notes: "Generated customer invoice."
       }
-    }));
+    });
 
-  const refreshedLoad = await loadForDocument(loadId, user);
-  const company = await getCompanyBranding(user.companyId);
-
-  const document = await prisma.loadDocument.create({
-    data: {
+    await enqueueJob("GENERATE_PDF", {
       companyId: user.companyId,
       loadId: load.id,
-      customerId: load.customerId,
+      documentId: document.id,
       type: "INVOICE",
-      name: documentTitle("INVOICE", load.loadNumber),
-      documentNumber: invoice.invoiceNo,
-      generatedContent: plainTextForType("INVOICE", refreshedLoad, invoice.invoiceNo, company),
-      status: "PROCESSING",
-      notes: "Generated customer invoice."
-    }
-  });
+      documentNumber: invoice.invoiceNo
+    });
 
-  await enqueueJob("GENERATE_PDF", {
-    companyId: user.companyId,
-    loadId: load.id,
-    documentId: document.id,
-    type: "INVOICE",
-    documentNumber: invoice.invoiceNo
-  });
+    await prisma.loadActivity.create({
+      data: {
+        loadId,
+        userId: user.id,
+        action: "Customer invoice queued",
+        details: invoice.invoiceNo
+      }
+    });
 
-  await prisma.loadActivity.create({
-    data: {
-      loadId,
-      userId: user.id,
-      action: "Customer invoice queued",
-      details: invoice.invoiceNo
-    }
-  });
-
-  revalidatePath("/accounting");
-  revalidatePath("/documents");
-  revalidatePath(`/loads/${loadId}`);
-  redirect(`/documents/${document.id}`);
+    revalidatePath("/accounting");
+    revalidatePath("/documents");
+    revalidatePath(`/loads/${loadId}`);
+    redirect(`/documents/${document.id}`);
+  } catch (error) {
+    unstable_rethrow(error);
+    const message =
+      error instanceof Error ? error.message : "Could not generate customer invoice.";
+    redirect(`/accounting?tab=invoices&error=${encodeURIComponent(message)}`);
+  }
 }
 
 export async function createInvoice(formData: FormData) {

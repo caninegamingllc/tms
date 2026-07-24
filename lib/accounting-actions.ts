@@ -546,9 +546,20 @@ export async function bulkEmailInvoicesAction(formData: FormData) {
     return a.loadNumber.localeCompare(b.loadNumber, undefined, { numeric: true });
   });
 
+  if (targets.length === 0) {
+    redirect(
+      "/accounting?tab=invoices&error=" +
+        encodeURIComponent(
+          "No matching delivered loads found for the selection. Refresh and try again."
+        )
+    );
+  }
+
   let emailed = 0;
+  const failures: string[] = [];
   for (const target of targets) {
     if (!(await canAccessRecord(user, target.branchId))) {
+      failures.push(`Load ${target.loadNumber}: no access.`);
       continue;
     }
     try {
@@ -565,12 +576,29 @@ export async function bulkEmailInvoicesAction(formData: FormData) {
       }
       await sendPreparedEmail(sendData);
       emailed += 1;
-    } catch {
-      // skip failures
+    } catch (error) {
+      const message =
+        error instanceof Error ? error.message : "Could not email invoice.";
+      failures.push(`Load ${target.loadNumber}: ${message}`);
     }
   }
 
-  redirect(`/accounting?tab=invoices&emailed=${emailed}`);
+  if (emailed === 0 && failures.length > 0) {
+    redirect(
+      `/accounting?tab=invoices&error=${encodeURIComponent(failures.slice(0, 3).join(" "))}`
+    );
+  }
+
+  const emailedUrl = `/accounting?tab=invoices&emailed=${emailed}`;
+  if (failures.length > 0) {
+    redirect(
+      `${emailedUrl}&error=${encodeURIComponent(
+        `${failures.length} failed. ${failures.slice(0, 2).join(" ")}`
+      )}`
+    );
+  }
+
+  redirect(emailedUrl);
 }
 
 export async function bulkPushInvoicesToQuickbooks(formData: FormData) {
