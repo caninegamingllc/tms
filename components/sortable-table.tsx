@@ -44,6 +44,15 @@ type SortableTableProps<T> = {
   columns: SortableColumn<T>[];
   data: T[];
   defaultSort?: { columnId: string; direction: SortDirection };
+  /**
+   * When set, sorting is controlled by the parent (e.g. URL/server pagination).
+   * The table will not re-sort `data` client-side.
+   */
+  serverSort?: {
+    columnId: string;
+    direction: SortDirection;
+    onSort: (columnId: string) => void;
+  };
   keyExtractor: (row: T) => string;
   emptyMessage?: string;
   className?: string;
@@ -577,6 +586,7 @@ export function SortableTable<T>({
   columns,
   data,
   defaultSort,
+  serverSort,
   keyExtractor,
   emptyMessage = "No records found.",
   className,
@@ -608,7 +618,10 @@ export function SortableTable<T>({
   const firstSortableColumn = orderedColumns.find(
     (column) => column.sortable !== false && column.sortValue
   );
-  const [sortState, setSortState] = useState<{ columnId: string; direction: SortDirection }>(() => {
+  const [clientSortState, setClientSortState] = useState<{
+    columnId: string;
+    direction: SortDirection;
+  }>(() => {
     if (defaultSort) {
       return defaultSort;
     }
@@ -620,14 +633,22 @@ export function SortableTable<T>({
     return { columnId: "", direction: "asc" };
   });
 
+  const sortState = serverSort
+    ? { columnId: serverSort.columnId, direction: serverSort.direction }
+    : clientSortState;
+
   const sortedData = useMemo(() => {
+    if (serverSort) {
+      return data;
+    }
+
     const column = orderedColumns.find((entry) => entry.id === sortState.columnId);
     if (!column?.sortValue) {
       return data;
     }
 
     return sortData(data, column.sortValue, sortState.direction);
-  }, [orderedColumns, data, sortState]);
+  }, [orderedColumns, data, sortState, serverSort]);
 
   const pagination = useClientPagination(paginated ? sortedData : [], paginated ? data.length : undefined);
   const displayRows = paginated ? pagination.pageRows : sortedData;
@@ -638,7 +659,12 @@ export function SortableTable<T>({
       return;
     }
 
-    setSortState((current) => {
+    if (serverSort) {
+      serverSort.onSort(columnId);
+      return;
+    }
+
+    setClientSortState((current) => {
       if (current.columnId === columnId) {
         return { columnId, direction: current.direction === "asc" ? "desc" : "asc" };
       }

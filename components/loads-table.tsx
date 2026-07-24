@@ -2,8 +2,10 @@
 
 import Link from "next/link";
 import { SortableTable } from "@/components/sortable-table";
+import { useUrlTableSort } from "@/components/url-table-sort";
 import { StatusBadge } from "@/components/status-badge";
 import { formatDate, formatMoney, marginPercent } from "@/lib/format";
+import { DEFAULT_LOAD_SEARCH_SORT } from "@/lib/load-search";
 
 export type LoadTableRow = {
   id: string;
@@ -28,11 +30,19 @@ export type LoadTableRow = {
 
 export function LoadsTable({
   loads,
-  paginated = true
+  paginated = true,
+  serverSorted = false
 }: {
   loads: LoadTableRow[];
   paginated?: boolean;
+  /** When true, column sorts update the URL and the parent re-fetches the page. */
+  serverSorted?: boolean;
 }) {
+  const urlSort = useUrlTableSort({
+    columnId: DEFAULT_LOAD_SEARCH_SORT.column,
+    direction: DEFAULT_LOAD_SEARCH_SORT.direction
+  });
+
   return (
     <SortableTable
       tableId="loads"
@@ -40,7 +50,19 @@ export function LoadsTable({
       paginated={paginated}
       keyExtractor={(load) => load.id}
       getRowHref={(load) => `/loads/${load.id}`}
-      defaultSort={{ columnId: "pickup", direction: "desc" }}
+      defaultSort={{
+        columnId: DEFAULT_LOAD_SEARCH_SORT.column,
+        direction: DEFAULT_LOAD_SEARCH_SORT.direction
+      }}
+      serverSort={
+        serverSorted
+          ? {
+              columnId: urlSort.columnId,
+              direction: urlSort.direction,
+              onSort: urlSort.onSort
+            }
+          : undefined
+      }
       emptyMessage="No loads found."
       columns={[
         {
@@ -68,7 +90,8 @@ export function LoadsTable({
         {
           id: "lane",
           label: "Lane",
-          sortValue: (load) => `${load.pickupCity}, ${load.pickupState} to ${load.deliveryCity}, ${load.deliveryState}`,
+          sortValue: (load) =>
+            `${load.pickupCity}, ${load.pickupState} to ${load.deliveryCity}, ${load.deliveryState}`,
           render: (load) => (
             <>
               {load.pickupCity}, {load.pickupState} to {load.deliveryCity}, {load.deliveryState}

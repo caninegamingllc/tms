@@ -14,6 +14,7 @@ import {
   getResizableTableStyle,
   type SortableColumn
 } from "@/components/sortable-table";
+import { useUrlTableSort } from "@/components/url-table-sort";
 import { TablePagination } from "@/components/table-pagination";
 import { StatusBadge } from "@/components/status-badge";
 import {
@@ -23,6 +24,7 @@ import {
   exportLoadsPdf
 } from "@/lib/export-reports";
 import { formatDate, formatMoney, marginPercent } from "@/lib/format";
+import { DEFAULT_LOAD_SEARCH_SORT } from "@/lib/load-search";
 
 export type SerializedSearchLoad = {
   id: string;
@@ -144,12 +146,21 @@ export function LoadSearchResults({
     columnWidths,
     setColumnWidth
   } = useOrderedColumns("load-search", baseColumns);
-  const { sortedData, sortState, handleSort } = useSortedRows(loads, orderedColumns, {
-    columnId: "pickup",
-    direction: "desc"
-  });
-  const clientPagination = useClientPagination(sortedData, loads);
   const useServerPaging = typeof serverTotal === "number";
+  const urlSort = useUrlTableSort({
+    columnId: DEFAULT_LOAD_SEARCH_SORT.column,
+    direction: DEFAULT_LOAD_SEARCH_SORT.direction
+  });
+  const clientSort = useSortedRows(loads, orderedColumns, {
+    columnId: DEFAULT_LOAD_SEARCH_SORT.column,
+    direction: DEFAULT_LOAD_SEARCH_SORT.direction
+  });
+  const sortState = useServerPaging
+    ? { columnId: urlSort.columnId, direction: urlSort.direction }
+    : clientSort.sortState;
+  const handleSort = useServerPaging ? urlSort.onSort : clientSort.handleSort;
+  const sortedData = useServerPaging ? loads : clientSort.sortedData;
+  const clientPagination = useClientPagination(sortedData, loads);
   const pageRows = useServerPaging ? sortedData : clientPagination.pageRows;
   const displayTotal = useServerPaging ? serverTotal : loads.length;
   const pageIds = pageRows.map((load) => load.id);

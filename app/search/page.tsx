@@ -20,6 +20,7 @@ import {
   getLoadSearchOptions,
   getRevenueSummary,
   parseLoadSearchParams,
+  parseLoadSearchSort,
   searchLoads,
   serializeSearchLoads
 } from "@/lib/load-search";
@@ -36,13 +37,14 @@ export default async function SearchPage({ searchParams }: SearchPageProps) {
   const resolvedSearchParams = await searchParams;
   const filters = parseLoadSearchParams(resolvedSearchParams);
   const pagination = parsePaginationParams(resolvedSearchParams);
+  const sort = parseLoadSearchSort(resolvedSearchParams);
   const view = filters.view ?? "loads";
   const showResults = isSearchSubmitted(resolvedSearchParams);
 
   const scope = await getBranchScope(user);
   const [loadsResult, options, layoutContext, revenueSummary] = await Promise.all([
     showResults && view === "loads"
-      ? searchLoads(scope, filters, pagination)
+      ? searchLoads(scope, filters, pagination, sort)
       : Promise.resolve({ items: [], total: 0, page: 1, pageSize: pagination.pageSize, totalPages: 0 }),
     getLoadSearchOptions(scope),
     loadPageLayoutContext("search"),
@@ -92,12 +94,14 @@ export default async function SearchPage({ searchParams }: SearchPageProps) {
 
         {showResults && view === "loads" ? (
           <Tile id="load-results">
-            <LoadSearchResults
-              loads={serializedLoads}
-              companyName={user.companyName}
-              filterSummary={filterSummary}
-              serverTotal={loadsResult.total}
-            />
+            <Suspense fallback={<div className="muted">Loading results...</div>}>
+              <LoadSearchResults
+                loads={serializedLoads}
+                companyName={user.companyName}
+                filterSummary={filterSummary}
+                serverTotal={loadsResult.total}
+              />
+            </Suspense>
             <Suspense fallback={null}>
               <ServerPagination
                 page={loadsResult.page}

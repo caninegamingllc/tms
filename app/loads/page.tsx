@@ -15,6 +15,7 @@ import { syncMissingCommissions } from "@/lib/commission";
 import {
   getLoadSearchOptions,
   parseLoadSearchParams,
+  parseLoadSearchSort,
   searchLoads
 } from "@/lib/load-search";
 import { isSearchSubmitted } from "@/lib/list-search";
@@ -29,6 +30,7 @@ export default async function LoadsPage({
   const params = await searchParams;
   const filters = parseLoadSearchParams(params);
   const pagination = parsePaginationParams(params);
+  const sort = parseLoadSearchSort(params);
   const showResults = isSearchSubmitted(params);
 
   after(() => {
@@ -38,7 +40,7 @@ export default async function LoadsPage({
   const scope = await getBranchScope(user);
   const [loadsResult, options] = await Promise.all([
     showResults
-      ? searchLoads(scope, filters, pagination)
+      ? searchLoads(scope, filters, pagination, sort)
       : Promise.resolve({ items: [], total: 0, page: 1, pageSize: pagination.pageSize, totalPages: 0 }),
     getLoadSearchOptions(scope)
   ]);
@@ -114,7 +116,9 @@ export default async function LoadsPage({
             <p className="muted mb-3">
               {loadsResult.total} load{loadsResult.total === 1 ? "" : "s"} found
             </p>
-            <LoadsTable loads={rows} paginated={false} />
+            <Suspense fallback={null}>
+              <LoadsTable loads={rows} paginated={false} serverSorted />
+            </Suspense>
             <Suspense fallback={null}>
               <ServerPagination
                 page={loadsResult.page}

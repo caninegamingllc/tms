@@ -10,6 +10,7 @@ import {
   type PageSize,
   type PaginatedResult
 } from "@/lib/pagination";
+import { sortData, type SortDirection } from "@/lib/table-sort";
 
 export const loadSearchViewSchema = z.enum(["loads", "revenue"]);
 export type LoadSearchView = z.infer<typeof loadSearchViewSchema>;
@@ -30,8 +31,85 @@ export const loadSearchFiltersSchema = z.object({
 
 export type LoadSearchFilters = z.infer<typeof loadSearchFiltersSchema>;
 
+export const LOAD_SEARCH_SORT_COLUMNS = [
+  "load",
+  "status",
+  "customer",
+  "lane",
+  "pickup",
+  "equipment",
+  "commodity",
+  "carrier",
+  "financials"
+] as const;
+
+export type LoadSearchSortColumn = (typeof LOAD_SEARCH_SORT_COLUMNS)[number];
+
+export type LoadSearchSort = {
+  column: LoadSearchSortColumn;
+  direction: SortDirection;
+};
+
+export const DEFAULT_LOAD_SEARCH_SORT: LoadSearchSort = {
+  column: "pickup",
+  direction: "desc"
+};
+
 export type SearchLoadResult = Awaited<ReturnType<typeof searchLoads>>["items"][number];
 
+function isLoadSearchSortColumn(value: string): value is LoadSearchSortColumn {
+  return (LOAD_SEARCH_SORT_COLUMNS as readonly string[]).includes(value);
+}
+
+export function parseLoadSearchSort(
+  searchParams: Record<string, string | string[] | undefined>
+): LoadSearchSort {
+  const rawSort = typeof searchParams.sort === "string" ? searchParams.sort : undefined;
+  const rawDir = typeof searchParams.dir === "string" ? searchParams.dir : undefined;
+
+  if (!rawSort || !isLoadSearchSortColumn(rawSort)) {
+    return DEFAULT_LOAD_SEARCH_SORT;
+  }
+
+  return {
+    column: rawSort,
+    direction: rawDir === "desc" ? "desc" : "asc"
+  };
+}
+
+export function buildLoadSearchOrderBy(
+  sort: LoadSearchSort
+): Prisma.LoadOrderByWithRelationInput[] | null {
+  const dir = sort.direction;
+
+  switch (sort.column) {
+    case "load":
+      return [{ loadNumber: dir }];
+    case "status":
+      return [{ status: dir }, { loadNumber: "desc" }];
+    case "customer":
+      return [{ customer: { name: dir } }, { loadNumber: "desc" }];
+    case "lane":
+      return [
+        { pickupCity: dir },
+        { pickupState: dir },
+        { deliveryCity: dir },
+        { deliveryState: dir },
+        { loadNumber: "desc" }
+      ];
+    case "pickup":
+      return [{ pickupDate: dir }, { loadNumber: "desc" }];
+    case "equipment":
+      return [{ equipmentType: dir }, { loadNumber: "desc" }];
+    case "commodity":
+      return [{ commodity: dir }, { loadNumber: "desc" }];
+    case "carrier":
+    case "financials":
+      return null;
+    default:
+      return [{ pickupDate: "desc" }, { loadNumber: "desc" }];
+  }
+}
 function startOfDay(dateStr: string) {
   const date = new Date(`${dateStr}T00:00:00`);
   return Number.isNaN(date.getTime()) ? undefined : date;
@@ -198,37 +276,86 @@ export function describeActiveFilters(filters: LoadSearchFilters, customerName?:
   return parts.length ? parts.join(" · ") : "All loads";
 }
 
+const loadSearchInclude = {
+  customer: true,
+  dispatchAssignments: {
+    orderBy: { sequence: "asc" as const },
+    include: { carrier: true }
+  },
+  commission: true
+} satisfies Prisma.LoadInclude;
+
+type SearchLoadPayload = Prisma.LoadGetPayload<{ include: typeof loadSearchInclude }>;
+
+async function findLoadsPageByIds(ids: string[]): Promise<SearchLoadPayload[]> {
+  if (ids.length === 0) {
+    return [];
+  }
+
+  const items = await prisma.load.findMany({
+    where: { id: { in: ids } },
+    include: loadSearchInclude
+  });
+  const byId = new Map(items.map((item) => [item.id, item]));
+  return ids.map((id) => byId.get(id)).filter((item): item is SearchLoadPayload => Boolean(item));
+}
+
+async function searchLoadsWithInMemorySort(
+  where: Prisma.LoadWhereInput,
+  sort: LoadSearchSort,
+  skip: number,
+  take: number
+): Promise<SearchLoadPayload[]> {
+  const rows = await prisma.load.findMany({
+    where,
+    select: {
+      id: true,
+      revenueCents: true,
+      carrierCostCents: true,
+      dispatchAssignments: {
+        orderBy: { sequence: "asc" },
+        select: {
+          id: true,
+          sequence: true,
+          carrier: { select: { name: true } }
+        }
+      }
+    }
+  });
+
+  const sorted = sortData(
+    rows,
+    (row) =>
+      sort.column === "financials"
+        ? row.revenueCents - row.carrierCostCents
+        : carrierDisplayName(row.dispatchAssignments),
+    sort.direction
+  );
+  return findLoadsPageByIds(sorted.slice(skip, skip + take).map((row) => row.id));
+}
+
 export async function searchLoads(
   scope: BranchScope,
   filters: LoadSearchFilters,
-  pagination?: { page: number; pageSize: PageSize }
-): Promise<PaginatedResult<Prisma.LoadGetPayload<{
-  include: {
-    customer: true;
-    dispatchAssignments: { include: { carrier: true } };
-    commission: true;
-  };
-}>>> {
+  pagination?: { page: number; pageSize: PageSize },
+  sort: LoadSearchSort = DEFAULT_LOAD_SEARCH_SORT
+): Promise<PaginatedResult<SearchLoadPayload>> {
   const page = pagination?.page ?? 1;
   const pageSize = pagination?.pageSize ?? DEFAULT_PAGE_SIZE;
   const where = buildLoadSearchWhere(scope, filters);
   const { skip, take } = paginationSkipTake(page, pageSize);
+  const orderBy = buildLoadSearchOrderBy(sort);
 
   const [items, total] = await Promise.all([
-    prisma.load.findMany({
-      where,
-      orderBy: [{ pickupDate: "desc" }, { loadNumber: "desc" }],
-      include: {
-        customer: true,
-        dispatchAssignments: {
-          orderBy: { sequence: "asc" },
-          include: { carrier: true }
-        },
-        commission: true
-      },
-      skip,
-      take
-    }),
+    orderBy
+      ? prisma.load.findMany({
+          where,
+          orderBy,
+          include: loadSearchInclude,
+          skip,
+          take
+        })
+      : searchLoadsWithInMemorySort(where, sort, skip, take),
     prisma.load.count({ where })
   ]);
 
