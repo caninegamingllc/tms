@@ -2,7 +2,7 @@ import type { ReactNode } from "react";
 import { TOUR_ATTR } from "@/components/onboarding/tour-steps";
 
 type PageHeaderProps = {
-  title: string;
+  title: ReactNode;
   description?: string;
   action?: ReactNode;
   eyebrow?: string;

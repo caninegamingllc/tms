@@ -3,6 +3,7 @@ import { after } from "next/server";
 import { DocumentUploadForm } from "@/components/document-upload-form";
 import { DocumentsTable } from "@/components/documents-table";
 import { PageHeader } from "@/components/page-header";
+import { LoadNumberNav } from "@/components/load-number-nav";
 import { LoadRoutePanel } from "@/components/load-route-panel";
 import { CheckCallForm } from "@/components/check-call-location-input";
 import { CarrierAssignmentsPanel } from "@/components/carrier-assignments-panel";
@@ -188,6 +189,25 @@ export default async function LoadDetailPage({
     notFound();
   }
 
+  const [previousLoad, nextLoad] = await Promise.all([
+    prisma.load.findFirst({
+      where: {
+        ...scope,
+        loadNumber: { lt: load.loadNumber }
+      },
+      orderBy: { loadNumber: "desc" },
+      select: { id: true }
+    }),
+    prisma.load.findFirst({
+      where: {
+        ...scope,
+        loadNumber: { gt: load.loadNumber }
+      },
+      orderBy: { loadNumber: "asc" },
+      select: { id: true }
+    })
+  ]);
+
   const hasFleetDispatch = planHasFeature(user.plan, "fleet_dispatch");
   const [fleetDrivers, fleetTrucks, fleetTrailers] = hasFleetDispatch
     ? await Promise.all([
@@ -337,7 +357,13 @@ export default async function LoadDetailPage({
   return (
     <>
       <PageHeader
-        title={load.loadNumber}
+        title={
+          <LoadNumberNav
+            loadNumber={load.loadNumber}
+            previousId={previousLoad?.id}
+            nextId={nextLoad?.id}
+          />
+        }
         description={`${load.customer.name} freight from ${load.pickupCity}, ${load.pickupState} to ${load.deliveryCity}, ${load.deliveryState}.`}
         action={
           canWrite(user) ? (
@@ -351,7 +377,11 @@ export default async function LoadDetailPage({
 
       {saved ? (
         <div className="mb-4 rounded-lg border border-emerald-200 bg-emerald-50 p-3 text-sm font-semibold text-emerald-700">
-          Load saved successfully.
+          {saved === "carrier"
+            ? "Carrier assignment saved."
+            : saved === "fleet"
+              ? "Fleet assignment saved."
+              : "Load saved successfully."}
         </div>
       ) : null}
 

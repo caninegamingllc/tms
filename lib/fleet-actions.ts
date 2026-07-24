@@ -454,7 +454,7 @@ export async function assignFleetToLoad(formData: FormData) {
   revalidatePath("/dispatch");
   revalidatePath("/loads");
   revalidatePath(`/loads/${loadId}`);
-  redirect(`/loads/${loadId}?saved=1`);
+  redirect(`/loads/${loadId}?saved=fleet`);
 }
 
 export async function clearFleetAssignment(formData: FormData) {
@@ -525,7 +525,7 @@ export async function clearFleetAssignment(formData: FormData) {
   revalidatePath("/dispatch");
   revalidatePath("/loads");
   revalidatePath(`/loads/${loadId}`);
-  redirect(`/loads/${loadId}?saved=1`);
+  redirect(`/loads/${loadId}?saved=fleet`);
 }
 
 export async function saveDriverPayLines(formData: FormData) {

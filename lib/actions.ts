@@ -1875,6 +1875,7 @@ export async function assignCarrier(formData: FormData) {
   revalidatePath("/loads");
   revalidatePath("/commissions");
   revalidatePath(`/loads/${loadId}`);
+  redirect(`/loads/${loadId}?saved=carrier`);
 }
 
 export async function unassignCarrier(formData: FormData) {
@@ -1957,7 +1958,7 @@ export async function unassignCarrier(formData: FormData) {
   revalidatePath("/loads");
   revalidatePath("/commissions");
   revalidatePath(`/loads/${loadId}`);
-  redirect(`/loads/${loadId}?saved=1`);
+  redirect(`/loads/${loadId}?saved=carrier`);
 }
 
 export async function addCheckCall(formData: FormData) {
