@@ -630,7 +630,7 @@ export default async function AccountingPage({
                   <div className="rounded-lg border border-border p-4">
                     <p className="text-[15px] font-semibold text-foreground">Create Invoice</p>
                     <form action={createInvoice} className="mt-4 grid gap-3">
-                      <input name="invoiceNo" className="input" placeholder="INV-1003" required />
+                      <input name="invoiceNo" className="input" placeholder="INV-2491" required />
                       <select name="loadId" className="select" required>
                         <option value="">Select load</option>
                         {activeLoads.map((load) => (

@@ -30,7 +30,7 @@ import {
 } from "@/lib/mail/user-mailbox";
 import { generateDocumentPdf, pdfFilenameForDocument } from "@/lib/pdf-documents";
 import { dueDateFromTerms } from "@/lib/accounting-aging";
-import { nextInvoiceNumber } from "@/lib/invoice-numbers";
+import { invoiceNumberForLoad } from "@/lib/invoice-numbers";
 import { enqueueJob } from "@/lib/jobs";
 import { applyLateFeesForInvoiceSend } from "@/lib/late-fees-apply";
 import {
@@ -191,7 +191,7 @@ async function ensurePrimaryDocument(
   if (docType === "INVOICE") {
     let invoice = load.invoices[0];
     if (!invoice) {
-      const invoiceNumber = await nextInvoiceNumber(user.companyId);
+      const invoiceNumber = invoiceNumberForLoad(load.loadNumber);
       const issuedAt = new Date();
       const dueAt = dueDateFromTerms(issuedAt, load.customer.paymentTerms);
       invoice = await prisma.invoice.create({
@@ -266,7 +266,7 @@ async function ensurePrimaryDocument(
 
     const documentNumber =
       docType === "INVOICE"
-        ? load.invoices[0]?.invoiceNo ?? (await nextInvoiceNumber(user.companyId))
+        ? load.invoices[0]?.invoiceNo ?? invoiceNumberForLoad(load.loadNumber)
         : docType === "BOL"
           ? `BOL-${load.loadNumber}`
           : await nextDocumentNumber(user.companyId, docTypePrefix(docType));
@@ -541,7 +541,7 @@ async function regenerateInvoiceDocument(
   const documentNumber =
     existing?.documentNumber ??
     load.invoices[0]?.invoiceNo ??
-    (await nextInvoiceNumber(user.companyId));
+    invoiceNumberForLoad(load.loadNumber);
   const structured = structuredDocumentForType("INVOICE", load, documentNumber, company);
   const pdf = await persistGeneratedPdf(user.companyId, structured);
 

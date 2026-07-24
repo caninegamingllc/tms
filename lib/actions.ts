@@ -47,7 +47,7 @@ import {
 } from "@/lib/customer-charges";
 import { dueDateFromTerms, parsePaymentTermsDays } from "@/lib/accounting-aging";
 import { resolveCarrierApPayee } from "@/lib/accounting-payee";
-import { nextInvoiceNumber } from "@/lib/invoice-numbers";
+import { invoiceNumberForLoad } from "@/lib/invoice-numbers";
 import {
   commodityLinesCreateData,
   parseFreightLinesFromForm,
@@ -2370,7 +2370,7 @@ export async function generateCustomerInvoice(formData: FormData) {
 
   try {
     const load = await loadForDocument(loadId, user);
-    const invoiceNumber = await nextInvoiceNumber(user.companyId);
+    const invoiceNumber = invoiceNumberForLoad(load.loadNumber);
     const issuedAt = new Date();
     const dueAt = dueDateFromTerms(issuedAt, load.customer.paymentTerms);
 

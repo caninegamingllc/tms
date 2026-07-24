@@ -1,16 +1,11 @@
-import { prisma } from "@/lib/db";
-
 /**
- * Allocate the next INV-#### for a company from the highest existing numeric
- * suffix (not row count — gaps/deletes make count-based numbers collide).
+ * Invoice numbers match the load: INV-{loadNumber}.
+ * Example: load 2491 → INV-2491
  */
-export async function nextInvoiceNumber(companyId: string): Promise<string> {
-  const latest = await prisma.invoice.findFirst({
-    where: { companyId, invoiceNo: { startsWith: "INV-" } },
-    orderBy: { invoiceNo: "desc" },
-    select: { invoiceNo: true }
-  });
-  const match = latest?.invoiceNo.match(/^INV-(\d+)$/i);
-  const next = match ? Number(match[1]) + 1 : 1001;
-  return `INV-${String(next).padStart(4, "0")}`;
+export function invoiceNumberForLoad(loadNumber: string): string {
+  const trimmed = loadNumber.trim();
+  if (!trimmed) {
+    throw new Error("Load number is required to build an invoice number.");
+  }
+  return `INV-${trimmed}`;
 }
