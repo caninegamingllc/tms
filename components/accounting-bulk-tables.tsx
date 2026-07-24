@@ -23,12 +23,15 @@ import {
   receiveArPayment,
   recordApPayment
 } from "@/lib/accounting-actions";
+import { generateCustomerInvoice } from "@/lib/actions";
 import { markInvoicePaid } from "@/lib/commission-actions";
 import { markCarrierBillPaid } from "@/lib/quickbooks/actions";
 import type { QuickbooksMethod } from "@/lib/quickbooks/types";
 
 export type AccountingInvoiceRow = {
-  id: string;
+  /** Stable row key: invoice id, or `load-{loadId}` when no invoice exists yet. */
+  rowKey: string;
+  invoiceId: string | null;
   invoiceNo: string;
   loadId: string;
   loadNumber: string;
@@ -45,6 +48,7 @@ export type AccountingInvoiceRow = {
   exportLabel: string | null;
   canMarkPaid: boolean;
   canPushOnline: boolean;
+  canGenerate: boolean;
 };
 
 /** Load-centric AP row: may or may not have a recorded bill yet. */
@@ -126,7 +130,14 @@ export function AccountingInvoicesPanel({
       return invoices;
     }
     return invoices.filter((row) =>
-      [row.customerName, row.invoiceNo, row.loadNumber, row.referenceNumber, row.status]
+      [
+        row.customerName,
+        row.invoiceNo,
+        row.loadNumber,
+        row.referenceNumber,
+        row.status,
+        row.sentLabel
+      ]
         .filter(Boolean)
         .some((value) => String(value).toLowerCase().includes(q))
     );
@@ -151,12 +162,15 @@ export function AccountingInvoicesPanel({
         id: "invoice",
         label: "Invoice #",
         sortValue: (row) => row.invoiceNo,
-        render: (row) => (
-          <>
-            <span className="font-semibold">{row.invoiceNo}</span>{" "}
-            <StatusBadge value={row.status} />
-          </>
-        )
+        render: (row) =>
+          row.invoiceId ? (
+            <>
+              <span className="font-semibold">{row.invoiceNo}</span>{" "}
+              <StatusBadge value={row.status} />
+            </>
+          ) : (
+            <span className="text-muted-foreground">—</span>
+          )
       },
       {
         id: "load",
@@ -224,17 +238,29 @@ export function AccountingInvoicesPanel({
         label: "Actions",
         sortable: false,
         reorderable: false,
-        render: (row: AccountingInvoiceRow) =>
-          row.canMarkPaid ? (
-            <form action={markInvoicePaid}>
-              <input type="hidden" name="invoiceId" value={row.id} />
-              <button type="submit" className="text-xs font-semibold text-primary">
-                Mark paid
-              </button>
-            </form>
-          ) : (
-            "—"
-          )
+        render: (row: AccountingInvoiceRow) => {
+          if (row.canGenerate) {
+            return (
+              <form action={generateCustomerInvoice}>
+                <input type="hidden" name="loadId" value={row.loadId} />
+                <button type="submit" className="text-xs font-semibold text-primary">
+                  Generate invoice
+                </button>
+              </form>
+            );
+          }
+          if (row.canMarkPaid && row.invoiceId) {
+            return (
+              <form action={markInvoicePaid}>
+                <input type="hidden" name="invoiceId" value={row.invoiceId} />
+                <button type="submit" className="text-xs font-semibold text-primary">
+                  Mark paid
+                </button>
+              </form>
+            );
+          }
+          return "—";
+        }
       }
     ],
     [quickbooksMethod]
@@ -254,14 +280,17 @@ export function AccountingInvoicesPanel({
   });
   const pagination = useClientPagination(sortedData, query);
   const pageRows = pagination.pageRows;
-  const pageIds = pageRows.map((row) => row.id);
+  const pageInvoiceIds = pageRows.filter((row) => row.invoiceId).map((row) => row.invoiceId!);
   const selection = useSelection();
-  const selectedRows = sortedData.filter((row) => selection.selected.has(row.id));
+  const selectedRows = sortedData.filter(
+    (row) => row.invoiceId && selection.selected.has(row.invoiceId)
+  );
   const openBalance = selectedRows.reduce((sum, row) => sum + row.balanceCents, 0);
   const sameCustomer =
     selectedRows.length > 0 &&
     selectedRows.every((row) => row.customerId === selectedRows[0].customerId);
-  const allPageSelected = pageIds.length > 0 && pageIds.every((id) => selection.selected.has(id));
+  const allPageSelected =
+    pageInvoiceIds.length > 0 && pageInvoiceIds.every((id) => selection.selected.has(id));
 
   const headerColumns = orderedColumns.map((column) =>
     column.id === "select"
@@ -272,8 +301,8 @@ export function AccountingInvoicesPanel({
               type="checkbox"
               aria-label="Select all invoices on this page"
               checked={allPageSelected}
-              disabled={pageIds.length === 0}
-              onChange={(event) => selection.toggleAll(pageIds, event.target.checked)}
+              disabled={pageInvoiceIds.length === 0}
+              onChange={(event) => selection.toggleAll(pageInvoiceIds, event.target.checked)}
             />
           )
         }
@@ -322,9 +351,9 @@ export function AccountingInvoicesPanel({
                 Send to Accounting
               </a>
             ) : null}
-            {selectedRows.length === 1 && selectedRows[0].canMarkPaid ? (
+            {selectedRows.length === 1 && selectedRows[0].canMarkPaid && selectedRows[0].invoiceId ? (
               <form action={markInvoicePaid}>
-                <input type="hidden" name="invoiceId" value={selectedRows[0].id} />
+                <input type="hidden" name="invoiceId" value={selectedRows[0].invoiceId} />
                 <button type="submit" className="btn-secondary">
                   Mark Paid
                 </button>
@@ -409,17 +438,23 @@ export function AccountingInvoicesPanel({
           <tbody>
             {pageRows.map((row) => (
               <tr
-                key={row.id}
-                className={selection.selected.has(row.id) ? "bg-amber-50" : undefined}
+                key={row.rowKey}
+                className={
+                  row.invoiceId && selection.selected.has(row.invoiceId) ? "bg-amber-50" : undefined
+                }
               >
                 {orderedColumns.map((column) =>
                   column.id === "select" ? (
                     <td key={column.id}>
-                      <input
-                        type="checkbox"
-                        checked={selection.selected.has(row.id)}
-                        onChange={() => selection.toggle(row.id)}
-                      />
+                      {row.invoiceId ? (
+                        <input
+                          type="checkbox"
+                          checked={selection.selected.has(row.invoiceId)}
+                          onChange={() => selection.toggle(row.invoiceId!)}
+                        />
+                      ) : (
+                        <span className="text-muted-foreground">—</span>
+                      )}
                     </td>
                   ) : (
                     <td key={column.id}>{column.render(row)}</td>
@@ -430,7 +465,7 @@ export function AccountingInvoicesPanel({
             {sortedData.length === 0 ? (
               <tr>
                 <td colSpan={orderedColumns.length} className="p-8 text-center text-muted-foreground">
-                  No invoices match this search.
+                  No delivered loads or invoices match this search.
                 </td>
               </tr>
             ) : null}

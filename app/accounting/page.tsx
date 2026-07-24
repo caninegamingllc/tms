@@ -280,41 +280,72 @@ export default async function AccountingPage({
     ? ACCOUNTING_TILES
     : ACCOUNTING_TILES.filter((tile) => tile.id !== "quickbooks");
 
-  const invoiceRows = activeInvoices.map((invoice) => {
-    const exportView = activeExportMethod
-      ? toExportStatusView(activeExportMethod, invoiceExports.get(invoice.id) ?? null)
-      : null;
-    const deliveryStop = [...invoice.load.stops].reverse().find((stop) => stop.type === "DELIVERY");
-    return {
-      id: invoice.id,
-      invoiceNo: invoice.invoiceNo,
-      loadId: invoice.loadId,
-      loadNumber: invoice.load.loadNumber,
-      referenceNumber: invoice.load.referenceNumber ?? null,
-      customerId: invoice.customerId,
-      customerName: invoice.customer.name,
-      status: invoice.status,
-      totalCents: invoice.totalCents,
-      balanceCents: invoice.balanceCents,
-      issuedAt: invoice.issuedAt?.toISOString() ?? null,
-      dueAt: invoice.dueAt?.toISOString() ?? null,
-      deliveryAt:
-        deliveryStop?.appointmentAt?.toISOString() ??
-        invoice.load.deliveryDate?.toISOString() ??
-        null,
-      sentLabel:
-        invoice.status === "SENT" ||
-        invoice.status === "PARTIAL" ||
-        invoice.status === "OVERDUE" ||
-        invoice.status === "PAID"
-          ? invoice.issuedAt
-            ? `Sent On ${invoice.issuedAt.toLocaleDateString()}`
-            : "Sent"
-          : "Unsent",
-      exportLabel: exportView?.label ?? null,
-      canMarkPaid: invoice.balanceCents > 0 && invoice.status !== "VOID",
-      canPushOnline: method === "ONLINE" && qboConnected && invoice.status !== "VOID"
-    };
+  const invoiceRows = activeLoads.flatMap((load) => {
+    const deliveryStop = [...load.stops].reverse().find((stop) => stop.type === "DELIVERY");
+    const deliveryAt =
+      deliveryStop?.appointmentAt?.toISOString() ?? load.deliveryDate?.toISOString() ?? null;
+    const nonVoidInvoices = load.invoices.filter((invoice) => invoice.status !== "VOID");
+
+    if (nonVoidInvoices.length === 0) {
+      return [
+        {
+          rowKey: `load-${load.id}`,
+          invoiceId: null,
+          invoiceNo: "",
+          loadId: load.id,
+          loadNumber: load.loadNumber,
+          referenceNumber: load.referenceNumber ?? null,
+          customerId: load.customerId,
+          customerName: load.customer.name,
+          status: "DRAFT",
+          totalCents: load.revenueCents,
+          balanceCents: load.revenueCents,
+          issuedAt: null,
+          dueAt: null,
+          deliveryAt,
+          sentLabel: "Unsent",
+          exportLabel: null,
+          canMarkPaid: false,
+          canPushOnline: false,
+          canGenerate: true
+        }
+      ];
+    }
+
+    return nonVoidInvoices.map((invoice) => {
+      const exportView = activeExportMethod
+        ? toExportStatusView(activeExportMethod, invoiceExports.get(invoice.id) ?? null)
+        : null;
+      return {
+        rowKey: invoice.id,
+        invoiceId: invoice.id,
+        invoiceNo: invoice.invoiceNo,
+        loadId: load.id,
+        loadNumber: load.loadNumber,
+        referenceNumber: load.referenceNumber ?? null,
+        customerId: invoice.customerId,
+        customerName: load.customer.name,
+        status: invoice.status,
+        totalCents: invoice.totalCents,
+        balanceCents: invoice.balanceCents,
+        issuedAt: invoice.issuedAt?.toISOString() ?? null,
+        dueAt: invoice.dueAt?.toISOString() ?? null,
+        deliveryAt,
+        sentLabel:
+          invoice.status === "SENT" ||
+          invoice.status === "PARTIAL" ||
+          invoice.status === "OVERDUE" ||
+          invoice.status === "PAID"
+            ? invoice.issuedAt
+              ? `Sent On ${invoice.issuedAt.toLocaleDateString()}`
+              : "Sent"
+            : "Unsent",
+        exportLabel: exportView?.label ?? null,
+        canMarkPaid: invoice.balanceCents > 0 && invoice.status !== "VOID",
+        canPushOnline: method === "ONLINE" && qboConnected && invoice.status !== "VOID",
+        canGenerate: false
+      };
+    });
   });
 
   const apLoadRows = activeLoads.flatMap((load) => {
@@ -566,8 +597,9 @@ export default async function AccountingPage({
                 <div>
                   <p className="mb-3 text-[15px] font-semibold text-foreground">Customer Invoices</p>
                   <p className="muted mb-4">
-                    Delivered loads ready for invoicing or payment. Select invoices for bulk email,
-                    payment receipt, or QuickBooks export.
+                    Delivered loads ready for invoicing or payment, including loads that have not been
+                    invoiced yet (Unsent). Select existing invoices for bulk email, payment receipt,
+                    or QuickBooks export.
                   </p>
                   <AccountingInvoicesPanel invoices={invoiceRows} quickbooksMethod={method} />
                 </div>
