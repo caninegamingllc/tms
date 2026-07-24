@@ -121,13 +121,31 @@ export function getLoadBoardStage(load: BoardStageInput): DispatchBoardStage | n
 
   const hasAssignment = Boolean(load.dispatchAssignments?.length);
 
-  if (hasAssignment && ["COVERED", "DISPATCHED"].includes(load.status)) {
+  // Status wins over assignment presence so loads are never silently dropped when
+  // status and assignments are out of sync (e.g. DISPATCHED with no carrier yet).
+  if (["COVERED", "DISPATCHED"].includes(load.status)) {
     return "active";
   }
 
-  if (!hasAssignment && ["QUOTE", "AVAILABLE"].includes(load.status)) {
-    return "pending";
+  if (["QUOTE", "AVAILABLE"].includes(load.status)) {
+    return hasAssignment ? "active" : "pending";
   }
+
+  // #region agent log
+  fetch("http://127.0.0.1:7361/ingest/81bab758-445f-494f-88d7-9f894e8b488d", {
+    method: "POST",
+    headers: { "Content-Type": "application/json", "X-Debug-Session-Id": "9ca083" },
+    body: JSON.stringify({
+      sessionId: "9ca083",
+      runId: "post-fix",
+      hypothesisId: "A",
+      location: "lib/dispatch-board.ts:getLoadBoardStage",
+      message: "Unmapped load status for board stage",
+      data: { status: load.status, hasAssignment, assignmentCount: load.dispatchAssignments?.length ?? 0 },
+      timestamp: Date.now()
+    })
+  }).catch(() => {});
+  // #endregion
 
   return null;
 }
@@ -261,8 +279,50 @@ type DispatchBoardLoad = {
 export function serializeDispatchBoardRow(load: DispatchBoardLoad): DispatchBoardRow | null {
   const boardStage = getLoadBoardStage(load);
   if (!boardStage) {
+    // #region agent log
+    fetch("http://127.0.0.1:7361/ingest/81bab758-445f-494f-88d7-9f894e8b488d", {
+      method: "POST",
+      headers: { "Content-Type": "application/json", "X-Debug-Session-Id": "9ca083" },
+      body: JSON.stringify({
+        sessionId: "9ca083",
+        runId: "post-fix",
+        hypothesisId: "A",
+        location: "lib/dispatch-board.ts:serializeDispatchBoardRow",
+        message: "Dropped load from dispatch board (null stage)",
+        data: {
+          loadNumber: load.loadNumber,
+          status: load.status,
+          assignmentCount: load.dispatchAssignments?.length ?? 0
+        },
+        timestamp: Date.now()
+      })
+    }).catch(() => {});
+    // #endregion
     return null;
   }
+
+  // #region agent log
+  if (load.loadNumber === "2492" || load.loadNumber?.includes("2492")) {
+    fetch("http://127.0.0.1:7361/ingest/81bab758-445f-494f-88d7-9f894e8b488d", {
+      method: "POST",
+      headers: { "Content-Type": "application/json", "X-Debug-Session-Id": "9ca083" },
+      body: JSON.stringify({
+        sessionId: "9ca083",
+        runId: "post-fix",
+        hypothesisId: "A",
+        location: "lib/dispatch-board.ts:serializeDispatchBoardRow",
+        message: "Load 2492 serialized onto board",
+        data: {
+          loadNumber: load.loadNumber,
+          status: load.status,
+          boardStage,
+          assignmentCount: load.dispatchAssignments?.length ?? 0
+        },
+        timestamp: Date.now()
+      })
+    }).catch(() => {});
+  }
+  // #endregion
 
   const primary = primaryAssignment(load.dispatchAssignments);
   const latestCheckCall =
