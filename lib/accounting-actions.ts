@@ -483,24 +483,76 @@ export async function bulkEmailInvoicesAction(formData: FormData) {
   const user = await requireWriteUser();
   await assertPlanFeature(user.companyId, "bulk_invoice_email");
   const invoiceIds = formIdList(formData, "invoiceIds");
-  if (invoiceIds.length === 0) {
-    redirect("/accounting?tab=invoices&error=" + encodeURIComponent("Select at least one invoice."));
+  const loadIds = formIdList(formData, "loadIds");
+  if (invoiceIds.length === 0 && loadIds.length === 0) {
+    redirect(
+      "/accounting?tab=invoices&error=" + encodeURIComponent("Select at least one invoice or Unsent load.")
+    );
   }
 
   const { prepareEmailDraft, sendPreparedEmail } = await import("@/lib/email-ops-actions");
+  const { ACCOUNTING_READY_LOAD_STATUSES } = await import("@/lib/accounting-settled");
 
-  const invoices = await prisma.invoice.findMany({
-    where: { id: { in: invoiceIds }, companyId: user.companyId },
-    include: { load: true }
+  type EmailTarget = {
+    loadId: string;
+    customerId: string;
+    loadNumber: string;
+    branchId: string | null;
+  };
+
+  const byLoadId = new Map<string, EmailTarget>();
+
+  if (invoiceIds.length > 0) {
+    const invoices = await prisma.invoice.findMany({
+      where: { id: { in: invoiceIds }, companyId: user.companyId },
+      include: {
+        load: { select: { id: true, customerId: true, loadNumber: true, branchId: true } }
+      }
+    });
+    for (const invoice of invoices) {
+      byLoadId.set(invoice.loadId, {
+        loadId: invoice.load.id,
+        customerId: invoice.load.customerId,
+        loadNumber: invoice.load.loadNumber,
+        branchId: invoice.load.branchId
+      });
+    }
+  }
+
+  if (loadIds.length > 0) {
+    const loads = await prisma.load.findMany({
+      where: {
+        id: { in: loadIds },
+        companyId: user.companyId,
+        status: { in: [...ACCOUNTING_READY_LOAD_STATUSES] }
+      },
+      select: { id: true, customerId: true, loadNumber: true, branchId: true }
+    });
+    for (const load of loads) {
+      if (!byLoadId.has(load.id)) {
+        byLoadId.set(load.id, {
+          loadId: load.id,
+          customerId: load.customerId,
+          loadNumber: load.loadNumber,
+          branchId: load.branchId
+        });
+      }
+    }
+  }
+
+  const targets = [...byLoadId.values()].sort((a, b) => {
+    const customerCmp = a.customerId.localeCompare(b.customerId);
+    if (customerCmp !== 0) return customerCmp;
+    return a.loadNumber.localeCompare(b.loadNumber, undefined, { numeric: true });
   });
 
   let emailed = 0;
-  for (const invoice of invoices) {
-    if (!(await canAccessRecord(user, invoice.load.branchId))) {
+  for (const target of targets) {
+    if (!(await canAccessRecord(user, target.branchId))) {
       continue;
     }
     try {
-      const draft = await prepareEmailDraft(invoice.loadId, "INVOICE");
+      const draft = await prepareEmailDraft(target.loadId, "INVOICE");
       const sendData = new FormData();
       sendData.set("loadId", draft.loadId);
       sendData.set("purpose", draft.purpose);

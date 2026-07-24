@@ -598,9 +598,10 @@ export default async function AccountingPage({
                 <div>
                   <p className="mb-3 text-[15px] font-semibold text-foreground">Customer Invoices</p>
                   <p className="muted mb-4">
-                    Delivered loads ready for invoicing or payment, including loads that have not been
-                    invoiced yet (Unsent). Select existing invoices for bulk email, payment receipt,
-                    or QuickBooks export.
+                    Delivered loads ready for invoicing or payment, including Unsent loads with no
+                    invoice yet. Select any rows to email — Unsent loads get an invoice created
+                    automatically, and sends are processed grouped by customer. Payment and QuickBooks
+                    actions require an existing invoice.
                   </p>
                   <AccountingInvoicesPanel invoices={invoiceRows} quickbooksMethod={method} />
                 </div>

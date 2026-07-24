@@ -280,17 +280,20 @@ export function AccountingInvoicesPanel({
   });
   const pagination = useClientPagination(sortedData, query);
   const pageRows = pagination.pageRows;
-  const pageInvoiceIds = pageRows.filter((row) => row.invoiceId).map((row) => row.invoiceId!);
+  const pageRowKeys = pageRows.map((row) => row.rowKey);
   const selection = useSelection();
-  const selectedRows = sortedData.filter(
-    (row) => row.invoiceId && selection.selected.has(row.invoiceId)
-  );
-  const openBalance = selectedRows.reduce((sum, row) => sum + row.balanceCents, 0);
+  const selectedRows = sortedData.filter((row) => selection.selected.has(row.rowKey));
+  const selectedInvoiceRows = selectedRows.filter((row) => row.invoiceId);
+  const selectedInvoiceIds = selectedInvoiceRows.map((row) => row.invoiceId!);
+  const selectedUnsentLoadIds = selectedRows
+    .filter((row) => !row.invoiceId)
+    .map((row) => row.loadId);
+  const openBalance = selectedInvoiceRows.reduce((sum, row) => sum + row.balanceCents, 0);
   const sameCustomer =
-    selectedRows.length > 0 &&
-    selectedRows.every((row) => row.customerId === selectedRows[0].customerId);
+    selectedInvoiceRows.length > 0 &&
+    selectedInvoiceRows.every((row) => row.customerId === selectedInvoiceRows[0].customerId);
   const allPageSelected =
-    pageInvoiceIds.length > 0 && pageInvoiceIds.every((id) => selection.selected.has(id));
+    pageRowKeys.length > 0 && pageRowKeys.every((key) => selection.selected.has(key));
 
   const headerColumns = orderedColumns.map((column) =>
     column.id === "select"
@@ -299,10 +302,10 @@ export function AccountingInvoicesPanel({
           label: (
             <input
               type="checkbox"
-              aria-label="Select all invoices on this page"
+              aria-label="Select all rows on this page"
               checked={allPageSelected}
-              disabled={pageInvoiceIds.length === 0}
-              onChange={(event) => selection.toggleAll(pageInvoiceIds, event.target.checked)}
+              disabled={pageRowKeys.length === 0}
+              onChange={(event) => selection.toggleAll(pageRowKeys, event.target.checked)}
             />
           )
         }
@@ -315,45 +318,64 @@ export function AccountingInvoicesPanel({
         <div className="mb-4 rounded-2xl border border-emerald-200 bg-emerald-50 p-4">
           <div className="flex flex-wrap items-center justify-between gap-3">
             <p className="text-sm font-semibold text-emerald-900">
-              Selected {selection.count} Invoice{selection.count === 1 ? "" : "s"}
+              Selected {selection.count} row{selection.count === 1 ? "" : "s"}
+              {selectedUnsentLoadIds.length > 0
+                ? ` (${selectedUnsentLoadIds.length} Unsent)`
+                : ""}
             </p>
             <button type="button" className="btn-secondary" onClick={selection.clear}>
-              Clear Selected Invoices
+              Clear Selection
             </button>
           </div>
           <div className="mt-3 flex flex-wrap gap-2">
             <form action={bulkEmailInvoicesAction}>
-              {[...selection.selected].map((id) => (
-                <input key={id} type="hidden" name="invoiceIds" value={id} />
+              {selectedInvoiceIds.map((id) => (
+                <input key={`inv-${id}`} type="hidden" name="invoiceIds" value={id} />
+              ))}
+              {selectedUnsentLoadIds.map((id) => (
+                <input key={`load-${id}`} type="hidden" name="loadIds" value={id} />
               ))}
               <button type="submit" className="btn">
                 Email Invoices
               </button>
             </form>
-            <button type="button" className="btn" onClick={() => setShowPayment(true)}>
+            <button
+              type="button"
+              className="btn"
+              disabled={selectedInvoiceIds.length === 0}
+              onClick={() => setShowPayment(true)}
+            >
               Receive a Payment
             </button>
             {quickbooksMethod === "ONLINE" ? (
               <form action={bulkPushInvoicesToQuickbooks}>
-                {[...selection.selected].map((id) => (
+                {selectedInvoiceIds.map((id) => (
                   <input key={id} type="hidden" name="invoiceIds" value={id} />
                 ))}
-                <button type="submit" className="btn">
+                <button type="submit" className="btn" disabled={selectedInvoiceIds.length === 0}>
                   Send to Accounting
                 </button>
               </form>
             ) : null}
             {quickbooksMethod === "IIF" ? (
-              <a
-                href={`/api/integrations/quickbooks-desktop/export?invoiceIds=${[...selection.selected].join(",")}`}
-                className="btn"
-              >
-                Send to Accounting
-              </a>
+              selectedInvoiceIds.length > 0 ? (
+                <a
+                  href={`/api/integrations/quickbooks-desktop/export?invoiceIds=${selectedInvoiceIds.join(",")}`}
+                  className="btn"
+                >
+                  Send to Accounting
+                </a>
+              ) : (
+                <button type="button" className="btn" disabled>
+                  Send to Accounting
+                </button>
+              )
             ) : null}
-            {selectedRows.length === 1 && selectedRows[0].canMarkPaid && selectedRows[0].invoiceId ? (
+            {selectedInvoiceRows.length === 1 &&
+            selectedInvoiceRows[0].canMarkPaid &&
+            selectedInvoiceRows[0].invoiceId ? (
               <form action={markInvoicePaid}>
-                <input type="hidden" name="invoiceId" value={selectedRows[0].invoiceId} />
+                <input type="hidden" name="invoiceId" value={selectedInvoiceRows[0].invoiceId} />
                 <button type="submit" className="btn-secondary">
                   Mark Paid
                 </button>
@@ -362,17 +384,22 @@ export function AccountingInvoicesPanel({
           </div>
           {showPayment ? (
             <form action={receiveArPayment} className="mt-4 grid gap-3 rounded-2xl bg-card p-4">
-              {[...selection.selected].map((id) => (
+              {selectedInvoiceIds.map((id) => (
                 <input key={id} type="hidden" name="invoiceIds" value={id} />
               ))}
-              {!sameCustomer ? (
+              {selectedInvoiceIds.length === 0 ? (
+                <p className="text-sm font-semibold text-rose-700">
+                  Select at least one existing invoice to receive a payment. Unsent rows need an
+                  invoice first (use Email Invoices to create and send).
+                </p>
+              ) : !sameCustomer ? (
                 <p className="text-sm font-semibold text-rose-700">
                   Select invoices for one customer at a time to receive a payment.
                 </p>
               ) : (
                 <>
                   <p className="text-sm text-slate-700">
-                    Applying to {selectedRows[0].customerName}. Open balance{" "}
+                    Applying to {selectedInvoiceRows[0].customerName}. Open balance{" "}
                     {formatMoney(openBalance)}.
                   </p>
                   <div className="grid gap-3 md:grid-cols-4">
@@ -439,22 +466,16 @@ export function AccountingInvoicesPanel({
             {pageRows.map((row) => (
               <tr
                 key={row.rowKey}
-                className={
-                  row.invoiceId && selection.selected.has(row.invoiceId) ? "bg-amber-50" : undefined
-                }
+                className={selection.selected.has(row.rowKey) ? "bg-amber-50" : undefined}
               >
                 {orderedColumns.map((column) =>
                   column.id === "select" ? (
                     <td key={column.id}>
-                      {row.invoiceId ? (
-                        <input
-                          type="checkbox"
-                          checked={selection.selected.has(row.invoiceId)}
-                          onChange={() => selection.toggle(row.invoiceId!)}
-                        />
-                      ) : (
-                        <span className="text-muted-foreground">—</span>
-                      )}
+                      <input
+                        type="checkbox"
+                        checked={selection.selected.has(row.rowKey)}
+                        onChange={() => selection.toggle(row.rowKey)}
+                      />
                     </td>
                   ) : (
                     <td key={column.id}>{column.render(row)}</td>
