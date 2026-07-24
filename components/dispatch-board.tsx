@@ -387,7 +387,7 @@ export function DispatchBoard({
           data={filteredRows}
           columns={columns}
           keyExtractor={(row) => row.id}
-          defaultSort={{ columnId: "pickup", direction: "asc" }}
+          defaultSort={{ columnId: "pickup", direction: "desc" }}
           emptyMessage={
             activeStages.length === 0
               ? "No loads on the dispatch board."
