@@ -140,7 +140,17 @@ export default async function LoadDetailPage({
         carrierBills: { include: { carrier: true } }
       }
     }),
-    prisma.carrier.findMany({ where: { ...scope, dnuAt: null }, orderBy: { name: "asc" } }),
+    prisma.carrier.findMany({
+      where: { ...scope, dnuAt: null },
+      orderBy: { name: "asc" },
+      include: {
+        drivers: {
+          where: { active: true },
+          orderBy: { name: "asc" },
+          select: { id: true, name: true, phone: true }
+        }
+      }
+    }),
     canManageUsers(user)
       ? prisma.commissionProfile.findMany({
           where: { companyId: user.companyId },
@@ -307,11 +317,25 @@ export default async function LoadDetailPage({
       carrier.mcNumber,
       carrier.dotNumber,
       carrier.complianceStatus,
-      carrier.insuranceExpiresAt ? `Insurance ${formatDate(carrier.insuranceExpiresAt)}` : "Insurance missing"
+      carrier.safetyRating,
+      carrier.insuranceExpiresAt
+        ? `Insurance ${formatDate(carrier.insuranceExpiresAt)}`
+        : "Insurance missing"
     ]
       .filter(Boolean)
-      .join(" - ")
+      .join(" · ")
   }));
+
+  const driversByCarrierId = Object.fromEntries(
+    carriers.map((carrier) => [
+      carrier.id,
+      carrier.drivers.map((driver) => ({
+        id: driver.id,
+        name: driver.name,
+        phone: driver.phone
+      }))
+    ])
+  );
 
   const customerOptions = customers.map((customer) => ({
     id: customer.id,
@@ -381,7 +405,9 @@ export default async function LoadDetailPage({
             ? "Carrier assignment saved."
             : saved === "fleet"
               ? "Fleet assignment saved."
-              : "Load saved successfully."}
+              : saved === "status"
+                ? "Load status updated."
+                : "Load saved successfully."}
         </div>
       ) : null}
 
@@ -936,6 +962,7 @@ export default async function LoadDetailPage({
                 <CarrierAssignmentsPanel
                   loadId={load.id}
                   carrierOptions={carrierOptions}
+                  driversByCarrierId={driversByCarrierId}
                   lineTypes={payLineTypes.map((type) => ({
                     id: type.id,
                     name: type.name,

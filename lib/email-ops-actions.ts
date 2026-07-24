@@ -12,10 +12,13 @@ import { getCompanyPlan } from "@/lib/seats";
 import {
   buildPodRequestEmail,
   defaultEmailMessage,
+  defaultInvoiceBatchMessage,
+  defaultInvoiceBatchSubject,
   documentTitle,
   plainTextToHtml,
   type StructuredDocument
 } from "@/lib/document-templates";
+import { ACCOUNTING_READY_LOAD_STATUSES } from "@/lib/accounting-settled";
 import {
   getCompanyBranding,
   persistGeneratedPdf,
@@ -65,6 +68,33 @@ export type EmailDraft = {
   primaryAttachmentName: string | null;
   supportingDocuments: EmailDraftAttachment[];
   assignmentId?: string | null;
+};
+
+/** Max invoices (loads) attached to a single batch email. */
+export const INVOICE_BATCH_EMAIL_MAX = 5;
+
+export type InvoiceBatchReviewLine = {
+  loadId: string;
+  loadNumber: string;
+  invoiceNo: string;
+  totalCents: number;
+  referenceNumber: string | null;
+  deliveryAt: string | null;
+};
+
+export type InvoiceBatchCustomerGroup = {
+  customerId: string;
+  customerName: string;
+  fromAddress: string;
+  to: string;
+  subject: string;
+  body: string;
+  emailCount: number;
+  lines: InvoiceBatchReviewLine[];
+};
+
+export type InvoiceBatchReview = {
+  groups: InvoiceBatchCustomerGroup[];
 };
 
 async function loadForEmail(loadId: string, user: SessionUser) {
@@ -365,6 +395,101 @@ async function attachmentFromDocument(document: {
   };
 }
 
+/** Build invoice PDF + supporting BOL/POD attachments for a load. */
+async function invoiceAttachmentsForLoad(
+  load: Awaited<ReturnType<typeof loadForEmail>>,
+  document:
+    | {
+        id: string;
+        name: string;
+        filePath: string | null;
+        mimeType: string | null;
+        originalFileName: string | null;
+        type: string;
+        documentNumber: string | null;
+      }
+    | null,
+  user: SessionUser,
+  supportingDocumentIds?: Set<string>
+): Promise<MailAttachment[]> {
+  const attachments: MailAttachment[] = [];
+
+  if (document) {
+    const primary = await attachmentFromDocument(document);
+    if (primary) {
+      attachments.push(primary);
+    } else {
+      const company = await getCompanyBranding(user.companyId);
+      const structured = structuredDocumentForType(
+        "INVOICE",
+        load,
+        document.documentNumber ?? "DOC",
+        company
+      );
+      const pdfBuffer = await generateDocumentPdf(structured);
+      attachments.push({
+        filename: pdfFilenameForDocument(structured),
+        contentType: "application/pdf",
+        content: pdfBuffer
+      });
+    }
+  }
+
+  for (const supporting of supportingDocsForInvoice(load)) {
+    if (supportingDocumentIds && !supportingDocumentIds.has(supporting.id)) {
+      continue;
+    }
+    const attachment = await attachmentFromDocument(supporting);
+    if (attachment) {
+      attachments.push(attachment);
+    }
+  }
+
+  return attachments;
+}
+
+function chunkArray<T>(items: T[], size: number): T[][] {
+  const chunks: T[][] = [];
+  for (let i = 0; i < items.length; i += size) {
+    chunks.push(items.slice(i, i + size));
+  }
+  return chunks;
+}
+
+async function markInvoiceSentAndLoadInvoiced(
+  user: SessionUser,
+  loadId: string,
+  invoiceId: string
+) {
+  await prisma.invoice.update({
+    where: { id: invoiceId },
+    data: {
+      status: "SENT",
+      issuedAt: new Date()
+    }
+  });
+
+  const loadRow = await prisma.load.findFirst({
+    where: { id: loadId, companyId: user.companyId },
+    select: { status: true }
+  });
+  if (loadRow && !["PAID", "CANCELED", "INVOICED"].includes(loadRow.status)) {
+    await prisma.load.update({
+      where: { id: loadId },
+      data: {
+        status: "INVOICED",
+        activities: {
+          create: {
+            userId: user.id,
+            action: "Status changed",
+            details: "Load moved to INVOICED after invoice was emailed."
+          }
+        }
+      }
+    });
+  }
+}
+
 async function recordOutboundEmail(input: {
   user: SessionUser;
   loadId: string;
@@ -612,7 +737,18 @@ export async function sendPreparedEmail(formData: FormData) {
 
   const attachments: MailAttachment[] = [];
 
-  if (document) {
+  if (purpose === "INVOICE") {
+    const selectedIds = new Set(
+      formData
+        .getAll("supportingDocumentIds")
+        .map((value) => String(value).trim())
+        .filter(Boolean)
+    );
+    const refreshed = await loadForEmail(loadId, user);
+    attachments.push(
+      ...(await invoiceAttachmentsForLoad(refreshed, document, user, selectedIds))
+    );
+  } else if (document) {
     const primary = await attachmentFromDocument(document);
     if (primary) {
       attachments.push(primary);
@@ -636,25 +772,6 @@ export async function sendPreparedEmail(formData: FormData) {
     }
   }
 
-  if (purpose === "INVOICE") {
-    const selectedIds = new Set(
-      formData
-        .getAll("supportingDocumentIds")
-        .map((value) => String(value).trim())
-        .filter(Boolean)
-    );
-    const refreshed = await loadForEmail(loadId, user);
-    for (const supporting of supportingDocsForInvoice(refreshed)) {
-      if (!selectedIds.has(supporting.id)) {
-        continue;
-      }
-      const attachment = await attachmentFromDocument(supporting);
-      if (attachment) {
-        attachments.push(attachment);
-      }
-    }
-  }
-
   await recordOutboundEmail({
     user,
     loadId,
@@ -668,35 +785,7 @@ export async function sendPreparedEmail(formData: FormData) {
   });
 
   if (invoiceId) {
-    await prisma.invoice.update({
-      where: { id: invoiceId },
-      data: {
-        status: "SENT",
-        issuedAt: new Date()
-      }
-    });
-
-    if (purpose === "INVOICE") {
-      const loadRow = await prisma.load.findFirst({
-        where: { id: loadId, companyId: user.companyId },
-        select: { status: true }
-      });
-      if (loadRow && !["PAID", "CANCELED", "INVOICED"].includes(loadRow.status)) {
-        await prisma.load.update({
-          where: { id: loadId },
-          data: {
-            status: "INVOICED",
-            activities: {
-              create: {
-                userId: user.id,
-                action: "Status changed",
-                details: "Load moved to INVOICED after invoice was emailed."
-              }
-            }
-          }
-        });
-      }
-    }
+    await markInvoiceSentAndLoadInvoiced(user, loadId, invoiceId);
   }
 
   revalidatePath(`/loads/${loadId}`);
@@ -721,6 +810,357 @@ export async function sendPreparedEmail(formData: FormData) {
             : "pod-request";
 
   redirect(`/loads/${loadId}?emailed=${redirectKey}`);
+}
+
+export async function prepareInvoiceBatchReview(input: {
+  invoiceIds: string[];
+  loadIds: string[];
+}): Promise<InvoiceBatchReview> {
+  const user = await requireWriteUser();
+  await assertPlanFeature(user.companyId, "bulk_invoice_email");
+
+  const invoiceIds = [...new Set(input.invoiceIds.map((id) => id.trim()).filter(Boolean))];
+  const loadIds = [...new Set(input.loadIds.map((id) => id.trim()).filter(Boolean))];
+  if (invoiceIds.length === 0 && loadIds.length === 0) {
+    throw new Error("Select at least one invoice or Unsent load.");
+  }
+
+  const mailbox = await prisma.userMailbox.findFirst({
+    where: { userId: user.id, status: "CONNECTED" }
+  });
+  if (!mailbox) {
+    throw new Error("Connect your Gmail or Microsoft mailbox in Settings > Email before sending.");
+  }
+
+  const company = await getCompanyBranding(user.companyId);
+
+  type Target = {
+    loadId: string;
+    customerId: string;
+    customerName: string;
+    loadNumber: string;
+    referenceNumber: string | null;
+    revenueCents: number;
+    invoiceNo: string;
+    totalCents: number;
+    deliveryAt: string | null;
+    branchId: string | null;
+  };
+
+  const byLoadId = new Map<string, Target>();
+
+  if (invoiceIds.length > 0) {
+    const invoices = await prisma.invoice.findMany({
+      where: { id: { in: invoiceIds }, companyId: user.companyId },
+      include: {
+        load: {
+          include: {
+            customer: { select: { id: true, name: true } },
+            stops: { select: { type: true, appointmentAt: true } }
+          }
+        }
+      }
+    });
+    for (const invoice of invoices) {
+      if (!(await canAccessRecord(user, invoice.load.branchId))) {
+        continue;
+      }
+      const deliveryStop = [...invoice.load.stops]
+        .reverse()
+        .find((stop) => stop.type === "DELIVERY");
+      const deliveryAt =
+        deliveryStop?.appointmentAt?.toISOString() ??
+        invoice.load.deliveryDate?.toISOString() ??
+        null;
+      byLoadId.set(invoice.loadId, {
+        loadId: invoice.load.id,
+        customerId: invoice.load.customerId,
+        customerName: invoice.load.customer.name,
+        loadNumber: invoice.load.loadNumber,
+        referenceNumber: invoice.load.referenceNumber ?? null,
+        revenueCents: invoice.load.revenueCents,
+        invoiceNo: invoice.invoiceNo,
+        totalCents: invoice.totalCents,
+        deliveryAt,
+        branchId: invoice.load.branchId
+      });
+    }
+  }
+
+  if (loadIds.length > 0) {
+    const loads = await prisma.load.findMany({
+      where: {
+        id: { in: loadIds },
+        companyId: user.companyId,
+        status: { in: [...ACCOUNTING_READY_LOAD_STATUSES] }
+      },
+      include: {
+        customer: { select: { id: true, name: true } },
+        stops: { select: { type: true, appointmentAt: true } },
+        invoices: { orderBy: { createdAt: "desc" }, take: 1 }
+      }
+    });
+    for (const load of loads) {
+      if (byLoadId.has(load.id)) {
+        continue;
+      }
+      if (!(await canAccessRecord(user, load.branchId))) {
+        continue;
+      }
+      const deliveryStop = [...load.stops].reverse().find((stop) => stop.type === "DELIVERY");
+      const deliveryAt =
+        deliveryStop?.appointmentAt?.toISOString() ?? load.deliveryDate?.toISOString() ?? null;
+      const invoice = load.invoices[0];
+      byLoadId.set(load.id, {
+        loadId: load.id,
+        customerId: load.customerId,
+        customerName: load.customer.name,
+        loadNumber: load.loadNumber,
+        referenceNumber: load.referenceNumber ?? null,
+        revenueCents: load.revenueCents,
+        invoiceNo: invoice?.invoiceNo ?? invoiceNumberForLoad(load.loadNumber),
+        totalCents: invoice?.totalCents ?? load.revenueCents,
+        deliveryAt,
+        branchId: load.branchId
+      });
+    }
+  }
+
+  const targets = [...byLoadId.values()].sort((a, b) => {
+    const customerCmp = a.customerName.localeCompare(b.customerName) || a.customerId.localeCompare(b.customerId);
+    if (customerCmp !== 0) return customerCmp;
+    return a.loadNumber.localeCompare(b.loadNumber, undefined, { numeric: true });
+  });
+
+  if (targets.length === 0) {
+    throw new Error("No matching delivered loads found for the selection. Refresh and try again.");
+  }
+
+  const customerIds = [...new Set(targets.map((t) => t.customerId))];
+  const customers = await prisma.customer.findMany({
+    where: { id: { in: customerIds }, companyId: user.companyId },
+    include: { contacts: true }
+  });
+  const customerById = new Map(customers.map((c) => [c.id, c]));
+
+  const groups: InvoiceBatchCustomerGroup[] = [];
+  for (const customerId of customerIds.sort((a, b) => {
+    const nameA = customerById.get(a)?.name ?? a;
+    const nameB = customerById.get(b)?.name ?? b;
+    return nameA.localeCompare(nameB) || a.localeCompare(b);
+  })) {
+    const lines = targets.filter((t) => t.customerId === customerId);
+    const customer = customerById.get(customerId);
+    if (!customer) {
+      continue;
+    }
+    const primary = customer.contacts.find((contact) => contact.isPrimary);
+    const anyContact = customer.contacts.find((contact) => Boolean(contact.email?.trim()));
+    const to = (primary?.email || customer.email || anyContact?.email || "").trim();
+
+    const invoiceSummaries = lines.map((line) => ({
+      invoiceNo: line.invoiceNo,
+      loadNumber: line.loadNumber
+    }));
+
+    groups.push({
+      customerId,
+      customerName: customer.name,
+      fromAddress: mailbox.emailAddress,
+      to,
+      subject: defaultInvoiceBatchSubject(invoiceSummaries, company.name),
+      body: defaultInvoiceBatchMessage(invoiceSummaries, company.name),
+      emailCount: Math.ceil(lines.length / INVOICE_BATCH_EMAIL_MAX),
+      lines: lines.map((line) => ({
+        loadId: line.loadId,
+        loadNumber: line.loadNumber,
+        invoiceNo: line.invoiceNo,
+        totalCents: line.totalCents,
+        referenceNumber: line.referenceNumber,
+        deliveryAt: line.deliveryAt
+      }))
+    });
+  }
+
+  if (groups.length === 0) {
+    throw new Error("No accessible customers found for the selection.");
+  }
+
+  return { groups };
+}
+
+export async function emailCustomerInvoiceBatch(input: {
+  customerId: string;
+  loadIds: string[];
+  to: string;
+  subject: string;
+  body: string;
+}): Promise<{ emailed: number; failures: string[] }> {
+  const user = await requireWriteUser();
+  await assertPlanFeature(user.companyId, "bulk_invoice_email");
+  await assertPlanFeature(user.companyId, "email_ops");
+
+  const customerId = input.customerId.trim();
+  const to = input.to.trim();
+  const subject = input.subject.trim();
+  const body = input.body.trim();
+  const loadIds = [...new Set(input.loadIds.map((id) => id.trim()).filter(Boolean))];
+
+  if (!customerId || !to || !subject || !body || loadIds.length === 0) {
+    throw new Error("Customer, recipients, subject, message, and at least one load are required.");
+  }
+
+  const mailbox = await prisma.userMailbox.findFirst({
+    where: { userId: user.id, status: "CONNECTED" }
+  });
+  if (!mailbox) {
+    throw new Error("Connect your Gmail or Microsoft mailbox in Settings > Email before sending.");
+  }
+
+  type PreparedLoad = {
+    loadId: string;
+    loadNumber: string;
+    invoiceId: string;
+    documentId?: string;
+    attachments: MailAttachment[];
+  };
+
+  const prepared: PreparedLoad[] = [];
+  const failures: string[] = [];
+
+  for (const loadId of loadIds) {
+    try {
+      let load = await loadForEmail(loadId, user);
+      if (load.customerId !== customerId) {
+        failures.push(`Load ${load.loadNumber}: does not belong to this customer.`);
+        continue;
+      }
+
+      const ensured = await ensurePrimaryDocument("INVOICE", load, user);
+      let document = ensured.document;
+      const invoiceId = ensured.invoiceId;
+      if (!invoiceId) {
+        failures.push(`Load ${load.loadNumber}: could not create invoice.`);
+        continue;
+      }
+
+      const plan = await getCompanyPlan(user.companyId);
+      if (planHasFeature(plan, "late_fees")) {
+        const { feesApplied } = await applyLateFeesForInvoiceSend({ loadId, invoiceId });
+        if (feesApplied > 0) {
+          load = await loadForEmail(loadId, user);
+          document = await regenerateInvoiceDocument(load, user, document);
+        }
+      }
+
+      load = await loadForEmail(loadId, user);
+      const attachments = await invoiceAttachmentsForLoad(load, document, user);
+      if (attachments.length === 0) {
+        failures.push(`Load ${load.loadNumber}: no invoice PDF available.`);
+        continue;
+      }
+
+      prepared.push({
+        loadId,
+        loadNumber: load.loadNumber,
+        invoiceId,
+        documentId: document?.id,
+        attachments
+      });
+    } catch (error) {
+      const message = error instanceof Error ? error.message : "Could not prepare invoice.";
+      failures.push(`Load ${loadId}: ${message}`);
+    }
+  }
+
+  if (prepared.length === 0) {
+    return { emailed: 0, failures };
+  }
+
+  prepared.sort((a, b) =>
+    a.loadNumber.localeCompare(b.loadNumber, undefined, { numeric: true })
+  );
+
+  const chunks = chunkArray(prepared, INVOICE_BATCH_EMAIL_MAX);
+  let emailed = 0;
+
+  for (let chunkIndex = 0; chunkIndex < chunks.length; chunkIndex += 1) {
+    const chunk = chunks[chunkIndex];
+    const chunkSubject =
+      chunks.length > 1 ? `${subject} (part ${chunkIndex + 1} of ${chunks.length})` : subject;
+    const attachments = chunk.flatMap((item) => item.attachments);
+    const attachmentNote = attachments.length
+      ? ` [${attachments.map((item) => item.filename).join(", ")}]`
+      : "";
+
+    try {
+      const sent = await sendViaUserMailbox({
+        userId: user.id,
+        to: [to],
+        subject: chunkSubject,
+        text: body,
+        html: plainTextToHtml(body),
+        attachments
+      });
+
+      const primary = chunk[0];
+      await prisma.emailThread.create({
+        data: {
+          companyId: user.companyId,
+          loadId: primary.loadId,
+          userId: user.id,
+          purpose: "INVOICE",
+          subject: chunkSubject,
+          provider: sent.provider,
+          providerThreadId: sent.providerThreadId,
+          documentId: primary.documentId,
+          invoiceId: primary.invoiceId,
+          messages: {
+            create: {
+              userId: user.id,
+              direction: "OUTBOUND",
+              fromAddress: sent.fromAddress,
+              toAddresses: to,
+              subject: chunkSubject,
+              bodyPreview: body.slice(0, 280),
+              bodyText: body + attachmentNote,
+              providerMessageId: sent.providerMessageId,
+              sentAt: new Date()
+            }
+          }
+        }
+      });
+
+      for (const item of chunk) {
+        await prisma.loadActivity.create({
+          data: {
+            loadId: item.loadId,
+            userId: user.id,
+            action: "Email sent",
+            details: `INVOICE: ${chunkSubject} → ${to}${attachmentNote}`
+          }
+        });
+        await markInvoiceSentAndLoadInvoiced(user, item.loadId, item.invoiceId);
+        emailed += 1;
+      }
+    } catch (error) {
+      const message = error instanceof Error ? error.message : "Could not send email.";
+      for (const item of chunk) {
+        failures.push(`Load ${item.loadNumber}: ${message}`);
+      }
+    }
+  }
+
+  for (const item of prepared) {
+    revalidatePath(`/loads/${item.loadId}`);
+  }
+  revalidatePath("/documents");
+  revalidatePath("/accounting");
+  revalidatePath("/");
+  revalidatePath("/dispatch");
+  revalidatePath("/loads");
+
+  return { emailed, failures };
 }
 
 /** Legacy one-click wrappers kept for compatibility — prefer prepareEmailDraft + sendPreparedEmail. */

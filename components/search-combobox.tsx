@@ -22,7 +22,8 @@ export function SearchCombobox({
   options,
   required,
   defaultValue,
-  className
+  className,
+  onValueChange
 }: {
   name: string;
   label?: string;
@@ -31,12 +32,21 @@ export function SearchCombobox({
   required?: boolean;
   defaultValue?: string;
   className?: string;
+  onValueChange?: (id: string) => void;
 }) {
   const initialOption = options.find((option) => option.id === defaultValue);
   const [query, setQuery] = useState(initialOption?.label ?? "");
   const [selectedId, setSelectedId] = useState(initialOption?.id ?? "");
   const [open, setOpen] = useState(false);
   const rootRef = useRef<HTMLLabelElement>(null);
+
+  function selectValue(id: string, labelText?: string) {
+    setSelectedId(id);
+    if (labelText !== undefined) {
+      setQuery(labelText);
+    }
+    onValueChange?.(id);
+  }
 
   // Keep visible text in sync when the server default changes (e.g. unassign carrier).
   useEffect(() => {
@@ -83,7 +93,7 @@ export function SearchCombobox({
           setQuery(value);
           setOpen(true);
           if (options.find((option) => option.id === selectedId)?.label !== value) {
-            setSelectedId("");
+            selectValue("");
           }
         }}
         onFocus={() => setOpen(true)}
@@ -105,8 +115,7 @@ export function SearchCombobox({
               className="block w-full px-4 py-3 text-left text-sm transition hover:bg-muted"
               onMouseDown={(event) => event.preventDefault()}
               onClick={() => {
-                setQuery(option.label);
-                setSelectedId(option.id);
+                selectValue(option.id, option.label);
                 setOpen(false);
               }}
             >

@@ -537,6 +537,7 @@ model Carrier {
   branchId            String?
   branch              Branch?                     @relation(fields: [branchId], references: [id])
   contacts            CarrierContact[]
+  drivers             CarrierDriver[]
   complianceDocuments CarrierComplianceDocument[]
   insuranceCoverages  CarrierInsuranceCoverage[]
   assignments         DispatchAssignment[]
@@ -576,6 +577,21 @@ model CarrierContact {
   email     String?
   phone     String?
   isPrimary Boolean @default(false)
+}
+
+/// Broker-side drivers saved on a carrier roster (not company fleet Driver).
+model CarrierDriver {
+  id        String   @id @default(cuid())
+  carrierId String
+  carrier   Carrier  @relation(fields: [carrierId], references: [id], onDelete: Cascade)
+  name      String
+  phone     String?
+  active    Boolean  @default(true)
+  notes     String?
+  createdAt DateTime @default(now())
+  updatedAt DateTime @updatedAt
+
+  @@index([carrierId])
 }
 
 model CarrierComplianceDocument {

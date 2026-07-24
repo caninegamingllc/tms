@@ -873,6 +873,33 @@ export function defaultEmailMessage(
   }
 }
 
+/** Subject line for a customer invoice batch (one or more invoices). */
+export function defaultInvoiceBatchSubject(
+  invoices: Array<{ invoiceNo: string; loadNumber: string }>,
+  companyName: string
+) {
+  if (invoices.length === 1) {
+    const only = invoices[0];
+    return `Invoice ${only.invoiceNo} for load ${only.loadNumber}`;
+  }
+  const numbers = invoices.map((item) => item.invoiceNo).join(", ");
+  return `Invoices ${numbers} from ${companyName}`;
+}
+
+/** Body for a customer invoice batch email. */
+export function defaultInvoiceBatchMessage(
+  invoices: Array<{ invoiceNo: string; loadNumber: string }>,
+  companyName: string
+) {
+  if (invoices.length === 1) {
+    return defaultEmailMessage("INVOICE", invoices[0].loadNumber, companyName);
+  }
+  const lines = invoices
+    .map((item) => `- Invoice ${item.invoiceNo} (load ${item.loadNumber})`)
+    .join("\n");
+  return `Please find attached the following invoices, along with any supporting documents:\n\n${lines}\n\nThank you for your business,\n${companyName}`;
+}
+
 export function plainTextToHtml(text: string) {
   const escaped = text
     .replace(/&/g, "&amp;")

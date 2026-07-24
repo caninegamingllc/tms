@@ -7,10 +7,13 @@ import { TileBoard, Tile } from "@/components/tile-board";
 import {
   addCarrierActivityNote,
   clearCarrierDnu,
+  createCarrierDriver,
   createCarrierInsuranceCoverage,
+  deleteCarrierDriver,
   markCarrierDnu,
   refreshCarrierInsuranceFromFmcsa,
   updateCarrier,
+  updateCarrierDriver,
   updateCarrierInsuranceCoverage
 } from "@/lib/actions";
 import { requireTmsAccess, userHasPlanFeature } from "@/lib/permissions";
@@ -57,6 +60,7 @@ export default async function CarrierDetailPage({
       where: { id, companyId: user.companyId },
       include: {
         contacts: true,
+        drivers: { orderBy: [{ active: "desc" }, { name: "asc" }] },
         factoringCompany: true,
         dnuMarkedBy: true,
         insuranceCoverages: { orderBy: [{ expiresAt: "asc" }, { coverageType: "asc" }] },
@@ -264,6 +268,94 @@ export default async function CarrierDetailPage({
           </div>
         </Tile>
         ) : null}
+
+        <Tile id="drivers">
+          <p className="muted">
+            Save drivers for this carrier so they can be selected quickly when assigning the carrier to
+            a load.
+          </p>
+          {writable ? (
+            <form action={createCarrierDriver} className="mt-4 grid gap-3 rounded-2xl bg-muted p-4">
+              <input type="hidden" name="carrierId" value={carrier.id} />
+              <div className="grid gap-3 md:grid-cols-2">
+                <input name="name" className="input" placeholder="Driver name" required />
+                <input name="phone" className="input" placeholder="Phone" />
+              </div>
+              <input name="notes" className="input" placeholder="Notes (optional)" />
+              <button type="submit" className="btn">
+                Add Driver
+              </button>
+            </form>
+          ) : null}
+          <div className="mt-4 grid gap-3">
+            {carrier.drivers.length === 0 ? (
+              <p className="text-sm text-muted-foreground">No drivers saved yet.</p>
+            ) : (
+              carrier.drivers.map((driver) =>
+                writable ? (
+                  <form
+                    key={driver.id}
+                    action={updateCarrierDriver}
+                    className="grid gap-3 rounded-2xl border border-border p-4"
+                  >
+                    <input type="hidden" name="driverId" value={driver.id} />
+                    <div className="grid gap-3 md:grid-cols-2">
+                      <input name="name" className="input" defaultValue={driver.name} required />
+                      <input
+                        name="phone"
+                        className="input"
+                        defaultValue={driver.phone ?? ""}
+                        placeholder="Phone"
+                      />
+                    </div>
+                    <input
+                      name="notes"
+                      className="input"
+                      defaultValue={driver.notes ?? ""}
+                      placeholder="Notes"
+                    />
+                    <label className="inline-flex items-center gap-2 text-sm text-foreground">
+                      <input
+                        type="checkbox"
+                        name="active"
+                        value="1"
+                        defaultChecked={driver.active}
+                        className="h-4 w-4 rounded border-border"
+                      />
+                      Active (shown in load assignment dropdown)
+                    </label>
+                    <div className="flex flex-wrap gap-2">
+                      <button type="submit" className="btn-secondary">
+                        Save
+                      </button>
+                      <button
+                        type="submit"
+                        formAction={deleteCarrierDriver}
+                        className="btn-secondary text-rose-700"
+                        formNoValidate
+                      >
+                        Remove
+                      </button>
+                    </div>
+                  </form>
+                ) : (
+                  <div key={driver.id} className="rounded-2xl border border-border p-4">
+                    <p className="font-semibold text-foreground">
+                      {driver.name}
+                      {!driver.active ? (
+                        <span className="ml-2 text-xs font-normal text-muted-foreground">
+                          Inactive
+                        </span>
+                      ) : null}
+                    </p>
+                    <p className="muted">{driver.phone ?? "No phone"}</p>
+                    {driver.notes ? <p className="mt-1 text-sm text-muted-foreground">{driver.notes}</p> : null}
+                  </div>
+                )
+              )
+            )}
+          </div>
+        </Tile>
 
         <Tile id="insurance">
           <p className="muted">

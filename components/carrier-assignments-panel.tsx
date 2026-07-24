@@ -1,6 +1,6 @@
 "use client";
 
-import { FormEvent, useState } from "react";
+import { FormEvent, useMemo, useState } from "react";
 import { assignCarrier, unassignCarrier, generateRateConfirmation } from "@/lib/actions";
 import { CarrierPayLinesEditor, type InitialPayLine, type PayLineTypeOption } from "@/components/carrier-pay-lines-editor";
 import { SearchCombobox } from "@/components/search-combobox";
@@ -12,6 +12,12 @@ export type CarrierOption = {
   id: string;
   label: string;
   description?: string;
+};
+
+export type CarrierDriverOption = {
+  id: string;
+  name: string;
+  phone: string | null;
 };
 
 export type AssignmentBlock = {
@@ -118,6 +124,7 @@ function LaneFields({
 function AssignmentForm({
   loadId,
   carrierOptions,
+  driversByCarrierId,
   lineTypes,
   defaultMiles,
   assignment,
@@ -131,6 +138,7 @@ function AssignmentForm({
 }: {
   loadId: string;
   carrierOptions: CarrierOption[];
+  driversByCarrierId: Record<string, CarrierDriverOption[]>;
   lineTypes: PayLineTypeOption[];
   defaultMiles?: number | null;
   assignment?: AssignmentBlock | null;
@@ -142,11 +150,41 @@ function AssignmentForm({
   mailboxConnected: boolean;
   locked: boolean;
 }) {
+  const [carrierId, setCarrierId] = useState(assignment?.carrierId ?? "");
+  const [driverName, setDriverName] = useState(assignment?.driverName ?? "");
+  const [driverPhone, setDriverPhone] = useState(assignment?.driverPhone ?? "");
+  const [selectedDriverId, setSelectedDriverId] = useState("");
+
+  const savedDrivers = useMemo(
+    () => (carrierId ? driversByCarrierId[carrierId] ?? [] : []),
+    [carrierId, driversByCarrierId]
+  );
+
   const title = isAdditional
     ? assignment?.carrierName
       ? `Additional carrier: ${assignment.carrierName}`
       : "Additional carrier"
     : `Primary carrier: ${assignment?.carrierName ?? "Not covered"}`;
+
+  function handleCarrierChange(nextId: string) {
+    setCarrierId(nextId);
+    setSelectedDriverId("");
+    setDriverName("");
+    setDriverPhone("");
+  }
+
+  function handleSavedDriverChange(driverId: string) {
+    setSelectedDriverId(driverId);
+    if (!driverId) {
+      return;
+    }
+    const driver = savedDrivers.find((row) => row.id === driverId);
+    if (!driver) {
+      return;
+    }
+    setDriverName(driver.name);
+    setDriverPhone(driver.phone ?? "");
+  }
 
   return (
     <div className="grid gap-3 rounded-2xl border border-border p-4">
@@ -172,6 +210,7 @@ function AssignmentForm({
           options={carrierOptions}
           defaultValue={assignment?.carrierId ?? ""}
           required
+          onValueChange={handleCarrierChange}
         />
         {isAdditional ||
         (assignment &&
@@ -188,35 +227,67 @@ function AssignmentForm({
             defaultMiles={isAdditional ? null : defaultMiles}
           />
         </div>
-        {showDriverFields && !isAdditional ? (
-          <>
+        {carrierId ? (
+          <div className="grid gap-3">
+            {savedDrivers.length > 0 ? (
+              <label className="grid gap-2">
+                <span className="label">Saved driver</span>
+                <select
+                  className="select"
+                  value={selectedDriverId}
+                  onChange={(event) => handleSavedDriverChange(event.target.value)}
+                >
+                  <option value="">Select a saved driver (optional)</option>
+                  {savedDrivers.map((driver) => (
+                    <option key={driver.id} value={driver.id}>
+                      {driver.name}
+                      {driver.phone ? ` · ${driver.phone}` : ""}
+                    </option>
+                  ))}
+                </select>
+              </label>
+            ) : (
+              <p className="text-xs text-muted-foreground">
+                No saved drivers for this carrier. Add them on the carrier profile.
+              </p>
+            )}
             <input
               name="driverName"
               className="input"
               placeholder="Driver name"
-              defaultValue={assignment?.driverName ?? ""}
+              value={driverName}
+              onChange={(event) => {
+                setSelectedDriverId("");
+                setDriverName(event.target.value);
+              }}
             />
             <input
               name="driverPhone"
               className="input"
               placeholder="Driver phone"
-              defaultValue={assignment?.driverPhone ?? ""}
+              value={driverPhone}
+              onChange={(event) => {
+                setSelectedDriverId("");
+                setDriverPhone(event.target.value);
+              }}
             />
-            <div className="grid gap-3 md:grid-cols-2">
-              <input
-                name="truckNumber"
-                className="input"
-                placeholder="Truck #"
-                defaultValue={assignment?.truckNumber ?? ""}
-              />
-              <input
-                name="trailerNumber"
-                className="input"
-                placeholder="Trailer #"
-                defaultValue={assignment?.trailerNumber ?? ""}
-              />
-            </div>
-          </>
+            {showDriverFields ? (
+              <div className="grid gap-3 md:grid-cols-2">
+                <input
+                  name="truckNumber"
+                  className="input"
+                  placeholder="Truck #"
+                  defaultValue={assignment?.truckNumber ?? ""}
+                />
+                <input
+                  name="trailerNumber"
+                  className="input"
+                  placeholder="Trailer #"
+                  defaultValue={assignment?.trailerNumber ?? ""}
+                />
+              </div>
+            ) : null}
+          </div>
         ) : null}
         {canWrite && !locked ? (
           <button type="submit" className="btn">
@@ -269,6 +340,7 @@ function AssignmentForm({
 export function CarrierAssignmentsPanel({
   loadId,
   carrierOptions,
+  driversByCarrierId = {},
   lineTypes,
   defaultMiles,
   assignments,
@@ -281,6 +353,7 @@ export function CarrierAssignmentsPanel({
 }: {
   loadId: string;
   carrierOptions: CarrierOption[];
+  driversByCarrierId?: Record<string, CarrierDriverOption[]>;
   lineTypes: PayLineTypeOption[];
   defaultMiles?: number | null;
   assignments: AssignmentBlock[];
@@ -307,6 +380,7 @@ export function CarrierAssignmentsPanel({
       <AssignmentForm
         loadId={loadId}
         carrierOptions={carrierOptions}
+        driversByCarrierId={driversByCarrierId}
         lineTypes={lineTypes}
         defaultMiles={defaultMiles}
         assignment={primary}
@@ -347,6 +421,7 @@ export function CarrierAssignmentsPanel({
             key={assignment.id}
             loadId={loadId}
             carrierOptions={carrierOptions}
+            driversByCarrierId={driversByCarrierId}
             lineTypes={lineTypes}
             defaultMiles={defaultMiles}
             assignment={assignment}
@@ -365,6 +440,7 @@ export function CarrierAssignmentsPanel({
           key={`draft-${index}`}
           loadId={loadId}
           carrierOptions={carrierOptions}
+          driversByCarrierId={driversByCarrierId}
           lineTypes={lineTypes}
           defaultMiles={defaultMiles}
           assignment={null}

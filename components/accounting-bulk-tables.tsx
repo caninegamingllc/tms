@@ -17,7 +17,6 @@ import { StatusBadge } from "@/components/status-badge";
 import { DatePicker } from "@/components/ui/date-picker";
 import { formatDate, formatMoney } from "@/lib/format";
 import {
-  bulkEmailInvoicesAction,
   bulkPushBillsToQuickbooks,
   bulkPushInvoicesToQuickbooks,
   receiveArPayment,
@@ -27,6 +26,7 @@ import { generateCustomerInvoice } from "@/lib/actions";
 import { markInvoicePaid } from "@/lib/commission-actions";
 import { markCarrierBillPaid } from "@/lib/quickbooks/actions";
 import type { QuickbooksMethod } from "@/lib/quickbooks/types";
+import { InvoiceBatchReview } from "@/components/invoice-batch-review";
 
 export type AccountingInvoiceRow = {
   /** Stable row key: invoice id, or `load-{loadId}` when no invoice exists yet. */
@@ -124,6 +124,7 @@ export function AccountingInvoicesPanel({
 }) {
   const [query, setQuery] = useState("");
   const [showPayment, setShowPayment] = useState(false);
+  const [batchReviewOpen, setBatchReviewOpen] = useState(false);
   const filtered = useMemo(() => {
     const q = query.trim().toLowerCase();
     if (!q) {
@@ -328,17 +329,9 @@ export function AccountingInvoicesPanel({
             </button>
           </div>
           <div className="mt-3 flex flex-wrap gap-2">
-            <form action={bulkEmailInvoicesAction}>
-              {selectedInvoiceIds.map((id) => (
-                <input key={`inv-${id}`} type="hidden" name="invoiceIds" value={id} />
-              ))}
-              {selectedUnsentLoadIds.map((id) => (
-                <input key={`load-${id}`} type="hidden" name="loadIds" value={id} />
-              ))}
-              <button type="submit" className="btn">
-                Email Invoices
-              </button>
-            </form>
+            <button type="button" className="btn" onClick={() => setBatchReviewOpen(true)}>
+              Email Invoices
+            </button>
             <button
               type="button"
               className="btn"
@@ -502,6 +495,13 @@ export function AccountingInvoicesPanel({
         end={pagination.end}
         onPageChange={pagination.setPage}
         onPageSizeChange={pagination.setPageSize}
+      />
+
+      <InvoiceBatchReview
+        open={batchReviewOpen}
+        invoiceIds={selectedInvoiceIds}
+        loadIds={selectedUnsentLoadIds}
+        onClose={() => setBatchReviewOpen(false)}
       />
     </div>
   );

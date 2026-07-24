@@ -907,6 +907,100 @@ export async function createCarrierInsuranceCoverage(formData: FormData) {
   redirect(`/carriers/${carrierId}?saved=1`);
 }
 
+export async function createCarrierDriver(formData: FormData) {
+  const user = await requireWriteUser();
+  const carrierId = requiredString(formData, "carrierId");
+  await requireCompanyCarrier(carrierId, user.companyId);
+
+  const name = requiredString(formData, "name");
+  const phone = optionalString(formData, "phone");
+  const notes = optionalString(formData, "notes");
+
+  await prisma.carrierDriver.create({
+    data: {
+      carrierId,
+      name,
+      phone,
+      notes,
+      active: true
+    }
+  });
+
+  await prisma.carrierActivity.create({
+    data: {
+      carrierId,
+      userId: user.id,
+      action: "Driver added",
+      details: phone ? `${name} · ${phone}` : name
+    }
+  });
+
+  revalidatePath(`/carriers/${carrierId}`);
+  redirect(`/carriers/${carrierId}?saved=1`);
+}
+
+export async function updateCarrierDriver(formData: FormData) {
+  const user = await requireWriteUser();
+  const driverId = requiredString(formData, "driverId");
+  const driver = await prisma.carrierDriver.findUniqueOrThrow({
+    where: { id: driverId },
+    include: { carrier: true }
+  });
+
+  if (driver.carrier.companyId !== user.companyId) {
+    throw new Error("Driver not found.");
+  }
+
+  const name = requiredString(formData, "name");
+  const phone = optionalString(formData, "phone");
+  const notes = optionalString(formData, "notes");
+  const active = String(formData.get("active") ?? "").trim() === "1";
+
+  await prisma.carrierDriver.update({
+    where: { id: driverId },
+    data: { name, phone, notes, active }
+  });
+
+  await prisma.carrierActivity.create({
+    data: {
+      carrierId: driver.carrierId,
+      userId: user.id,
+      action: "Driver updated",
+      details: `${name}${active ? "" : " (inactive)"}`
+    }
+  });
+
+  revalidatePath(`/carriers/${driver.carrierId}`);
+  redirect(`/carriers/${driver.carrierId}?saved=1`);
+}
+
+export async function deleteCarrierDriver(formData: FormData) {
+  const user = await requireWriteUser();
+  const driverId = requiredString(formData, "driverId");
+  const driver = await prisma.carrierDriver.findUniqueOrThrow({
+    where: { id: driverId },
+    include: { carrier: true }
+  });
+
+  if (driver.carrier.companyId !== user.companyId) {
+    throw new Error("Driver not found.");
+  }
+
+  await prisma.carrierDriver.delete({ where: { id: driverId } });
+
+  await prisma.carrierActivity.create({
+    data: {
+      carrierId: driver.carrierId,
+      userId: user.id,
+      action: "Driver removed",
+      details: driver.name
+    }
+  });
+
+  revalidatePath(`/carriers/${driver.carrierId}`);
+  redirect(`/carriers/${driver.carrierId}?saved=1`);
+}
+
 export async function updateCarrierInsuranceCoverage(formData: FormData) {
   const user = await requireWriteUser();
   const coverageId = requiredString(formData, "coverageId");
@@ -1554,6 +1648,7 @@ export async function updateLoadStatus(formData: FormData) {
   revalidatePath(`/loads/${loadId}`);
   revalidatePath("/");
   revalidatePath("/portal");
+  redirect(`/loads/${loadId}?saved=status`);
 }
 
 export async function addLoadNote(formData: FormData) {

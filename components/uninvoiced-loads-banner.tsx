@@ -27,7 +27,7 @@ export function UninvoicedLoadsBanner({ loads }: { loads: UninvoicedLoadRow[] })
   const remaining = withDays.length - preview.length;
 
   return (
-    <div className={`card mb-6 border ${uninvoicedUrgencyClass[urgency]}`}>
+    <div className={`card mb-6 w-full border sm:w-1/2 ${uninvoicedUrgencyClass[urgency]}`}>
       <div className="flex flex-wrap items-start justify-between gap-3">
         <div>
           <p className="text-sm font-semibold">
