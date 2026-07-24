@@ -3,6 +3,7 @@ import { describe, it } from "node:test";
 import { getLoadBoardStage } from "@/lib/dispatch-board";
 import {
   isPendingLoadStatus,
+  loadHasDispatchedCoverage,
   statusAfterCoverageAssigned,
   statusAfterCoverageCleared
 } from "@/lib/dispatch-assignment";
@@ -48,6 +49,23 @@ describe("coverage status transitions", () => {
     assert.equal(isPendingLoadStatus("PENDING"), true);
     assert.equal(isPendingLoadStatus("AVAILABLE"), true);
     assert.equal(isPendingLoadStatus("DISPATCHED"), false);
+  });
+
+  it("requires carrier or driver+truck for dispatched coverage", () => {
+    assert.equal(loadHasDispatchedCoverage([]), false);
+    assert.equal(loadHasDispatchedCoverage([{ sequence: 0, carrierId: "c1" }]), true);
+    assert.equal(
+      loadHasDispatchedCoverage([{ sequence: 0, carrierId: null, driverId: "d1", truckId: null }]),
+      false
+    );
+    assert.equal(
+      loadHasDispatchedCoverage([{ sequence: 0, carrierId: null, driverId: null, truckId: "t1" }]),
+      false
+    );
+    assert.equal(
+      loadHasDispatchedCoverage([{ sequence: 0, carrierId: null, driverId: "d1", truckId: "t1" }]),
+      true
+    );
   });
 });
 

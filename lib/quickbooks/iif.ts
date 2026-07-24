@@ -168,7 +168,7 @@ export function buildIifFile(input: {
           "BILL",
           date,
           config.purchasedTransportation,
-          bill.vendorName,
+          "",
           amount,
           bill.docNumber,
           bill.memo ?? ""

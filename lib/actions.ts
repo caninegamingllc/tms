@@ -1932,10 +1932,7 @@ export async function unassignCarrier(formData: FormData) {
 
     const remaining = await tx.dispatchAssignment.findMany({ where: { loadId } });
     const totalCost = await syncLoadCarrierCost(tx, loadId);
-    const stillCovered = remaining.some(
-      (row) =>
-        Boolean(row.carrierId) || Boolean(row.driverId || row.truckId || row.trailerId)
-    );
+    const stillCovered = loadHasDispatchedCoverage(remaining);
     const nextStatus = !stillCovered
       ? statusAfterCoverageCleared(load.status)
       : load.status;

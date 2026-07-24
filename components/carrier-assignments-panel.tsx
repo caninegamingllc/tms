@@ -1,10 +1,11 @@
 "use client";
 
-import { useState } from "react";
+import { FormEvent, useState } from "react";
 import { assignCarrier, unassignCarrier, generateRateConfirmation } from "@/lib/actions";
 import { CarrierPayLinesEditor, type InitialPayLine, type PayLineTypeOption } from "@/components/carrier-pay-lines-editor";
 import { SearchCombobox } from "@/components/search-combobox";
 import { EmailComposeButton } from "@/components/email-compose-button";
+import { UNASSIGN_CARRIER_CONFIRM_MESSAGE } from "@/lib/dispatch-assignment";
 import { formatMoney } from "@/lib/format";
 
 export type CarrierOption = {
@@ -245,7 +246,14 @@ function AssignmentForm({
               assignmentId={assignment.id}
             />
           ) : null}
-          <form action={unassignCarrier}>
+          <form
+            action={unassignCarrier}
+            onSubmit={(event: FormEvent<HTMLFormElement>) => {
+              if (!window.confirm(UNASSIGN_CARRIER_CONFIRM_MESSAGE)) {
+                event.preventDefault();
+              }
+            }}
+          >
             <input type="hidden" name="loadId" value={loadId} />
             <input type="hidden" name="assignmentId" value={assignment.id} />
             <button type="submit" className="btn-secondary">

@@ -103,6 +103,9 @@ export const DISPATCHED_COVERAGE_REQUIRED_MESSAGE =
 export const PENDING_REVERT_CONFIRM_MESSAGE =
   "Move this load to Pending? All assigned carriers, fleet resources, and pay line items will be removed.";
 
+export const UNASSIGN_CARRIER_CONFIRM_MESSAGE =
+  "Unassign this carrier? Pay lines for this carrier will be removed. If the load is no longer covered, status will move to Pending.";
+
 export function isPendingLoadStatus(status: string): boolean {
   return (pendingLoadStatuses as readonly string[]).includes(status);
 }
