@@ -77,10 +77,16 @@ describe("coverage status transitions", () => {
 });
 
 describe("uninvoiced aging", () => {
-  it("counts calendar days waiting", () => {
-    const delivered = new Date(2026, 6, 20);
+  it("counts calendar days waiting from delivery date", () => {
+    const delivered = new Date(2026, 6, 17);
     const now = new Date(2026, 6, 24);
-    assert.equal(daysWaitingToInvoice(delivered, now), 4);
+    assert.equal(daysWaitingToInvoice(delivered, now), 7);
+  });
+
+  it("treats same calendar day as zero days waiting", () => {
+    const delivered = new Date(2026, 6, 24, 8, 0, 0);
+    const now = new Date(2026, 6, 24, 18, 0, 0);
+    assert.equal(daysWaitingToInvoice(delivered, now), 0);
   });
 
   it("maps day bands to urgency colors", () => {

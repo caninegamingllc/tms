@@ -1,3 +1,4 @@
+import Link from "next/link";
 import { DispatchBoard } from "@/components/dispatch-board";
 import { PageHeader } from "@/components/page-header";
 import { parseDispatchBoardParams, serializeDispatchBoardRow } from "@/lib/dispatch-board";
@@ -42,6 +43,11 @@ export default async function DispatchPage({
       <PageHeader
         title="Dispatch"
         description="Track freight through pending coverage, active dispatch, en route movement, delivery, invoicing, and payment."
+        action={
+          <Link href="/loads/new" className="btn">
+            Create Load
+          </Link>
+        }
       />
 
       <DispatchBoard rows={rows} activeStages={stages} />

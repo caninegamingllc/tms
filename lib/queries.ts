@@ -86,7 +86,7 @@ export async function getDashboardData() {
           ...loadScope,
           status: "DELIVERED"
         },
-        orderBy: [{ deliveredAt: "asc" }, { deliveryDate: "asc" }],
+        orderBy: [{ deliveryDate: "asc" }, { deliveredAt: "asc" }],
         include: { customer: { select: { name: true } } },
         take: 25
       })
@@ -139,7 +139,8 @@ export async function getDashboardData() {
       id: load.id,
       loadNumber: load.loadNumber,
       customerName: load.customer.name,
-      deliveredAt: load.deliveredAt ?? load.deliveryDate
+      // Age from scheduled/actual delivery date, not when status was clicked to DELIVERED.
+      deliveredAt: load.deliveryDate ?? load.deliveredAt
     }))
   };
 }
