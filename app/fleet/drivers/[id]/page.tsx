@@ -8,9 +8,10 @@ import { updateDriverCsaScores } from "@/lib/dvir-settlement-actions";
 import { updateDriver } from "@/lib/fleet-actions";
 import { driverDisplayName } from "@/lib/fleet-constants";
 import { prisma } from "@/lib/db";
-import { formatDateTime } from "@/lib/format";
+import { formatDateTime, formatMoney } from "@/lib/format";
 import { requirePlanFeature } from "@/lib/permissions";
 import { planHasFeature } from "@/lib/plans";
+import { advanceRemainingCents } from "@/lib/driver-pay";
 
 export default async function FleetDriverDetailPage({
   params,
@@ -27,7 +28,13 @@ export default async function FleetDriverDetailPage({
     where: { id, companyId: user.companyId },
     include: {
       qualificationItems: { orderBy: [{ category: "asc" }, { createdAt: "asc" }] },
-      safetyEvents: { orderBy: { occurredAt: "desc" }, take: 5 }
+      safetyEvents: { orderBy: { occurredAt: "desc" }, take: 5 },
+      advances: {
+        where: { status: "OPEN" },
+        include: { applications: true },
+        orderBy: { issuedAt: "desc" },
+        take: 10
+      }
     }
   });
   if (!driver) notFound();
@@ -65,6 +72,31 @@ export default async function FleetDriverDetailPage({
         <h2 className="mb-4 text-lg font-semibold">Profile</h2>
         <DriverForm action={updateDriver} driver={driver} />
       </div>
+
+      {driver.advances.length > 0 ? (
+        <div className="card mt-6">
+          <h2 className="mb-2 text-lg font-semibold">Open advances</h2>
+          <ul className="space-y-2 text-sm">
+            {driver.advances.map((advance) => (
+              <li key={advance.id} className="flex justify-between gap-3 border-b border-border/60 pb-2">
+                <span>
+                  {advance.advanceType}
+                  {advance.reference ? ` · ${advance.reference}` : ""}
+                </span>
+                <span className="font-semibold">
+                  {formatMoney(advanceRemainingCents(advance))}
+                </span>
+              </li>
+            ))}
+          </ul>
+          <Link
+            href="/fleet/advances"
+            className="mt-3 inline-block text-sm font-semibold text-primary underline"
+          >
+            Manage advances
+          </Link>
+        </div>
+      ) : null}
 
       <div className="card mt-6">
         <h2 className="mb-2 text-lg font-semibold">CSA / HOS</h2>

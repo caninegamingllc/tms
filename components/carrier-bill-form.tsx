@@ -35,12 +35,30 @@ export function CarrierBillForm({
   const [termsDays, setTermsDays] = useState(String(initial.paymentTermsDays));
   const [dueAt, setDueAt] = useState(initial.dueAt);
   const [amountTouched, setAmountTouched] = useState(Boolean(initial.billId));
+  const openAdvances = initial.openAdvances ?? [];
+  const [selectedAdvanceIds, setSelectedAdvanceIds] = useState<Set<string>>(
+    () => new Set(openAdvances.map((advance) => advance.id))
+  );
 
   const selectedTotalCents = useMemo(() => {
     return initial.lineItems
       .filter((line) => selectedLineIds.has(line.id))
       .reduce((sum, line) => sum + line.amountCents, 0);
   }, [initial.lineItems, selectedLineIds]);
+
+  const advancesAppliedCents = useMemo(() => {
+    return openAdvances
+      .filter((advance) => selectedAdvanceIds.has(advance.id))
+      .reduce((sum, advance) => sum + advance.remainingCents, 0);
+  }, [openAdvances, selectedAdvanceIds]);
+
+  const grossCents = amountTouched
+    ? Math.round(Number(amountOverride.replace(/[^0-9.-]/g, "") || 0) * 100)
+    : selectedTotalCents > 0
+      ? selectedTotalCents
+      : initial.totalCents;
+
+  const netOwedCents = Math.max(0, grossCents - advancesAppliedCents);
 
   const displayAmount = amountTouched
     ? amountOverride
@@ -59,6 +77,18 @@ export function CarrierBillForm({
       return next;
     });
     setAmountTouched(false);
+  }
+
+  function toggleAdvance(id: string) {
+    setSelectedAdvanceIds((prev) => {
+      const next = new Set(prev);
+      if (next.has(id)) {
+        next.delete(id);
+      } else {
+        next.add(id);
+      }
+      return next;
+    });
   }
 
   function onTermsChange(value: string) {
@@ -189,6 +219,54 @@ export function CarrierBillForm({
           </table>
         </div>
       </div>
+
+      {openAdvances.length > 0 ? (
+        <div>
+          <p className="label mb-2">Apply open advances</p>
+          <p className="muted mb-3">
+            Selected advances reduce the amount owed on this bill.
+          </p>
+          <div className="overflow-x-auto rounded-2xl border border-border">
+            <table className="min-w-full text-left text-sm">
+              <thead className="border-b border-border bg-muted/40 text-xs uppercase tracking-wide text-muted-foreground">
+                <tr>
+                  <th className="px-3 py-3" />
+                  <th className="px-3 py-3">Type</th>
+                  <th className="px-3 py-3">Issued</th>
+                  <th className="px-3 py-3">Remaining</th>
+                </tr>
+              </thead>
+              <tbody>
+                {openAdvances.map((advance) => (
+                  <tr key={advance.id} className="border-b border-border">
+                    <td className="px-3 py-3">
+                      <input
+                        type="checkbox"
+                        name="advanceIds"
+                        value={advance.id}
+                        checked={selectedAdvanceIds.has(advance.id)}
+                        onChange={() => toggleAdvance(advance.id)}
+                      />
+                    </td>
+                    <td className="px-3 py-3">
+                      {advance.advanceType}
+                      {advance.reference ? ` · ${advance.reference}` : ""}
+                    </td>
+                    <td className="px-3 py-3">{advance.issuedAt}</td>
+                    <td className="px-3 py-3 font-semibold">
+                      {formatMoney(advance.remainingCents)}
+                    </td>
+                  </tr>
+                ))}
+              </tbody>
+            </table>
+          </div>
+          <p className="mt-3 text-sm">
+            Gross bill {formatMoney(grossCents)} − advances {formatMoney(advancesAppliedCents)} ={" "}
+            <span className="font-semibold">net owed {formatMoney(netOwedCents)}</span>
+          </p>
+        </div>
+      ) : null}
 
       <div className="grid gap-4 md:grid-cols-2 xl:grid-cols-4">
         <label className="grid gap-2">

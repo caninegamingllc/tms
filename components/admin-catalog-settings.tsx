@@ -2,17 +2,21 @@ import {
   createCarrierPayLineType,
   createCommodityOption,
   createCustomerChargeType,
+  createDriverPayLineType,
   deleteCarrierPayLineType,
   deleteCommodityOption,
   deleteCustomerChargeType,
+  deleteDriverPayLineType,
   toggleCarrierPayLineTypeActive,
   toggleCommodityActive,
   toggleCustomerChargeTypeActive,
+  toggleDriverPayLineTypeActive,
   updateCarrierPayLineType,
   updateCommodityOption,
-  updateCustomerChargeType
+  updateCustomerChargeType,
+  updateDriverPayLineType
 } from "@/lib/catalog-actions";
-import { carrierPayCalculationMethods } from "@/lib/constants";
+import { carrierPayCalculationMethods, driverPayCalculationMethods } from "@/lib/constants";
 import { humanize } from "@/lib/format";
 
 type CommodityRow = {
@@ -40,15 +44,18 @@ type ChargeTypeRow = {
   sortOrder: number;
   isSystem: boolean;
   usageCount: number;
+  includeInDriverPay: boolean;
 };
 
 export function AdminCatalogSettings({
   commodities,
   payLineTypes,
+  driverPayLineTypes = [],
   chargeTypes
 }: {
   commodities: CommodityRow[];
   payLineTypes: PayLineTypeRow[];
+  driverPayLineTypes?: PayLineTypeRow[];
   chargeTypes: ChargeTypeRow[];
 }) {
   return (
@@ -250,12 +257,14 @@ export function AdminCatalogSettings({
         <h2 className="section-title">Customer Charge Types</h2>
         <p className="muted">
           Line item types for customer rates on a load. Flat uses a dollar amount; per mile and hourly
-          multiply rate × quantity. System types can be deactivated but not deleted.
+          multiply rate × quantity. Uncheck &quot;Include in driver % pay&quot; to exclude types (permits,
+          escorts, warehouse, etc.) from percentage-of-revenue driver pay. System types can be
+          deactivated but not deleted.
         </p>
 
         <form
           action={createCustomerChargeType}
-          className="mt-4 grid gap-3 md:grid-cols-[1fr_1fr_120px_auto]"
+          className="mt-4 grid gap-3 md:grid-cols-[1fr_1fr_120px_auto_auto]"
         >
           <label className="grid gap-2">
             <span className="label">Name</span>
@@ -281,6 +290,10 @@ export function AdminCatalogSettings({
               defaultValue={chargeTypes.length}
             />
           </label>
+          <label className="flex items-end gap-2 pb-2 text-sm">
+            <input type="checkbox" name="includeInDriverPay" value="true" defaultChecked />
+            <span>Driver % pay</span>
+          </label>
           <div className="flex items-end">
             <button type="submit" className="btn">
               Add Type
@@ -296,7 +309,7 @@ export function AdminCatalogSettings({
               <div key={item.id} className="grid gap-3 rounded-2xl border border-border p-4">
                 <form
                   action={updateCustomerChargeType}
-                  className="grid gap-3 md:grid-cols-[1fr_1fr_100px_auto]"
+                  className="grid gap-3 md:grid-cols-[1fr_1fr_100px_auto_auto]"
                 >
                   <input type="hidden" name="id" value={item.id} />
                   <input type="hidden" name="active" value={item.active ? "true" : "false"} />
@@ -328,6 +341,15 @@ export function AdminCatalogSettings({
                       defaultValue={item.sortOrder}
                     />
                   </label>
+                  <label className="flex items-end gap-2 pb-2 text-sm">
+                    <input
+                      type="checkbox"
+                      name="includeInDriverPay"
+                      value="true"
+                      defaultChecked={item.includeInDriverPay}
+                    />
+                    <span>Driver % pay</span>
+                  </label>
                   <div className="flex items-end">
                     <button type="submit" className="btn-secondary">
                       Save
@@ -343,6 +365,121 @@ export function AdminCatalogSettings({
                   </form>
                   {!item.isSystem && item.usageCount === 0 ? (
                     <form action={deleteCustomerChargeType}>
+                      <input type="hidden" name="id" value={item.id} />
+                      <button type="submit" className="btn-danger">
+                        Delete
+                      </button>
+                    </form>
+                  ) : null}
+                  <span className="text-xs text-muted-foreground">
+                    {item.active ? "Active" : "Inactive"}
+                    {item.isSystem ? " · System" : ""}
+                    {item.includeInDriverPay ? "" : " · Excluded from driver %"}
+                    {item.usageCount > 0 ? ` · Used on ${item.usageCount} line(s)` : ""}
+                  </span>
+                </div>
+              </div>
+            ))
+          )}
+        </div>
+      </section>
+
+      <section className="card">
+        <h2 className="section-title">Driver Pay Line Types</h2>
+        <p className="muted">
+          Pay methods for company drivers: flat, rate per mile, or percent of eligible revenue.
+        </p>
+
+        <form
+          action={createDriverPayLineType}
+          className="mt-4 grid gap-3 md:grid-cols-[1fr_1fr_120px_auto]"
+        >
+          <label className="grid gap-2">
+            <span className="label">Name</span>
+            <input name="name" className="input" placeholder="e.g. Bonus" required />
+          </label>
+          <label className="grid gap-2">
+            <span className="label">Calculation</span>
+            <select name="calculationMethod" className="select" defaultValue="FLAT">
+              {driverPayCalculationMethods.map((method) => (
+                <option key={method} value={method}>
+                  {humanize(method)}
+                </option>
+              ))}
+            </select>
+          </label>
+          <label className="grid gap-2">
+            <span className="label">Sort</span>
+            <input
+              name="sortOrder"
+              className="input"
+              type="number"
+              min={0}
+              defaultValue={driverPayLineTypes.length}
+            />
+          </label>
+          <div className="flex items-end">
+            <button type="submit" className="btn">
+              Add Type
+            </button>
+          </div>
+        </form>
+
+        <div className="mt-4 grid gap-3">
+          {driverPayLineTypes.length === 0 ? (
+            <p className="text-sm text-muted-foreground">No driver pay line types yet.</p>
+          ) : (
+            driverPayLineTypes.map((item) => (
+              <div key={item.id} className="grid gap-3 rounded-2xl border border-border p-4">
+                <form
+                  action={updateDriverPayLineType}
+                  className="grid gap-3 md:grid-cols-[1fr_1fr_100px_auto]"
+                >
+                  <input type="hidden" name="id" value={item.id} />
+                  <input type="hidden" name="active" value={item.active ? "true" : "false"} />
+                  <label className="grid gap-1">
+                    <span className="label">Name</span>
+                    <input name="name" className="input" defaultValue={item.name} required />
+                  </label>
+                  <label className="grid gap-1">
+                    <span className="label">Calculation</span>
+                    <select
+                      name="calculationMethod"
+                      className="select"
+                      defaultValue={item.calculationMethod}
+                    >
+                      {driverPayCalculationMethods.map((method) => (
+                        <option key={method} value={method}>
+                          {humanize(method)}
+                        </option>
+                      ))}
+                    </select>
+                  </label>
+                  <label className="grid gap-1">
+                    <span className="label">Sort</span>
+                    <input
+                      name="sortOrder"
+                      className="input"
+                      type="number"
+                      min={0}
+                      defaultValue={item.sortOrder}
+                    />
+                  </label>
+                  <div className="flex items-end">
+                    <button type="submit" className="btn-secondary">
+                      Save
+                    </button>
+                  </div>
+                </form>
+                <div className="flex flex-wrap items-center gap-2">
+                  <form action={toggleDriverPayLineTypeActive}>
+                    <input type="hidden" name="id" value={item.id} />
+                    <button type="submit" className="btn-secondary">
+                      {item.active ? "Deactivate" : "Activate"}
+                    </button>
+                  </form>
+                  {!item.isSystem && item.usageCount === 0 ? (
+                    <form action={deleteDriverPayLineType}>
                       <input type="hidden" name="id" value={item.id} />
                       <button type="submit" className="btn-danger">
                         Delete

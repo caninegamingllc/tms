@@ -1457,6 +1457,9 @@ export async function updateLoad(formData: FormData) {
         }
       }
     });
+
+    const { recalcDriverPayLinesForLoad } = await import("@/lib/driver-pay");
+    await recalcDriverPayLinesForLoad(tx, loadId);
   });
 
   await recalculateLoadCommission(loadId);
@@ -2481,30 +2484,72 @@ export async function createCarrierBill(formData: FormData) {
   const nameOnCheck = optionalString(formData, "nameOnCheck") ?? payee.nameOnCheck;
   const payeeName = optionalString(formData, "payeeName") ?? payee.displayName;
 
-  await prisma.carrierBill.create({
-    data: {
-      companyId: user.companyId,
-      billNo,
-      loadId,
-      carrierId,
-      status,
-      totalCents,
-      balanceCents: status === "PAID" || status === "VOID" ? 0 : totalCents,
-      payeeName,
-      nameOnCheck,
-      remitAddress: optionalString(formData, "remitAddress"),
-      billReference: optionalString(formData, "billReference"),
-      paymentTermsDays: Number.isFinite(paymentTermsDays) ? paymentTermsDays : 30,
-      paymentMethod: optionalString(formData, "paymentMethod"),
-      notes: optionalString(formData, "notes"),
-      factoringCompanyId: payee.factoringCompanyId,
-      receivedAt,
-      dueAt,
-      paidAt: status === "PAID" ? new Date() : undefined
+  const advanceIds = formData.getAll("advanceIds").map(String).filter(Boolean);
+  const { getOpenAdvancesForCarrier } = await import("@/lib/advance-actions");
+  const openAdvances = await getOpenAdvancesForCarrier(user.companyId, carrierId);
+  const selectedAdvances = openAdvances.filter((advance) => advanceIds.includes(advance.id));
+
+  let advancesAppliedCents = 0;
+  const advanceApps: Array<{ advanceId: string; amountCents: number }> = [];
+  let remainingToApply = totalCents;
+  for (const advance of selectedAdvances) {
+    if (remainingToApply <= 0) break;
+    const applyCents = Math.min(advance.remainingCents, remainingToApply);
+    if (applyCents <= 0) continue;
+    advanceApps.push({ advanceId: advance.id, amountCents: applyCents });
+    advancesAppliedCents += applyCents;
+    remainingToApply -= applyCents;
+  }
+
+  const balanceCents =
+    status === "PAID" || status === "VOID" ? 0 : Math.max(0, totalCents - advancesAppliedCents);
+
+  await prisma.$transaction(async (tx) => {
+    const bill = await tx.carrierBill.create({
+      data: {
+        companyId: user.companyId,
+        billNo,
+        loadId,
+        carrierId,
+        status: balanceCents <= 0 && status !== "VOID" ? "PAID" : status,
+        totalCents,
+        balanceCents,
+        advancesAppliedCents,
+        payeeName,
+        nameOnCheck,
+        remitAddress: optionalString(formData, "remitAddress"),
+        billReference: optionalString(formData, "billReference"),
+        paymentTermsDays: Number.isFinite(paymentTermsDays) ? paymentTermsDays : 30,
+        paymentMethod: optionalString(formData, "paymentMethod"),
+        notes: optionalString(formData, "notes"),
+        factoringCompanyId: payee.factoringCompanyId,
+        receivedAt,
+        dueAt,
+        paidAt: balanceCents <= 0 && status !== "VOID" ? new Date() : undefined
+      }
+    });
+
+    for (const app of advanceApps) {
+      await tx.advanceApplication.create({
+        data: {
+          advanceId: app.advanceId,
+          amountCents: app.amountCents,
+          carrierBillId: bill.id
+        }
+      });
+      const advance = selectedAdvances.find((row) => row.id === app.advanceId);
+      if (advance) {
+        const remainingAfter = advance.remainingCents - app.amountCents;
+        await tx.advance.update({
+          where: { id: advance.id },
+          data: { status: remainingAfter <= 0 ? "APPLIED" : "OPEN" }
+        });
+      }
     }
   });
 
   revalidatePath("/accounting");
+  revalidatePath("/fleet/advances");
   revalidatePath(`/loads/${loadId}`);
   redirect("/accounting?tab=bills&billSaved=1");
 }

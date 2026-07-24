@@ -3,7 +3,10 @@
 import { revalidatePath } from "next/cache";
 import { prisma } from "@/lib/db";
 import { requireAdmin } from "@/lib/auth";
-import { carrierPayCalculationMethods } from "@/lib/constants";
+import {
+  carrierPayCalculationMethods,
+  driverPayCalculationMethods
+} from "@/lib/constants";
 import { ensureCompanyCatalogs } from "@/lib/catalogs";
 
 function requiredString(formData: FormData, key: string) {
@@ -25,6 +28,18 @@ function parseCalculationMethod(formData: FormData) {
     throw new Error("Invalid calculation method.");
   }
   return value;
+}
+
+function parseDriverCalculationMethod(formData: FormData) {
+  const value = String(formData.get("calculationMethod") ?? "FLAT").trim();
+  if (!(driverPayCalculationMethods as readonly string[]).includes(value)) {
+    throw new Error("Invalid calculation method.");
+  }
+  return value;
+}
+
+function parseIncludeInDriverPay(formData: FormData) {
+  return formData.get("includeInDriverPay") === "on" || formData.get("includeInDriverPay") === "true";
 }
 
 function revalidateAdminCatalogs() {
@@ -206,6 +221,7 @@ export async function createCustomerChargeType(formData: FormData) {
   const name = requiredString(formData, "name");
   const calculationMethod = parseCalculationMethod(formData);
   const sortOrder = parseSortOrder(formData);
+  const includeInDriverPay = parseIncludeInDriverPay(formData);
 
   await prisma.customerChargeType.create({
     data: {
@@ -213,6 +229,7 @@ export async function createCustomerChargeType(formData: FormData) {
       name,
       calculationMethod,
       sortOrder,
+      includeInDriverPay,
       active: true,
       isSystem: false
     }
@@ -228,6 +245,7 @@ export async function updateCustomerChargeType(formData: FormData) {
   const calculationMethod = parseCalculationMethod(formData);
   const sortOrder = parseSortOrder(formData);
   const active = formData.get("active") === "on" || formData.get("active") === "true";
+  const includeInDriverPay = parseIncludeInDriverPay(formData);
 
   const existing = await prisma.customerChargeType.findFirst({
     where: { id, companyId: user.companyId }
@@ -242,8 +260,96 @@ export async function updateCustomerChargeType(formData: FormData) {
       name,
       calculationMethod,
       sortOrder,
-      active
+      active,
+      includeInDriverPay
     }
+  });
+
+  revalidateAdminCatalogs();
+}
+
+export async function createDriverPayLineType(formData: FormData) {
+  const user = await requireAdmin();
+  await ensureCompanyCatalogs(user.companyId);
+
+  const name = requiredString(formData, "name");
+  const calculationMethod = parseDriverCalculationMethod(formData);
+  const sortOrder = parseSortOrder(formData);
+
+  await prisma.driverPayLineType.create({
+    data: {
+      companyId: user.companyId,
+      name,
+      calculationMethod,
+      sortOrder,
+      active: true,
+      isSystem: false
+    }
+  });
+
+  revalidateAdminCatalogs();
+}
+
+export async function updateDriverPayLineType(formData: FormData) {
+  const user = await requireAdmin();
+  const id = requiredString(formData, "id");
+  const name = requiredString(formData, "name");
+  const calculationMethod = parseDriverCalculationMethod(formData);
+  const sortOrder = parseSortOrder(formData);
+  const active = formData.get("active") === "on" || formData.get("active") === "true";
+
+  const existing = await prisma.driverPayLineType.findFirst({
+    where: { id, companyId: user.companyId }
+  });
+  if (!existing) {
+    throw new Error("Driver pay line type not found.");
+  }
+
+  await prisma.driverPayLineType.update({
+    where: { id },
+    data: { name, calculationMethod, sortOrder, active }
+  });
+
+  revalidateAdminCatalogs();
+}
+
+export async function deleteDriverPayLineType(formData: FormData) {
+  const user = await requireAdmin();
+  const id = requiredString(formData, "id");
+
+  const existing = await prisma.driverPayLineType.findFirst({
+    where: { id, companyId: user.companyId },
+    include: { _count: { select: { payLines: true } } }
+  });
+  if (!existing) {
+    throw new Error("Driver pay line type not found.");
+  }
+
+  if (existing.isSystem) {
+    throw new Error("System pay line types cannot be deleted. Deactivate them instead.");
+  }
+
+  if (existing._count.payLines > 0) {
+    throw new Error("This pay line type is in use. Deactivate it instead of deleting.");
+  }
+
+  await prisma.driverPayLineType.delete({ where: { id } });
+  revalidateAdminCatalogs();
+}
+
+export async function toggleDriverPayLineTypeActive(formData: FormData) {
+  const user = await requireAdmin();
+  const id = requiredString(formData, "id");
+  const existing = await prisma.driverPayLineType.findFirst({
+    where: { id, companyId: user.companyId }
+  });
+  if (!existing) {
+    throw new Error("Driver pay line type not found.");
+  }
+
+  await prisma.driverPayLineType.update({
+    where: { id },
+    data: { active: !existing.active }
   });
 
   revalidateAdminCatalogs();

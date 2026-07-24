@@ -75,6 +75,22 @@ export const carrierPayCalculationMethods = ["FLAT", "PER_MILE", "HOURLY"] as co
 
 export type CarrierPayCalculationMethod = (typeof carrierPayCalculationMethods)[number];
 
+export const driverPayCalculationMethods = ["FLAT", "PER_MILE", "PERCENT_REVENUE"] as const;
+
+export type DriverPayCalculationMethod = (typeof driverPayCalculationMethods)[number];
+
+export const advanceTypes = ["FUEL", "CASH", "OTHER"] as const;
+
+export type AdvanceType = (typeof advanceTypes)[number];
+
+export const advancePayeeTypes = ["DRIVER", "CARRIER"] as const;
+
+export type AdvancePayeeType = (typeof advancePayeeTypes)[number];
+
+export const advanceStatuses = ["OPEN", "APPLIED", "VOID"] as const;
+
+export const driverSettlementStatuses = ["DRAFT", "APPROVED", "PAID", "VOID"] as const;
+
 export const defaultCommodityNames = [
   "General Freight",
   "Produce",
@@ -91,12 +107,23 @@ export const defaultCarrierPayLineTypes = [
   { name: "Other Accessorial", calculationMethod: "FLAT" as const, isSystem: true }
 ] as const;
 
-export const defaultCustomerChargeTypes = [
+export const defaultDriverPayLineTypes = [
   { name: "Flat Rate", calculationMethod: "FLAT" as const, isSystem: true },
-  { name: "Rate per Mile", calculationMethod: "PER_MILE" as const, isSystem: true },
-  { name: "Hourly", calculationMethod: "HOURLY" as const, isSystem: true },
-  { name: "Detention", calculationMethod: "HOURLY" as const, isSystem: true },
-  { name: "Truck Ordered Not Used", calculationMethod: "FLAT" as const, isSystem: true }
+  { name: "Rate Per Mile", calculationMethod: "PER_MILE" as const, isSystem: true },
+  { name: "Percent of Revenue", calculationMethod: "PERCENT_REVENUE" as const, isSystem: true },
+  { name: "Detention Pay", calculationMethod: "FLAT" as const, isSystem: true },
+  { name: "Other Accessorial", calculationMethod: "FLAT" as const, isSystem: true }
+] as const;
+
+export const defaultCustomerChargeTypes = [
+  { name: "Flat Rate", calculationMethod: "FLAT" as const, isSystem: true, includeInDriverPay: true },
+  { name: "Rate per Mile", calculationMethod: "PER_MILE" as const, isSystem: true, includeInDriverPay: true },
+  { name: "Hourly", calculationMethod: "HOURLY" as const, isSystem: true, includeInDriverPay: true },
+  { name: "Detention", calculationMethod: "HOURLY" as const, isSystem: true, includeInDriverPay: true },
+  { name: "Truck Ordered Not Used", calculationMethod: "FLAT" as const, isSystem: true, includeInDriverPay: true },
+  { name: "Permit", calculationMethod: "FLAT" as const, isSystem: true, includeInDriverPay: false },
+  { name: "Escort", calculationMethod: "FLAT" as const, isSystem: true, includeInDriverPay: false },
+  { name: "Warehouse", calculationMethod: "FLAT" as const, isSystem: true, includeInDriverPay: false }
 ] as const;
 
 export type CommissionStatus = (typeof commissionStatuses)[number];

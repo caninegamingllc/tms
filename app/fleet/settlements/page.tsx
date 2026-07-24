@@ -13,16 +13,17 @@ import { requirePlanFeature } from "@/lib/permissions";
 export default async function FleetSettlementsPage({
   searchParams
 }: {
-  searchParams: Promise<{ saved?: string }>;
+  searchParams: Promise<{ saved?: string; error?: string }>;
 }) {
   const user = await requirePlanFeature("fleet_dispatch");
   const params = await searchParams;
 
-  const [settlements, drivers, loads] = await Promise.all([
+  const [settlements, drivers] = await Promise.all([
     prisma.driverSettlement.findMany({
       where: { companyId: user.companyId },
       include: {
         driver: true,
+        items: { orderBy: { sortOrder: "asc" } },
         load: { select: { id: true, loadNumber: true } }
       },
       orderBy: { createdAt: "desc" },
@@ -31,15 +32,6 @@ export default async function FleetSettlementsPage({
     prisma.driver.findMany({
       where: { companyId: user.companyId, status: { not: "TERMINATED" } },
       orderBy: [{ lastName: "asc" }, { firstName: "asc" }]
-    }),
-    prisma.load.findMany({
-      where: {
-        companyId: user.companyId,
-        dispatchAssignments: { some: { driverId: { not: null } } }
-      },
-      orderBy: { createdAt: "desc" },
-      take: 80,
-      select: { id: true, loadNumber: true, revenueCents: true, routeTotalMiles: true }
     })
   ]);
 
@@ -47,13 +39,24 @@ export default async function FleetSettlementsPage({
     <>
       <PageHeader
         title="Driver settlements"
-        description="Pay company drivers and owner-operators against loads or pay periods."
+        description="Build a period settlement from unsettled load pay and open advances, then approve and mark paid."
       />
       {params.saved ? (
         <div className="mb-6 rounded-2xl border border-emerald-200 bg-emerald-50 p-4 text-sm font-semibold text-emerald-800">
           Settlement saved.
         </div>
       ) : null}
+      {params.error ? (
+        <div className="mb-6 rounded-2xl border border-rose-200 bg-rose-50 p-4 text-sm font-semibold text-rose-800">
+          {params.error}
+        </div>
+      ) : null}
+
+      <div className="mb-4 text-sm">
+        <Link href="/fleet/advances" className="font-semibold text-primary underline">
+          Manage advances
+        </Link>
+      </div>
 
       <div className="grid gap-6 lg:grid-cols-[1.3fr_1fr]">
         <div className="card">
@@ -61,154 +64,124 @@ export default async function FleetSettlementsPage({
           {settlements.length === 0 ? (
             <p className="muted">No settlements yet.</p>
           ) : (
-            <div className="overflow-x-auto">
-              <table className="w-full text-left text-sm">
-                <thead>
-                  <tr className="border-b border-border text-xs uppercase text-muted-foreground">
-                    <th className="py-2 pr-3">Driver</th>
-                    <th className="py-2 pr-3">Load</th>
-                    <th className="py-2 pr-3">Pay</th>
-                    <th className="py-2 pr-3">Net</th>
-                    <th className="py-2 pr-3">Status</th>
-                    <th className="py-2">Actions</th>
-                  </tr>
-                </thead>
-                <tbody>
-                  {settlements.map((row) => (
-                    <tr key={row.id} className="border-b border-border/60 align-top">
-                      <td className="py-2.5 pr-3">
-                        <Link
-                          href={`/fleet/drivers/${row.driverId}`}
-                          className="font-semibold text-primary underline"
-                        >
-                          {driverDisplayName(row.driver)}
-                        </Link>
-                        <p className="text-xs text-muted-foreground">{humanize(row.payMethod)}</p>
-                      </td>
-                      <td className="py-2.5 pr-3">
-                        {row.load ? (
-                          <Link href={`/loads/${row.load.id}`} className="underline">
-                            {row.load.loadNumber}
-                          </Link>
-                        ) : (
-                          "—"
-                        )}
-                      </td>
-                      <td className="py-2.5 pr-3">{formatMoney(row.payCents)}</td>
-                      <td className="py-2.5 pr-3 font-semibold">{formatMoney(row.netCents)}</td>
-                      <td className="py-2.5 pr-3">
-                        <span className="badge bg-slate-100 text-slate-700">{humanize(row.status)}</span>
-                        {row.paidAt ? (
-                          <p className="text-xs text-muted-foreground">Paid {formatDate(row.paidAt)}</p>
-                        ) : null}
-                      </td>
-                      <td className="py-2.5">
-                        <div className="flex flex-col gap-1">
-                          {row.status === "DRAFT" ? (
-                            <form action={updateDriverSettlementStatus}>
-                              <input type="hidden" name="settlementId" value={row.id} />
-                              <input type="hidden" name="status" value="APPROVED" />
-                              <button type="submit" className="text-xs font-semibold text-primary underline">
-                                Approve
-                              </button>
-                            </form>
-                          ) : null}
-                          {row.status === "APPROVED" ? (
-                            <form action={updateDriverSettlementStatus}>
-                              <input type="hidden" name="settlementId" value={row.id} />
-                              <input type="hidden" name="status" value="PAID" />
-                              <button type="submit" className="text-xs font-semibold text-emerald-700 underline">
-                                Mark paid
-                              </button>
-                            </form>
-                          ) : null}
-                          {row.status !== "VOID" && row.status !== "PAID" ? (
-                            <form action={updateDriverSettlementStatus}>
-                              <input type="hidden" name="settlementId" value={row.id} />
-                              <input type="hidden" name="status" value="VOID" />
-                              <button type="submit" className="text-xs font-semibold text-rose-700 underline">
-                                Void
-                              </button>
-                            </form>
-                          ) : null}
-                        </div>
-                      </td>
-                    </tr>
-                  ))}
-                </tbody>
-              </table>
+            <div className="space-y-4">
+              {settlements.map((row) => (
+                <div key={row.id} className="rounded-2xl border border-border p-4">
+                  <div className="flex flex-wrap items-start justify-between gap-2">
+                    <div>
+                      <Link
+                        href={`/fleet/drivers/${row.driverId}`}
+                        className="font-semibold text-primary underline"
+                      >
+                        {driverDisplayName(row.driver)}
+                      </Link>
+                      <p className="text-xs text-muted-foreground">
+                        {row.periodStart && row.periodEnd
+                          ? `${formatDate(row.periodStart)} – ${formatDate(row.periodEnd)}`
+                          : row.load
+                            ? `Load ${row.load.loadNumber}`
+                            : "No period"}
+                        {" · "}
+                        {humanize(row.payMethod)} · {humanize(row.status)}
+                      </p>
+                    </div>
+                    <div className="text-right text-sm">
+                      <div>Pay {formatMoney(row.payCents)}</div>
+                      <div className="text-muted-foreground">
+                        Deductions {formatMoney(row.deductionsCents)}
+                      </div>
+                      <div className="font-semibold">Net {formatMoney(row.netCents)}</div>
+                    </div>
+                  </div>
+                  {row.items.length > 0 ? (
+                    <ul className="mt-3 space-y-1 text-xs text-muted-foreground">
+                      {row.items.slice(0, 8).map((item) => (
+                        <li key={item.id} className="flex justify-between gap-3">
+                          <span>{item.label}</span>
+                          <span>{formatMoney(item.amountCents)}</span>
+                        </li>
+                      ))}
+                      {row.items.length > 8 ? (
+                        <li>+{row.items.length - 8} more lines</li>
+                      ) : null}
+                    </ul>
+                  ) : null}
+                  <div className="mt-3 flex flex-wrap gap-2">
+                    {row.status === "DRAFT" ? (
+                      <>
+                        <form action={updateDriverSettlementStatus}>
+                          <input type="hidden" name="settlementId" value={row.id} />
+                          <input type="hidden" name="status" value="APPROVED" />
+                          <button className="btn-secondary text-xs" type="submit">
+                            Approve
+                          </button>
+                        </form>
+                        <form action={updateDriverSettlementStatus}>
+                          <input type="hidden" name="settlementId" value={row.id} />
+                          <input type="hidden" name="status" value="VOID" />
+                          <button className="btn-secondary text-xs" type="submit">
+                            Void
+                          </button>
+                        </form>
+                      </>
+                    ) : null}
+                    {row.status === "APPROVED" ? (
+                      <>
+                        <form action={updateDriverSettlementStatus}>
+                          <input type="hidden" name="settlementId" value={row.id} />
+                          <input type="hidden" name="status" value="PAID" />
+                          <button className="btn text-xs" type="submit">
+                            Mark paid
+                          </button>
+                        </form>
+                        <form action={updateDriverSettlementStatus}>
+                          <input type="hidden" name="settlementId" value={row.id} />
+                          <input type="hidden" name="status" value="VOID" />
+                          <button className="btn-secondary text-xs" type="submit">
+                            Void
+                          </button>
+                        </form>
+                      </>
+                    ) : null}
+                  </div>
+                </div>
+              ))}
             </div>
           )}
         </div>
 
         <div className="card">
-          <h2 className="mb-4 text-lg font-semibold">Create settlement</h2>
+          <h2 className="mb-2 text-lg font-semibold">Build period settlement</h2>
+          <p className="muted mb-4 text-sm">
+            Pulls unsettled driver pay lines on loads delivered in the period, plus open advances,
+            into a draft settlement.
+          </p>
           <form action={createDriverSettlement} className="grid gap-3">
             <label className="grid gap-1">
               <span className="label">Driver</span>
               <select className="input" name="driverId" required defaultValue="">
-                <option value="" disabled>
-                  Select driver
-                </option>
-                {drivers.map((d) => (
-                  <option key={d.id} value={d.id}>
-                    {driverDisplayName(d)}
+                <option value="">Select driver</option>
+                {drivers.map((driver) => (
+                  <option key={driver.id} value={driver.id}>
+                    {driverDisplayName(driver)}
                   </option>
                 ))}
               </select>
             </label>
             <label className="grid gap-1">
-              <span className="label">Load (optional)</span>
-              <select className="input" name="loadId" defaultValue="">
-                <option value="">None</option>
-                {loads.map((load) => (
-                  <option key={load.id} value={load.id}>
-                    {load.loadNumber} · {formatMoney(load.revenueCents)}
-                  </option>
-                ))}
-              </select>
+              <span className="label">Period start</span>
+              <DatePicker name="periodStart" required placeholder="Start" />
             </label>
             <label className="grid gap-1">
-              <span className="label">Pay method</span>
-              <select className="input" name="payMethod" defaultValue="FLAT">
-                <option value="FLAT">Flat</option>
-                <option value="PER_MILE">Per mile</option>
-                <option value="PERCENT_REVENUE">Percent of revenue</option>
-                <option value="OTHER">Other</option>
-              </select>
+              <span className="label">Period end</span>
+              <DatePicker name="periodEnd" required placeholder="End" />
             </label>
-            <div className="grid gap-3 sm:grid-cols-2">
-              <label className="grid gap-1">
-                <span className="label">Miles</span>
-                <input className="input" name="miles" type="number" step="0.1" defaultValue="0" />
-              </label>
-              <label className="grid gap-1">
-                <span className="label">Load revenue (USD)</span>
-                <input className="input" name="revenue" type="number" step="0.01" defaultValue="0" />
-              </label>
-              <label className="grid gap-1">
-                <span className="label">Gross pay (USD)</span>
-                <input className="input" name="pay" type="number" step="0.01" required />
-              </label>
-              <label className="grid gap-1">
-                <span className="label">Deductions (USD)</span>
-                <input className="input" name="deductions" type="number" step="0.01" defaultValue="0" />
-              </label>
-              <label className="grid gap-1">
-                <span className="label">Period start</span>
-                <DatePicker name="periodStart" placeholder="Period start" />
-              </label>
-              <label className="grid gap-1">
-                <span className="label">Period end</span>
-                <DatePicker name="periodEnd" placeholder="Period end" />
-              </label>
-            </div>
             <label className="grid gap-1">
               <span className="label">Notes</span>
               <textarea className="input min-h-[70px]" name="notes" />
             </label>
             <button className="btn" type="submit">
-              Create draft
+              Build settlement
             </button>
           </form>
         </div>

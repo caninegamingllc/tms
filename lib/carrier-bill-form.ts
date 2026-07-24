@@ -29,6 +29,14 @@ export type CarrierBillFormValues = {
   status: string;
   totalCents: number;
   lineItems: CarrierBillLineItem[];
+  openAdvances?: Array<{
+    id: string;
+    advanceType: string;
+    amountCents: number;
+    remainingCents: number;
+    reference?: string | null;
+    issuedAt: string;
+  }>;
 };
 
 function formatRemitBlock(parts: {
@@ -97,6 +105,7 @@ export function buildDefaultCarrierBillForm(input: {
   };
   lineItems: CarrierBillLineItem[];
   suggestedBillNo: string;
+  openAdvances?: CarrierBillFormValues["openAdvances"];
 }): CarrierBillFormValues {
   const termsDays =
     input.bill?.paymentTermsDays ?? parsePaymentTermsDays(input.paymentTerms ?? "Net 30");
@@ -122,6 +131,7 @@ export function buildDefaultCarrierBillForm(input: {
     notes: input.bill?.notes ?? "",
     status: input.bill?.status ?? "APPROVED",
     totalCents,
-    lineItems: input.lineItems
+    lineItems: input.lineItems,
+    openAdvances: input.openAdvances ?? []
   };
 }

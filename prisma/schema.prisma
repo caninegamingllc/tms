@@ -52,6 +52,7 @@ model Company {
   commodityOptions      CommodityOption[]
   carrierPayLineTypes   CarrierPayLineType[]
   customerChargeTypes   CustomerChargeType[]
+  driverPayLineTypes    DriverPayLineType[]
   portalUsers           CustomerPortalUser[]
   portalLinks           CustomerPortalLink[]
   drivers               Driver[]
@@ -62,6 +63,7 @@ model Company {
   iftaQuarters          IftaQuarter[]
   dvirReports           DvirReport[]
   driverSettlements     DriverSettlement[]
+  advances              Advance[]
   createdAt             DateTime               @default(now())
   updatedAt             DateTime               @updatedAt
 }
@@ -106,11 +108,31 @@ model CustomerChargeType {
   /// FLAT | PER_MILE | HOURLY
   calculationMethod  String       @default("FLAT")
   active             Boolean      @default(true)
+  /// When false, excluded from driver PERCENT_REVENUE eligible revenue
+  includeInDriverPay Boolean      @default(true)
   sortOrder          Int          @default(0)
   isSystem           Boolean      @default(false)
   charges            LoadCharge[]
   createdAt          DateTime     @default(now())
   updatedAt          DateTime     @updatedAt
+
+  @@unique([companyId, name])
+  @@index([companyId])
+}
+
+model DriverPayLineType {
+  id                 String         @id @default(cuid())
+  companyId          String
+  company            Company        @relation(fields: [companyId], references: [id], onDelete: Cascade)
+  name               String
+  /// FLAT | PER_MILE | PERCENT_REVENUE
+  calculationMethod  String         @default("FLAT")
+  active             Boolean        @default(true)
+  sortOrder          Int            @default(0)
+  isSystem           Boolean        @default(false)
+  payLines           DriverPayLine[]
+  createdAt          DateTime       @default(now())
+  updatedAt          DateTime       @updatedAt
 
   @@unique([companyId, name])
   @@index([companyId])
@@ -521,6 +543,7 @@ model Carrier {
   documents           LoadDocument[]
   carrierBills        CarrierBill[]
   payments            Payment[]
+  advances            Advance[]
   activities          CarrierActivity[]
   createdAt           DateTime                    @default(now())
   updatedAt           DateTime                    @updatedAt
@@ -635,6 +658,8 @@ model Load {
   deliveryDate      DateTime
   revenueCents         Int                 @default(0)
   carrierCostCents     Int                 @default(0)
+  /// Sum of DriverPayLine.amountCents
+  driverPayCents       Int                 @default(0)
   isCommissionable     Boolean             @default(true)
   /// Load-level rate con terms override; blank inherits customer default.
   rateConfirmationTerms String?
@@ -645,6 +670,7 @@ model Load {
   charges              LoadCharge[]
   expenses             LoadExpense[]
   carrierPayLines      CarrierPayLine[]
+  driverPayLines       DriverPayLine[]
   documents            LoadDocument[]
   notes                LoadNote[]
   activities           LoadActivity[]
@@ -656,6 +682,7 @@ model Load {
   safetyEvents         SafetyEvent[]
   iftaTrips            IftaTrip[]
   driverSettlements    DriverSettlement[]
+  advances             Advance[]
   routeTotalMiles      Float?
   routeStateMiles      Json?
   routePolyline        String?
@@ -820,6 +847,7 @@ model DispatchAssignment {
   assignedAt     DateTime         @default(now())
   checkCalls     CheckCall[]
   payLines       CarrierPayLine[]
+  driverPayLines DriverPayLine[]
   rateConfirmations LoadDocument[]
 
   @@index([loadId])
@@ -828,6 +856,34 @@ model DispatchAssignment {
   @@index([driverId])
   @@index([truckId])
   @@index([trailerId])
+}
+
+model DriverPayLine {
+  id             String              @id @default(cuid())
+  loadId         String
+  load           Load                @relation(fields: [loadId], references: [id], onDelete: Cascade)
+  assignmentId   String?
+  assignment     DispatchAssignment? @relation(fields: [assignmentId], references: [id], onDelete: SetNull)
+  lineTypeId     String
+  lineType       DriverPayLineType   @relation(fields: [lineTypeId], references: [id])
+  description    String?
+  unitRateCents  Int                 @default(0)
+  quantity       Float               @default(1)
+  /// Used when calculationMethod is PERCENT_REVENUE (e.g. 65 = 65%)
+  percent        Float?
+  amountCents    Int                 @default(0)
+  sortOrder      Int                 @default(0)
+  /// Set when included on an approved/paid settlement
+  settledAt      DateTime?
+  settlementId   String?
+  settlement     DriverSettlement?   @relation(fields: [settlementId], references: [id], onDelete: SetNull)
+  createdAt      DateTime            @default(now())
+  updatedAt      DateTime            @updatedAt
+
+  @@index([loadId])
+  @@index([assignmentId])
+  @@index([lineTypeId])
+  @@index([settlementId])
 }
 
 model CarrierPayLine {
@@ -968,6 +1024,8 @@ model CarrierBill {
   status             String               @default("DRAFT")
   totalCents         Int
   balanceCents       Int                  @default(0)
+  /// Advances applied against this bill (reduces amount owed)
+  advancesAppliedCents Int                @default(0)
   /// Snapshot of payee at bill creation (factor or carrier)
   payeeName          String?
   nameOnCheck        String?
@@ -985,6 +1043,7 @@ model CarrierBill {
   createdAt          DateTime             @default(now())
   updatedAt          DateTime             @updatedAt
   applications       PaymentApplication[]
+  advanceApplications AdvanceApplication[]
 
   @@unique([companyId, billNo])
   @@index([companyId])
@@ -993,7 +1052,7 @@ model CarrierBill {
   @@index([factoringCompanyId])
 }
 
-/// AR (customer) or AP (carrier/factor) cash receipt / disbursement
+/// AR (customer) or AP (carrier/factor/driver) cash receipt / disbursement
 model Payment {
   id                 String               @id @default(cuid())
   companyId          String
@@ -1009,6 +1068,8 @@ model Payment {
   customer           Customer?            @relation(fields: [customerId], references: [id], onDelete: SetNull)
   carrierId          String?
   carrier            Carrier?             @relation(fields: [carrierId], references: [id], onDelete: SetNull)
+  driverId           String?
+  driver             Driver?              @relation(fields: [driverId], references: [id], onDelete: SetNull)
   factoringCompanyId String?
   factoringCompany   FactoringCompany?    @relation(fields: [factoringCompanyId], references: [id], onDelete: SetNull)
   createdByUserId    String?
@@ -1020,22 +1081,26 @@ model Payment {
   @@index([companyId, direction])
   @@index([customerId])
   @@index([carrierId])
+  @@index([driverId])
 }
 
 model PaymentApplication {
-  id            String       @id @default(cuid())
-  paymentId     String
-  payment       Payment      @relation(fields: [paymentId], references: [id], onDelete: Cascade)
-  invoiceId     String?
-  invoice       Invoice?     @relation(fields: [invoiceId], references: [id], onDelete: Cascade)
-  carrierBillId String?
-  carrierBill   CarrierBill? @relation(fields: [carrierBillId], references: [id], onDelete: Cascade)
-  amountCents   Int
-  createdAt     DateTime     @default(now())
+  id                 String            @id @default(cuid())
+  paymentId          String
+  payment            Payment           @relation(fields: [paymentId], references: [id], onDelete: Cascade)
+  invoiceId          String?
+  invoice            Invoice?          @relation(fields: [invoiceId], references: [id], onDelete: Cascade)
+  carrierBillId      String?
+  carrierBill        CarrierBill?      @relation(fields: [carrierBillId], references: [id], onDelete: Cascade)
+  driverSettlementId String?
+  driverSettlement   DriverSettlement? @relation(fields: [driverSettlementId], references: [id], onDelete: Cascade)
+  amountCents        Int
+  createdAt          DateTime          @default(now())
 
   @@index([paymentId])
   @@index([invoiceId])
   @@index([carrierBillId])
+  @@index([driverSettlementId])
 }
 
 model IntegrationAccount {
@@ -1125,6 +1190,13 @@ model Driver {
   cdlExpiresAt      DateTime?
   medicalExpiresAt  DateTime?
   notes             String?
+  /// FLAT | PER_MILE | PERCENT_REVENUE — default pay method when assigned to a load
+  defaultPayMethod  String                     @default("FLAT")
+  defaultFlatCents  Int                        @default(0)
+  defaultPerMileCents Int                      @default(0)
+  /// e.g. 65 = 65% of eligible revenue
+  defaultRevenuePercent Float?
+  payNotes          String?
   /// CSA BASIC percentile scores (0-100, higher = worse typically); optional Phase 2 fields
   csaUnsafeDriving  Float?
   csaHosCompliance  Float?
@@ -1140,6 +1212,8 @@ model Driver {
   safetyEvents      SafetyEvent[]
   dvirReports       DvirReport[]
   settlements       DriverSettlement[]
+  advances          Advance[]
+  payments          Payment[]
   iftaTrips         IftaTrip[]
   createdAt         DateTime                   @default(now())
   updatedAt         DateTime                   @updatedAt
@@ -1385,11 +1459,12 @@ model DriverSettlement {
   company         Company   @relation(fields: [companyId], references: [id], onDelete: Cascade)
   driverId        String
   driver          Driver    @relation(fields: [driverId], references: [id], onDelete: Cascade)
+  /// Legacy optional single-load link; prefer period + payLines
   loadId          String?
   load            Load?     @relation(fields: [loadId], references: [id], onDelete: SetNull)
   periodStart     DateTime?
   periodEnd       DateTime?
-  /// FLAT | PER_MILE | PERCENT_REVENUE | OTHER
+  /// FLAT | PER_MILE | PERCENT_REVENUE | OTHER | MIXED
   payMethod       String    @default("FLAT")
   miles           Float     @default(0)
   revenueCents    Int       @default(0)
@@ -1400,6 +1475,10 @@ model DriverSettlement {
   status          String    @default("DRAFT")
   paidAt          DateTime?
   notes           String?
+  payLines        DriverPayLine[]
+  items           DriverSettlementItem[]
+  advanceApplications AdvanceApplication[]
+  paymentApplications PaymentApplication[]
   createdAt       DateTime  @default(now())
   updatedAt       DateTime  @updatedAt
 
@@ -1407,4 +1486,72 @@ model DriverSettlement {
   @@index([companyId, status])
   @@index([driverId])
   @@index([loadId])
+}
+
+/// Settlement breakdown: load pay (positive), advance deduction (negative), or manual adjustment
+model DriverSettlementItem {
+  id             String           @id @default(cuid())
+  settlementId   String
+  settlement     DriverSettlement @relation(fields: [settlementId], references: [id], onDelete: Cascade)
+  /// LOAD_PAY | ADVANCE | ADJUSTMENT
+  kind           String
+  label          String
+  amountCents    Int
+  loadId         String?
+  driverPayLineId String?
+  advanceId      String?
+  sortOrder      Int              @default(0)
+  createdAt      DateTime         @default(now())
+
+  @@index([settlementId])
+  @@index([loadId])
+  @@index([advanceId])
+}
+
+/// Fuel/cash/other advances issued to drivers or carriers; applied on settlement or bill
+model Advance {
+  id          String               @id @default(cuid())
+  companyId   String
+  company     Company              @relation(fields: [companyId], references: [id], onDelete: Cascade)
+  /// DRIVER | CARRIER
+  payeeType   String
+  driverId    String?
+  driver      Driver?              @relation(fields: [driverId], references: [id], onDelete: SetNull)
+  carrierId   String?
+  carrier     Carrier?             @relation(fields: [carrierId], references: [id], onDelete: SetNull)
+  /// FUEL | CASH | OTHER
+  advanceType String               @default("CASH")
+  amountCents Int
+  issuedAt    DateTime             @default(now())
+  loadId      String?
+  load        Load?                @relation(fields: [loadId], references: [id], onDelete: SetNull)
+  /// OPEN | APPLIED | VOID
+  status      String               @default("OPEN")
+  notes       String?
+  reference   String?
+  applications AdvanceApplication[]
+  createdAt   DateTime             @default(now())
+  updatedAt   DateTime             @updatedAt
+
+  @@index([companyId])
+  @@index([companyId, status])
+  @@index([driverId])
+  @@index([carrierId])
+  @@index([loadId])
+}
+
+model AdvanceApplication {
+  id                 String            @id @default(cuid())
+  advanceId          String
+  advance            Advance           @relation(fields: [advanceId], references: [id], onDelete: Cascade)
+  amountCents        Int
+  driverSettlementId String?
+  driverSettlement   DriverSettlement? @relation(fields: [driverSettlementId], references: [id], onDelete: Cascade)
+  carrierBillId      String?
+  carrierBill        CarrierBill?      @relation(fields: [carrierBillId], references: [id], onDelete: Cascade)
+  createdAt          DateTime          @default(now())
+
+  @@index([advanceId])
+  @@index([driverSettlementId])
+  @@index([carrierBillId])
 }

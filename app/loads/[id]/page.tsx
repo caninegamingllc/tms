@@ -58,6 +58,7 @@ import {
 } from "@/lib/quickbooks/exports";
 import type { AccountingExportMethod } from "@/lib/quickbooks/types";
 import { FleetAssignmentPanel } from "@/components/fleet-assignment-panel";
+import { DriverPayPanel } from "@/components/driver-pay-panel";
 import { driverDisplayName } from "@/lib/fleet-constants";
 import { planHasFeature } from "@/lib/plans";
 
@@ -86,7 +87,8 @@ export default async function LoadDetailPage({
     facilities,
     branches,
     commodities,
-    chargeTypes
+    chargeTypes,
+    driverPayLineTypes
   ] = await Promise.all([
     prisma.load.findUnique({
       where: { id, companyId: user.companyId },
@@ -95,10 +97,17 @@ export default async function LoadDetailPage({
         branch: true,
         stops: { orderBy: { sequence: "asc" } },
         commodityLines: { orderBy: { sequence: "asc" } },
-        charges: { orderBy: [{ sortOrder: "asc" }, { createdAt: "asc" }] },
         expenses: true,
         carrierPayLines: {
           orderBy: { sortOrder: "asc" },
+          include: { lineType: true }
+        },
+        driverPayLines: {
+          orderBy: { sortOrder: "asc" },
+          include: { lineType: true }
+        },
+        charges: {
+          orderBy: [{ sortOrder: "asc" }, { createdAt: "asc" }],
           include: { lineType: true }
         },
         commission: true,
@@ -168,6 +177,10 @@ export default async function LoadDetailPage({
     prisma.customerChargeType.findMany({
       where: { companyId: user.companyId },
       orderBy: [{ sortOrder: "asc" }, { name: "asc" }]
+    }),
+    prisma.driverPayLineType.findMany({
+      where: { companyId: user.companyId, active: true },
+      orderBy: [{ sortOrder: "asc" }, { name: "asc" }]
     })
   ]);
 
@@ -199,6 +212,11 @@ export default async function LoadDetailPage({
   const chargeTypesForEditor = chargeTypes.filter(
     (type) => type.active || usedChargeTypeIds.has(type.id)
   );
+
+  const eligibleDriverRevenueCents = load.charges.reduce((sum, charge) => {
+    if (charge.lineType && charge.lineType.includeInDriverPay === false) return sum;
+    return sum + charge.amountCents;
+  }, 0);
 
   const quickbooksMethod = await getCompanyQuickbooksMethod(user.companyId);
   const activeExportMethod: AccountingExportMethod | null =
@@ -843,6 +861,31 @@ export default async function LoadDetailPage({
                     : null
                 }
               />
+              {primaryDispatch?.driverId ? (
+                <DriverPayPanel
+                  loadId={load.id}
+                  lineTypes={driverPayLineTypes.map((type) => ({
+                    id: type.id,
+                    name: type.name,
+                    calculationMethod: type.calculationMethod
+                  }))}
+                  initialLines={load.driverPayLines.map((line) => ({
+                    lineTypeId: line.lineTypeId,
+                    description: line.description,
+                    unitRateCents: line.unitRateCents,
+                    quantity: line.quantity,
+                    percent: line.percent,
+                    amountCents: line.amountCents
+                  }))}
+                  defaultMiles={load.routeTotalMiles}
+                  eligibleRevenueCents={eligibleDriverRevenueCents}
+                  driverPayCents={load.driverPayCents}
+                  locked={
+                    ["INVOICED", "PAID"].includes(load.status) ||
+                    load.driverPayLines.some((line) => Boolean(line.settlementId))
+                  }
+                />
+              ) : null}
             </div>
           ) : null}
 

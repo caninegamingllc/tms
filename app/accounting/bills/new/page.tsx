@@ -72,6 +72,9 @@ export default async function NewCarrierBillPage({
   const billCount = await prisma.carrierBill.count({ where: { companyId: user.companyId } });
   const suggestedBillNo = `CB-${String(billCount + 1001).padStart(4, "0")}`;
 
+  const { getOpenAdvancesForCarrier } = await import("@/lib/advance-actions");
+  const openAdvances = await getOpenAdvancesForCarrier(user.companyId, carrier.id);
+
   const assignmentPayLines =
     assignment.payLines.length > 0
       ? assignment.payLines
@@ -110,7 +113,15 @@ export default async function NewCarrierBillPage({
     paymentMethod: carrier.paymentMethod,
     payee,
     lineItems,
-    suggestedBillNo
+    suggestedBillNo,
+    openAdvances: openAdvances.map((advance) => ({
+      id: advance.id,
+      advanceType: advance.advanceType,
+      amountCents: advance.amountCents,
+      remainingCents: advance.remainingCents,
+      reference: advance.reference,
+      issuedAt: advance.issuedAt.toISOString().slice(0, 10)
+    }))
   });
 
   return (

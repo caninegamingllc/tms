@@ -85,6 +85,7 @@ const navGroups: NavGroup[] = [
       { href: "/fleet/dvir", label: "DVIR", icon: FileText, feature: "fleet_assets" },
       { href: "/fleet/safety", label: "Safety", icon: ShieldCheck, feature: "safety_records" },
       { href: "/fleet/settlements", label: "Settlements", icon: Landmark, feature: "fleet_dispatch" },
+      { href: "/fleet/advances", label: "Advances", icon: Landmark, feature: "fleet_dispatch" },
       { href: "/fleet/fuel-tax", label: "Fuel tax", icon: Landmark, feature: "fuel_tax_ifta" }
     ]
   },

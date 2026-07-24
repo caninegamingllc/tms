@@ -45,6 +45,7 @@ export default async function AdminPage({
     commodities,
     payLineTypes,
     chargeTypes,
+    driverPayLineTypes,
     layoutContext
   ] = await Promise.all([
       prisma.company.findUniqueOrThrow({ where: { id: currentUser.companyId } }),
@@ -92,6 +93,11 @@ export default async function AdminPage({
       prisma.customerChargeType.findMany({
         where: { companyId: currentUser.companyId },
         include: { _count: { select: { charges: true } } },
+        orderBy: [{ sortOrder: "asc" }, { name: "asc" }]
+      }),
+      prisma.driverPayLineType.findMany({
+        where: { companyId: currentUser.companyId },
+        include: { _count: { select: { payLines: true } } },
         orderBy: [{ sortOrder: "asc" }, { name: "asc" }]
       }),
       loadPageLayoutContext("admin")
@@ -468,6 +474,15 @@ export default async function AdminPage({
                   isSystem: item.isSystem,
                   usageCount: item._count.payLines
                 }))}
+                driverPayLineTypes={driverPayLineTypes.map((item) => ({
+                  id: item.id,
+                  name: item.name,
+                  calculationMethod: item.calculationMethod,
+                  active: item.active,
+                  sortOrder: item.sortOrder,
+                  isSystem: item.isSystem,
+                  usageCount: item._count.payLines
+                }))}
                 chargeTypes={chargeTypes.map((item) => ({
                   id: item.id,
                   name: item.name,
@@ -475,7 +490,8 @@ export default async function AdminPage({
                   active: item.active,
                   sortOrder: item.sortOrder,
                   isSystem: item.isSystem,
-                  usageCount: item._count.charges
+                  usageCount: item._count.charges,
+                  includeInDriverPay: item.includeInDriverPay
                 }))}
               />
             </div>

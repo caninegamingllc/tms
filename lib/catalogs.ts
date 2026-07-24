@@ -3,7 +3,8 @@ import { prisma } from "@/lib/db";
 import {
   defaultCarrierPayLineTypes,
   defaultCommodityNames,
-  defaultCustomerChargeTypes
+  defaultCustomerChargeTypes,
+  defaultDriverPayLineTypes
 } from "@/lib/constants";
 
 type CatalogDb = PrismaClient | Prisma.TransactionClient;
@@ -29,8 +30,8 @@ export async function seedCompanyCatalogs(companyId: string, db: CatalogDb) {
     }))
   });
 
-  await db.customerChargeType.createMany({
-    data: defaultCustomerChargeTypes.map((type, index) => ({
+  await db.driverPayLineType.createMany({
+    data: defaultDriverPayLineTypes.map((type, index) => ({
       companyId,
       name: type.name,
       calculationMethod: type.calculationMethod,
@@ -39,13 +40,26 @@ export async function seedCompanyCatalogs(companyId: string, db: CatalogDb) {
       sortOrder: index
     }))
   });
+
+  await db.customerChargeType.createMany({
+    data: defaultCustomerChargeTypes.map((type, index) => ({
+      companyId,
+      name: type.name,
+      calculationMethod: type.calculationMethod,
+      isSystem: type.isSystem,
+      includeInDriverPay: type.includeInDriverPay,
+      active: true,
+      sortOrder: index
+    }))
+  });
 }
 
 /** Seeds default commodities and line-type catalogs when a company has none yet. */
 export async function ensureCompanyCatalogs(companyId: string, db: CatalogDb = prisma) {
-  const [commodityCount, payTypeCount, chargeTypeCount] = await Promise.all([
+  const [commodityCount, payTypeCount, driverPayTypeCount, chargeTypeCount] = await Promise.all([
     db.commodityOption.count({ where: { companyId } }),
     db.carrierPayLineType.count({ where: { companyId } }),
+    db.driverPayLineType.count({ where: { companyId } }),
     db.customerChargeType.count({ where: { companyId } })
   ]);
 
@@ -73,9 +87,9 @@ export async function ensureCompanyCatalogs(companyId: string, db: CatalogDb = p
     });
   }
 
-  if (chargeTypeCount === 0) {
-    await db.customerChargeType.createMany({
-      data: defaultCustomerChargeTypes.map((type, index) => ({
+  if (driverPayTypeCount === 0) {
+    await db.driverPayLineType.createMany({
+      data: defaultDriverPayLineTypes.map((type, index) => ({
         companyId,
         name: type.name,
         calculationMethod: type.calculationMethod,
@@ -84,5 +98,39 @@ export async function ensureCompanyCatalogs(companyId: string, db: CatalogDb = p
         sortOrder: index
       }))
     });
+  }
+
+  if (chargeTypeCount === 0) {
+    await db.customerChargeType.createMany({
+      data: defaultCustomerChargeTypes.map((type, index) => ({
+        companyId,
+        name: type.name,
+        calculationMethod: type.calculationMethod,
+        isSystem: type.isSystem,
+        includeInDriverPay: type.includeInDriverPay,
+        active: true,
+        sortOrder: index
+      }))
+    });
+  } else {
+    // Ensure system exclude types exist for older companies
+    for (const type of defaultCustomerChargeTypes.filter((t) => !t.includeInDriverPay)) {
+      const existing = await db.customerChargeType.findFirst({
+        where: { companyId, name: type.name }
+      });
+      if (!existing) {
+        await db.customerChargeType.create({
+          data: {
+            companyId,
+            name: type.name,
+            calculationMethod: type.calculationMethod,
+            isSystem: type.isSystem,
+            includeInDriverPay: false,
+            active: true,
+            sortOrder: 100
+          }
+        });
+      }
+    }
   }
 }

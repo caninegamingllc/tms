@@ -75,43 +75,136 @@ export async function createDriverSettlement(formData: FormData) {
   });
   if (!driver) throw new Error("Driver not found");
 
-  const loadId = optionalString(formData, "loadId") ?? null;
-  if (loadId) {
-    const load = await prisma.load.findFirst({
-      where: { id: loadId, companyId: user.companyId }
-    });
-    if (!load) throw new Error("Load not found");
+  const periodStart = optionalDate(formData, "periodStart");
+  const periodEnd = optionalDate(formData, "periodEnd");
+  if (!periodStart || !periodEnd) {
+    throw new Error("Period start and end are required");
+  }
+  if (periodEnd < periodStart) {
+    throw new Error("Period end must be on or after period start");
   }
 
-  const payMethod = optionalString(formData, "payMethod") ?? "FLAT";
-  const miles = Number(String(formData.get("miles") ?? "0"));
-  const revenueCents = Math.round(Number(String(formData.get("revenue") ?? "0").replace(/[^0-9.-]/g, "")) * 100);
-  const payCents = Math.round(Number(String(formData.get("pay") ?? "0").replace(/[^0-9.-]/g, "")) * 100);
-  const deductionsCents = Math.round(
-    Number(String(formData.get("deductions") ?? "0").replace(/[^0-9.-]/g, "")) * 100
-  );
-  const netCents = payCents - deductionsCents;
+  const endOfDay = new Date(periodEnd);
+  endOfDay.setHours(23, 59, 59, 999);
 
-  await prisma.driverSettlement.create({
-    data: {
+  const unsettledLines = await prisma.driverPayLine.findMany({
+    where: {
+      settlementId: null,
+      load: {
+        companyId: user.companyId,
+        deliveryDate: { gte: periodStart, lte: endOfDay },
+        status: { in: ["DELIVERED", "INVOICED", "PAID", "PICKED_UP", "DISPATCHED"] },
+        dispatchAssignments: { some: { driverId } }
+      }
+    },
+    include: {
+      load: { select: { id: true, loadNumber: true, routeTotalMiles: true, revenueCents: true } },
+      lineType: true
+    },
+    orderBy: [{ load: { deliveryDate: "asc" } }, { sortOrder: "asc" }]
+  });
+
+  const advances = await prisma.advance.findMany({
+    where: {
       companyId: user.companyId,
       driverId,
-      loadId,
-      periodStart: optionalDate(formData, "periodStart"),
-      periodEnd: optionalDate(formData, "periodEnd"),
-      payMethod,
-      miles: Number.isFinite(miles) ? miles : 0,
-      revenueCents: Number.isFinite(revenueCents) ? revenueCents : 0,
-      payCents: Number.isFinite(payCents) ? payCents : 0,
-      deductionsCents: Number.isFinite(deductionsCents) ? deductionsCents : 0,
-      netCents: Number.isFinite(netCents) ? netCents : 0,
-      status: "DRAFT",
-      notes: optionalString(formData, "notes") ?? null
+      payeeType: "DRIVER",
+      status: "OPEN",
+      issuedAt: { lte: endOfDay }
+    },
+    include: { applications: true },
+    orderBy: { issuedAt: "asc" }
+  });
+
+  const { advanceRemainingCents } = await import("@/lib/driver-pay");
+  const openAdvances = advances
+    .map((advance) => ({ ...advance, remainingCents: advanceRemainingCents(advance) }))
+    .filter((advance) => advance.remainingCents > 0);
+
+  if (unsettledLines.length === 0 && openAdvances.length === 0) {
+    redirect(
+      `/fleet/settlements?error=${encodeURIComponent("No unsettled driver pay or open advances in that period.")}`
+    );
+  }
+
+  const payCents = unsettledLines.reduce((sum, line) => sum + line.amountCents, 0);
+  const deductionsCents = openAdvances.reduce((sum, advance) => sum + advance.remainingCents, 0);
+  const miles = unsettledLines.reduce(
+    (sum, line) => sum + (line.load.routeTotalMiles ?? 0),
+    0
+  );
+  const revenueCents = unsettledLines.reduce((sum, line) => sum + line.load.revenueCents, 0);
+  const methods = new Set(unsettledLines.map((line) => line.lineType.calculationMethod));
+  const payMethod =
+    methods.size === 0 ? "OTHER" : methods.size === 1 ? [...methods][0] : "MIXED";
+
+  const settlement = await prisma.$transaction(async (tx) => {
+    const created = await tx.driverSettlement.create({
+      data: {
+        companyId: user.companyId,
+        driverId,
+        periodStart,
+        periodEnd,
+        payMethod,
+        miles,
+        revenueCents,
+        payCents,
+        deductionsCents,
+        netCents: payCents - deductionsCents,
+        status: "DRAFT",
+        notes: optionalString(formData, "notes") ?? null
+      }
+    });
+
+    let sortOrder = 0;
+    for (const line of unsettledLines) {
+      await tx.driverSettlementItem.create({
+        data: {
+          settlementId: created.id,
+          kind: "LOAD_PAY",
+          label: `${line.load.loadNumber} · ${line.lineType.name}`,
+          amountCents: line.amountCents,
+          loadId: line.loadId,
+          driverPayLineId: line.id,
+          sortOrder: sortOrder++
+        }
+      });
+      await tx.driverPayLine.update({
+        where: { id: line.id },
+        data: { settlementId: created.id, settledAt: new Date() }
+      });
     }
+
+    for (const advance of openAdvances) {
+      await tx.driverSettlementItem.create({
+        data: {
+          settlementId: created.id,
+          kind: "ADVANCE",
+          label: `${advance.advanceType} advance`,
+          amountCents: -advance.remainingCents,
+          advanceId: advance.id,
+          sortOrder: sortOrder++
+        }
+      });
+      await tx.advanceApplication.create({
+        data: {
+          advanceId: advance.id,
+          amountCents: advance.remainingCents,
+          driverSettlementId: created.id
+        }
+      });
+      await tx.advance.update({
+        where: { id: advance.id },
+        data: { status: "APPLIED" }
+      });
+    }
+
+    return created;
   });
 
   revalidatePath("/fleet/settlements");
-  redirect("/fleet/settlements?saved=1");
+  revalidatePath("/fleet/advances");
+  redirect(`/fleet/settlements?saved=1&highlight=${settlement.id}`);
 }
 
 export async function updateDriverSettlementStatus(formData: FormData) {
@@ -124,19 +217,84 @@ export async function updateDriverSettlementStatus(formData: FormData) {
   }
 
   const existing = await prisma.driverSettlement.findFirst({
-    where: { id: settlementId, companyId: user.companyId }
+    where: { id: settlementId, companyId: user.companyId },
+    include: {
+      advanceApplications: true,
+      payLines: true
+    }
   });
   if (!existing) throw new Error("Settlement not found");
 
-  await prisma.driverSettlement.update({
-    where: { id: settlementId },
-    data: {
-      status,
-      paidAt: status === "PAID" ? new Date() : existing.paidAt
+  if (status === "VOID" && existing.status === "PAID") {
+    throw new Error("Paid settlements cannot be voided");
+  }
+
+  await prisma.$transaction(async (tx) => {
+    if (status === "VOID") {
+      for (const line of existing.payLines) {
+        await tx.driverPayLine.update({
+          where: { id: line.id },
+          data: { settlementId: null, settledAt: null }
+        });
+      }
+      const advanceIds = [
+        ...new Set(existing.advanceApplications.map((app) => app.advanceId))
+      ];
+      await tx.advanceApplication.deleteMany({ where: { driverSettlementId: settlementId } });
+      await tx.driverSettlementItem.deleteMany({ where: { settlementId } });
+      for (const advanceId of advanceIds) {
+        const advance = await tx.advance.findUnique({
+          where: { id: advanceId },
+          include: { applications: true }
+        });
+        if (!advance || advance.status === "VOID") continue;
+        const applied = advance.applications.reduce((sum, row) => sum + row.amountCents, 0);
+        await tx.advance.update({
+          where: { id: advanceId },
+          data: { status: applied >= advance.amountCents ? "APPLIED" : "OPEN" }
+        });
+      }
     }
+
+    if (status === "PAID" && existing.status !== "PAID") {
+      const payAmount = Math.max(0, existing.netCents);
+      if (payAmount > 0) {
+        await tx.payment.create({
+          data: {
+            companyId: user.companyId,
+            direction: "AP",
+            amountCents: payAmount,
+            paidAt: new Date(),
+            method: optionalString(formData, "method") ?? "CHECK",
+            reference: optionalString(formData, "reference"),
+            notes: `Driver settlement ${settlementId}`,
+            driverId: existing.driverId,
+            createdByUserId: user.id,
+            applications: {
+              create: [
+                {
+                  driverSettlementId: settlementId,
+                  amountCents: payAmount
+                }
+              ]
+            }
+          }
+        });
+      }
+    }
+
+    await tx.driverSettlement.update({
+      where: { id: settlementId },
+      data: {
+        status,
+        paidAt: status === "PAID" ? new Date() : existing.paidAt
+      }
+    });
   });
 
   revalidatePath("/fleet/settlements");
+  revalidatePath("/fleet/advances");
+  revalidatePath("/accounting");
   redirect("/fleet/settlements?saved=1");
 }
 

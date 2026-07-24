@@ -7,7 +7,9 @@ import {
   TRUCK_OWNERSHIPS
 } from "@/lib/fleet-constants";
 import { createDriver, createTrailer, createTruck } from "@/lib/fleet-actions";
+import { driverPayCalculationMethods } from "@/lib/constants";
 import { formatLocalDate } from "@/lib/dates";
+import { humanize } from "@/lib/format";
 
 function dateInputValue(value?: Date | string | null) {
   if (!value) return "";
@@ -39,8 +41,22 @@ export function DriverForm({
     cdlExpiresAt?: Date | null;
     medicalExpiresAt?: Date | null;
     notes?: string | null;
+    defaultPayMethod?: string;
+    defaultFlatCents?: number;
+    defaultPerMileCents?: number;
+    defaultRevenuePercent?: number | null;
+    payNotes?: string | null;
   };
 }) {
+  const flatDefault =
+    driver?.defaultFlatCents != null && driver.defaultFlatCents > 0
+      ? (driver.defaultFlatCents / 100).toFixed(2).replace(/\.00$/, "")
+      : "";
+  const perMileDefault =
+    driver?.defaultPerMileCents != null && driver.defaultPerMileCents > 0
+      ? (driver.defaultPerMileCents / 100).toFixed(2).replace(/\.00$/, "")
+      : "";
+
   return (
     <form action={action} className="grid gap-3 sm:grid-cols-2">
       {driver ? <input type="hidden" name="driverId" value={driver.id} /> : null}
@@ -130,6 +146,68 @@ export function DriverForm({
         <span className="label">Notes</span>
         <textarea className="input min-h-[80px]" name="notes" defaultValue={driver?.notes ?? ""} />
       </label>
+
+      <div className="sm:col-span-2 mt-2 border-t border-border pt-4">
+        <h3 className="mb-1 text-sm font-semibold">Default load pay</h3>
+        <p className="muted mb-3 text-xs">
+          Used to seed driver pay lines when this driver is assigned to a load. You can override per
+          load.
+        </p>
+      </div>
+      <label className="grid gap-1">
+        <span className="label">Pay method</span>
+        <select
+          className="input"
+          name="defaultPayMethod"
+          defaultValue={driver?.defaultPayMethod ?? "FLAT"}
+        >
+          {driverPayCalculationMethods.map((method) => (
+            <option key={method} value={method}>
+              {humanize(method)}
+            </option>
+          ))}
+        </select>
+      </label>
+      <label className="grid gap-1">
+        <span className="label">Flat amount ($)</span>
+        <input
+          className="input"
+          name="defaultFlat"
+          placeholder="0.00"
+          defaultValue={flatDefault}
+        />
+      </label>
+      <label className="grid gap-1">
+        <span className="label">Rate per mile ($)</span>
+        <input
+          className="input"
+          name="defaultPerMile"
+          placeholder="0.00"
+          defaultValue={perMileDefault}
+        />
+      </label>
+      <label className="grid gap-1">
+        <span className="label">% of eligible revenue</span>
+        <input
+          className="input"
+          name="defaultRevenuePercent"
+          type="number"
+          min={0}
+          max={100}
+          step="0.01"
+          placeholder="65"
+          defaultValue={driver?.defaultRevenuePercent ?? ""}
+        />
+      </label>
+      <label className="grid gap-1 sm:col-span-2">
+        <span className="label">Pay notes</span>
+        <textarea
+          className="input min-h-[60px]"
+          name="payNotes"
+          defaultValue={driver?.payNotes ?? ""}
+        />
+      </label>
+
       <div className="sm:col-span-2">
         <button className="btn" type="submit">
           {driver ? "Save driver" : "Add driver"}

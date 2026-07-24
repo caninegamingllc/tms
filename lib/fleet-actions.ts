@@ -12,6 +12,8 @@ import {
   TRUCK_OWNERSHIPS
 } from "@/lib/fleet-constants";
 import { parseLocalDateTime } from "@/lib/dates";
+import { driverPayCalculationMethods } from "@/lib/constants";
+import { seedDriverPayLinesFromProfile } from "@/lib/driver-pay";
 
 function requiredString(formData: FormData, key: string) {
   const value = String(formData.get(key) ?? "").trim();
@@ -35,6 +37,32 @@ function optionalInt(formData: FormData, key: string) {
   if (!value) return null;
   const n = Number(value);
   return Number.isFinite(n) ? Math.round(n) : null;
+}
+
+function optionalMoneyCents(formData: FormData, key: string) {
+  const value = formData.get(key);
+  if (value == null || String(value).trim() === "") return 0;
+  return parseMoneyToCents(value);
+}
+
+function optionalFloat(formData: FormData, key: string) {
+  const value = String(formData.get(key) ?? "").trim();
+  if (!value) return null;
+  const n = Number(value);
+  return Number.isFinite(n) ? n : null;
+}
+
+function parseDriverPayFields(formData: FormData) {
+  const method = String(formData.get("defaultPayMethod") ?? "FLAT").trim();
+  return {
+    defaultPayMethod: (driverPayCalculationMethods as readonly string[]).includes(method)
+      ? method
+      : "FLAT",
+    defaultFlatCents: optionalMoneyCents(formData, "defaultFlat"),
+    defaultPerMileCents: optionalMoneyCents(formData, "defaultPerMile"),
+    defaultRevenuePercent: optionalFloat(formData, "defaultRevenuePercent"),
+    payNotes: optionalString(formData, "payNotes") ?? null
+  };
 }
 
 function parseStatus(value: string | undefined, allowed: readonly string[], fallback: string) {
@@ -68,6 +96,8 @@ export async function createDriver(formData: FormData) {
   const lastName = requiredString(formData, "lastName");
   const employeeNumber = optionalString(formData, "employeeNumber") ?? null;
 
+  const pay = parseDriverPayFields(formData);
+
   const driver = await prisma.driver.create({
     data: {
       companyId: user.companyId,
@@ -86,7 +116,8 @@ export async function createDriver(formData: FormData) {
       cdlEndorsements: optionalString(formData, "cdlEndorsements") ?? null,
       cdlExpiresAt: optionalDate(formData, "cdlExpiresAt"),
       medicalExpiresAt: optionalDate(formData, "medicalExpiresAt"),
-      notes: optionalString(formData, "notes") ?? null
+      notes: optionalString(formData, "notes") ?? null,
+      ...pay
     }
   });
 
@@ -100,6 +131,7 @@ export async function updateDriver(formData: FormData) {
   await assertPlanFeature(user.companyId, "fleet_assets");
   const driverId = requiredString(formData, "driverId");
   await requireCompanyDriver(driverId, user.companyId);
+  const pay = parseDriverPayFields(formData);
 
   await prisma.driver.update({
     where: { id: driverId },
@@ -119,7 +151,8 @@ export async function updateDriver(formData: FormData) {
       cdlEndorsements: optionalString(formData, "cdlEndorsements") ?? null,
       cdlExpiresAt: optionalDate(formData, "cdlExpiresAt"),
       medicalExpiresAt: optionalDate(formData, "medicalExpiresAt"),
-      notes: optionalString(formData, "notes") ?? null
+      notes: optionalString(formData, "notes") ?? null,
+      ...pay
     }
   });
 
@@ -339,8 +372,9 @@ export async function assignFleetToLoad(formData: FormData) {
     null;
 
   await prisma.$transaction(async (tx) => {
+    let assignmentId: string;
     if (primary) {
-      await tx.dispatchAssignment.update({
+      const updated = await tx.dispatchAssignment.update({
         where: { id: primary.id },
         data: {
           driverId,
@@ -352,8 +386,9 @@ export async function assignFleetToLoad(formData: FormData) {
           trailerNumber
         }
       });
+      assignmentId = updated.id;
     } else {
-      await tx.dispatchAssignment.create({
+      const created = await tx.dispatchAssignment.create({
         data: {
           loadId,
           sequence: 0,
@@ -367,6 +402,16 @@ export async function assignFleetToLoad(formData: FormData) {
           trailerNumber,
           rateCents: 0
         }
+      });
+      assignmentId = created.id;
+    }
+
+    if (driverId) {
+      await seedDriverPayLinesFromProfile(tx, {
+        companyId: user.companyId,
+        loadId,
+        assignmentId,
+        driverId
       });
     }
 
@@ -459,6 +504,73 @@ export async function clearFleetAssignment(formData: FormData) {
 
   revalidatePath("/dispatch");
   revalidatePath("/loads");
+  revalidatePath(`/loads/${loadId}`);
+  redirect(`/loads/${loadId}?saved=1`);
+}
+
+export async function saveDriverPayLines(formData: FormData) {
+  const user = await requireWriteUser();
+  await assertPlanFeature(user.companyId, "fleet_dispatch");
+
+  const loadId = requiredString(formData, "loadId");
+  const load = await prisma.load.findFirst({
+    where: { id: loadId, companyId: user.companyId },
+    include: {
+      dispatchAssignments: { orderBy: { sequence: "asc" } },
+      driverPayLines: true
+    }
+  });
+  if (!load) throw new Error("Load not found");
+
+  if (["INVOICED", "PAID"].includes(load.status)) {
+    redirect(
+      `/loads/${loadId}?error=${encodeURIComponent("Cannot change driver pay on an invoiced or paid load.")}`
+    );
+  }
+
+  if (load.driverPayLines.some((line) => line.settlementId)) {
+    redirect(
+      `/loads/${loadId}?error=${encodeURIComponent("Some driver pay lines are already on a settlement.")}`
+    );
+  }
+
+  const raw = String(formData.get("driverPayLinesJson") ?? "[]");
+  let parsed: Array<{
+    lineTypeId: string;
+    description?: string | null;
+    unitRateCents: number;
+    quantity: number;
+    percent?: number | null;
+    amountCents: number;
+  }> = [];
+  try {
+    parsed = JSON.parse(raw);
+  } catch {
+    redirect(`/loads/${loadId}?error=${encodeURIComponent("Invalid driver pay lines.")}`);
+  }
+
+  const primary =
+    load.dispatchAssignments.find((row) => row.sequence === 0) ??
+    load.dispatchAssignments[0] ??
+    null;
+
+  const { replaceDriverPayLines } = await import("@/lib/driver-pay");
+  await prisma.$transaction(async (tx) => {
+    await replaceDriverPayLines(tx, {
+      companyId: user.companyId,
+      loadId,
+      assignmentId: primary?.id ?? null,
+      lines: parsed.map((line) => ({
+        lineTypeId: line.lineTypeId,
+        description: line.description ?? null,
+        unitRateCents: line.unitRateCents ?? 0,
+        quantity: line.quantity ?? 1,
+        percent: line.percent ?? null,
+        amountCents: line.amountCents ?? 0
+      }))
+    });
+  });
+
   revalidatePath(`/loads/${loadId}`);
   redirect(`/loads/${loadId}?saved=1`);
 }
