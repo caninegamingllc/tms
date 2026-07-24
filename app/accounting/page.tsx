@@ -3,7 +3,8 @@ import { after } from "next/server";
 import {
   AccountingBillsPanel,
   AccountingInvoicesPanel,
-  AccountingSettledPanel
+  AccountingSettledPanel,
+  type AccountingInvoiceRow
 } from "@/components/accounting-bulk-tables";
 import { AccountingAgingReport } from "@/components/accounting-aging-report";
 import { MetricCard } from "@/components/metric-card";
@@ -280,7 +281,7 @@ export default async function AccountingPage({
     ? ACCOUNTING_TILES
     : ACCOUNTING_TILES.filter((tile) => tile.id !== "quickbooks");
 
-  const invoiceRows = activeLoads.flatMap((load) => {
+  const invoiceRows: AccountingInvoiceRow[] = activeLoads.flatMap((load): AccountingInvoiceRow[] => {
     const deliveryStop = [...load.stops].reverse().find((stop) => stop.type === "DELIVERY");
     const deliveryAt =
       deliveryStop?.appointmentAt?.toISOString() ?? load.deliveryDate?.toISOString() ?? null;
