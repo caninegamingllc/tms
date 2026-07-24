@@ -384,7 +384,7 @@ export async function assignFleetToLoad(formData: FormData) {
   ];
   const nextStatus = loadHasDispatchedCoverage(coverageRows)
     ? statusAfterCoverageAssigned(load.status)
-    : load.status;
+    : statusAfterCoverageCleared(load.status);
 
   await prisma.$transaction(async (tx) => {
     let assignmentId: string;
@@ -499,21 +499,27 @@ export async function clearFleetAssignment(formData: FormData) {
       });
     } else {
       await tx.dispatchAssignment.delete({ where: { id: primary.id } });
-      const nextStatus = statusAfterCoverageCleared(load.status);
-      await tx.load.update({
-        where: { id: loadId },
-        data: {
-          status: nextStatus,
-          activities: {
-            create: {
-              userId: user.id,
-              action: "Fleet unassigned",
-              details: "Own-fleet assignment removed."
-            }
+    }
+
+    const remaining = await tx.dispatchAssignment.findMany({ where: { loadId } });
+    const stillCovered = loadHasDispatchedCoverage(remaining);
+    const nextStatus = !stillCovered
+      ? statusAfterCoverageCleared(load.status)
+      : load.status;
+
+    await tx.load.update({
+      where: { id: loadId },
+      data: {
+        status: nextStatus,
+        activities: {
+          create: {
+            userId: user.id,
+            action: "Fleet unassigned",
+            details: "Own-fleet assignment removed."
           }
         }
-      });
-    }
+      }
+    });
   });
 
   revalidatePath("/dispatch");

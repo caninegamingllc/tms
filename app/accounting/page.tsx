@@ -2,7 +2,8 @@ import Link from "next/link";
 import { after } from "next/server";
 import {
   AccountingBillsPanel,
-  AccountingInvoicesPanel
+  AccountingInvoicesPanel,
+  AccountingSettledPanel
 } from "@/components/accounting-bulk-tables";
 import { AccountingAgingReport } from "@/components/accounting-aging-report";
 import { MetricCard } from "@/components/metric-card";
@@ -11,6 +12,10 @@ import { DatePicker } from "@/components/ui/date-picker";
 import { TileBoard, Tile } from "@/components/tile-board";
 import { createInvoice, generateCustomerInvoice } from "@/lib/actions";
 import { recomputeOverdueStatuses } from "@/lib/accounting-actions";
+import {
+  ACCOUNTING_READY_LOAD_STATUSES,
+  isLoadSettled
+} from "@/lib/accounting-settled";
 import { getBranchScope } from "@/lib/branch-filter-server";
 import { requirePlanFeature } from "@/lib/permissions";
 import { paymentStatuses } from "@/lib/constants";
@@ -29,13 +34,18 @@ import { loadPageLayoutContext } from "@/lib/ui-preferences-load";
 const TABS = [
   { id: "invoices", label: "Invoices" },
   { id: "bills", label: "Bills" },
+  { id: "settled", label: "Settled" },
   { id: "report", label: "AR/AP Report" }
 ] as const;
 
 type TabId = (typeof TABS)[number]["id"];
 
+const accountingReadyStatusFilter = {
+  in: [...ACCOUNTING_READY_LOAD_STATUSES]
+};
+
 function resolveTab(value?: string): TabId {
-  if (value === "bills" || value === "report") {
+  if (value === "bills" || value === "settled" || value === "report") {
     return value;
   }
   return "invoices";
@@ -48,6 +58,25 @@ function formatRemitTo(parts: {
   carrierName: string;
 }) {
   return parts.payeeName || parts.factorName || parts.nameOnCheck || parts.carrierName;
+}
+
+function settledApSummary(input: {
+  carrierCount: number;
+  paidBillCount: number;
+  driverPayLineCount: number;
+  paidSettlementLineCount: number;
+}) {
+  const parts: string[] = [];
+  if (input.carrierCount > 0) {
+    parts.push(`${input.paidBillCount}/${input.carrierCount} carrier bill(s) paid`);
+  }
+  if (input.driverPayLineCount > 0) {
+    parts.push(`${input.paidSettlementLineCount}/${input.driverPayLineCount} driver pay line(s) settled`);
+  }
+  if (parts.length === 0) {
+    return "No AP obligations";
+  }
+  return parts.join(" · ");
 }
 
 export default async function AccountingPage({
@@ -70,6 +99,10 @@ export default async function AccountingPage({
   const params = await searchParams;
   const tab = resolveTab(params.tab);
   const loadScope = await getBranchScope(user);
+  const accountingLoadScope = {
+    ...loadScope,
+    status: accountingReadyStatusFilter
+  };
   const quickbooksMethod = await getCompanyQuickbooksMethod(user.companyId);
   const activeExportMethod: AccountingExportMethod | null =
     quickbooksMethod === "ONLINE" || quickbooksMethod === "IIF" ? quickbooksMethod : null;
@@ -80,11 +113,12 @@ export default async function AccountingPage({
 
   const [loads, invoices, carrierBills, qboAccount, layoutContext] = await Promise.all([
     prisma.load.findMany({
-      where: loadScope,
+      where: accountingLoadScope,
       orderBy: { loadNumber: "desc" },
       include: {
         customer: true,
         expenses: true,
+        invoices: true,
         dispatchAssignments: {
           orderBy: { sequence: "asc" },
           include: {
@@ -95,11 +129,14 @@ export default async function AccountingPage({
         carrierBills: {
           include: { factoringCompany: true },
           orderBy: { createdAt: "desc" }
+        },
+        driverPayLines: {
+          include: { settlement: true }
         }
       }
     }),
     prisma.invoice.findMany({
-      where: { companyId: user.companyId, load: loadScope },
+      where: { companyId: user.companyId, load: accountingLoadScope },
       orderBy: { createdAt: "desc" },
       include: {
         customer: true,
@@ -112,7 +149,7 @@ export default async function AccountingPage({
       }
     }),
     prisma.carrierBill.findMany({
-      where: { companyId: user.companyId, load: loadScope },
+      where: { companyId: user.companyId, load: accountingLoadScope },
       orderBy: { createdAt: "desc" },
       include: { carrier: true, load: true, factoringCompany: true }
     }),
@@ -170,34 +207,65 @@ export default async function AccountingPage({
     });
   }
 
+  const settledByLoadId = new Map(
+    loads.map((load) => [
+      load.id,
+      isLoadSettled({
+        status: load.status,
+        invoices: load.invoices,
+        carrierBills: load.carrierBills,
+        dispatchAssignments: load.dispatchAssignments,
+        driverPayLines: load.driverPayLines
+      })
+    ])
+  );
+
+  const activeLoads = loads.filter((load) => !settledByLoadId.get(load.id));
+  const settledLoads = loads.filter((load) => settledByLoadId.get(load.id));
+  const activeInvoices = invoices.filter((invoice) => !settledByLoadId.get(invoice.loadId));
+
   const invoiceExports = activeExportMethod
     ? await getExportsForEntities({
         companyId: user.companyId,
         method: activeExportMethod,
         entityType: "INVOICE",
-        entityIds: invoices.map((invoice) => invoice.id)
+        entityIds: activeInvoices.map((invoice) => invoice.id)
       })
     : new Map();
+
+  const activeBillIds = carrierBills
+    .filter((bill) => !settledByLoadId.get(bill.loadId))
+    .map((bill) => bill.id);
 
   const billExports = activeExportMethod
     ? await getExportsForEntities({
         companyId: user.companyId,
         method: activeExportMethod,
         entityType: "CARRIER_BILL",
-        entityIds: carrierBills.map((bill) => bill.id)
+        entityIds: activeBillIds
       })
     : new Map();
 
   const openArAgg = await prisma.invoice.aggregate({
-    where: { companyId: user.companyId, load: loadScope, status: { not: "VOID" } },
+    where: {
+      companyId: user.companyId,
+      load: accountingLoadScope,
+      status: { not: "VOID" },
+      balanceCents: { gt: 0 }
+    },
     _sum: { balanceCents: true }
   });
   const openApAgg = await prisma.carrierBill.aggregate({
-    where: { companyId: user.companyId, load: loadScope, status: { not: "VOID" } },
+    where: {
+      companyId: user.companyId,
+      load: accountingLoadScope,
+      status: { not: "VOID" },
+      balanceCents: { gt: 0 }
+    },
     _sum: { balanceCents: true }
   });
   const loadMoneyAgg = await prisma.load.aggregate({
-    where: loadScope,
+    where: accountingLoadScope,
     _sum: { revenueCents: true, carrierCostCents: true }
   });
   const openAr = openArAgg._sum.balanceCents ?? 0;
@@ -212,7 +280,7 @@ export default async function AccountingPage({
     ? ACCOUNTING_TILES
     : ACCOUNTING_TILES.filter((tile) => tile.id !== "quickbooks");
 
-  const invoiceRows = invoices.map((invoice) => {
+  const invoiceRows = activeInvoices.map((invoice) => {
     const exportView = activeExportMethod
       ? toExportStatusView(activeExportMethod, invoiceExports.get(invoice.id) ?? null)
       : null;
@@ -249,7 +317,7 @@ export default async function AccountingPage({
     };
   });
 
-  const apLoadRows = loads.flatMap((load) => {
+  const apLoadRows = activeLoads.flatMap((load) => {
     const withCarrier = load.dispatchAssignments.filter((row) => row.carrier != null);
     if (!withCarrier.length) {
       return [];
@@ -304,6 +372,43 @@ export default async function AccountingPage({
     });
   });
 
+  const settledRows = settledLoads.map((load) => {
+    const deliveryStop = [...load.stops].reverse().find((stop) => stop.type === "DELIVERY");
+    const nonVoidInvoices = load.invoices.filter((invoice) => invoice.status !== "VOID");
+    const carrierAssignments = load.dispatchAssignments.filter((row) => row.carrierId);
+    const carrierNames = [
+      ...new Set(
+        carrierAssignments
+          .map((row) => row.carrier?.name)
+          .filter((name): name is string => Boolean(name))
+      )
+    ];
+    const nonVoidBills = load.carrierBills.filter((bill) => bill.status !== "VOID");
+    const paidBills = nonVoidBills.filter((bill) => bill.status === "PAID");
+    const driverLines = load.driverPayLines.filter((line) => line.amountCents !== 0);
+    const paidSettlementLines = driverLines.filter((line) => line.settlement?.status === "PAID");
+
+    return {
+      loadId: load.id,
+      loadNumber: load.loadNumber,
+      loadStatus: load.status,
+      referenceNumber: load.referenceNumber ?? null,
+      customerName: load.customer.name,
+      deliveryAt:
+        deliveryStop?.appointmentAt?.toISOString() ?? load.deliveryDate?.toISOString() ?? null,
+      invoiceNos: nonVoidInvoices.map((invoice) => invoice.invoiceNo).join(", "),
+      invoiceTotalCents: nonVoidInvoices.reduce((sum, invoice) => sum + invoice.totalCents, 0),
+      carrierNames: carrierNames.join(", "),
+      billNos: nonVoidBills.map((bill) => bill.billNo).join(", "),
+      apSummary: settledApSummary({
+        carrierCount: carrierAssignments.length,
+        paidBillCount: paidBills.length,
+        driverPayLineCount: driverLines.length,
+        paidSettlementLineCount: paidSettlementLines.length
+      })
+    };
+  });
+
   const arReportRows = invoices
     .filter((invoice) => invoice.balanceCents > 0 && invoice.status !== "VOID")
     .map((invoice) => ({
@@ -343,7 +448,7 @@ export default async function AccountingPage({
     <>
       <PageHeader
         title="Accounting"
-        description="Manage customer invoices, carrier bills, aging, receivables, payables, and QuickBooks export."
+        description="Manage customer invoices, carrier bills, aging, receivables, payables, and QuickBooks export for delivered loads."
       />
 
       {params.error ? (
@@ -432,7 +537,7 @@ export default async function AccountingPage({
               <MetricCard
                 label="Gross Margin"
                 value={formatMoney(grossMargin)}
-                detail="Revenue minus carrier cost"
+                detail="Revenue minus carrier cost (delivered+)"
               />
             </div>
           </div>
@@ -461,8 +566,8 @@ export default async function AccountingPage({
                 <div>
                   <p className="mb-3 text-[15px] font-semibold text-foreground">Customer Invoices</p>
                   <p className="muted mb-4">
-                    Click column headers to sort. Select invoices for bulk email, payment receipt, or
-                    QuickBooks export.
+                    Delivered loads ready for invoicing or payment. Select invoices for bulk email,
+                    payment receipt, or QuickBooks export.
                   </p>
                   <AccountingInvoicesPanel invoices={invoiceRows} quickbooksMethod={method} />
                 </div>
@@ -472,11 +577,11 @@ export default async function AccountingPage({
                     <p className="text-[15px] font-semibold text-foreground">
                       Generate Customer Invoice Document
                     </p>
-                    <p className="muted">Create a printable invoice from the selected load.</p>
+                    <p className="muted">Create a printable invoice from a delivered load.</p>
                     <form action={generateCustomerInvoice} className="mt-4 grid gap-3">
                       <select name="loadId" className="select" required>
                         <option value="">Select load</option>
-                        {loads.map((load) => (
+                        {activeLoads.map((load) => (
                           <option key={load.id} value={load.id}>
                             {load.loadNumber} - {load.customer.name} - {formatMoney(load.revenueCents)}
                           </option>
@@ -494,7 +599,7 @@ export default async function AccountingPage({
                       <input name="invoiceNo" className="input" placeholder="INV-1003" required />
                       <select name="loadId" className="select" required>
                         <option value="">Select load</option>
-                        {loads.map((load) => (
+                        {activeLoads.map((load) => (
                           <option key={load.id} value={load.id}>
                             {load.loadNumber} - {load.customer.name}
                           </option>
@@ -525,10 +630,22 @@ export default async function AccountingPage({
               <div>
                 <p className="mb-3 text-[15px] font-semibold text-foreground">Carrier Bills</p>
                 <p className="muted mb-4">
-                  Covered loads appear here. Expand a row to record a carrier invoice, or select billed
-                  rows to edit, pay, or export. Click column headers to sort.
+                  Delivered loads with a carrier appear here until the customer invoice and all AP
+                  obligations are paid or settled. Expand a row to record a carrier invoice, or select
+                  billed rows to edit, pay, or export.
                 </p>
                 <AccountingBillsPanel rows={apLoadRows} quickbooksMethod={method} />
+              </div>
+            ) : null}
+
+            {tab === "settled" ? (
+              <div>
+                <p className="mb-3 text-[15px] font-semibold text-foreground">Settled Loads</p>
+                <p className="muted mb-4">
+                  Loads where the customer invoice is paid and all carrier bills and driver
+                  settlements are closed. Search by load #, customer, carrier, or document number.
+                </p>
+                <AccountingSettledPanel rows={settledRows} />
               </div>
             ) : null}
 

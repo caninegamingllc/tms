@@ -855,3 +855,172 @@ export function AccountingBillsPanel({
     </div>
   );
 }
+
+export type AccountingSettledRow = {
+  loadId: string;
+  loadNumber: string;
+  loadStatus: string;
+  referenceNumber: string | null;
+  customerName: string;
+  deliveryAt: string | null;
+  invoiceNos: string;
+  invoiceTotalCents: number;
+  carrierNames: string;
+  billNos: string;
+  apSummary: string;
+};
+
+export function AccountingSettledPanel({ rows }: { rows: AccountingSettledRow[] }) {
+  const [query, setQuery] = useState("");
+
+  const filtered = useMemo(() => {
+    const q = query.trim().toLowerCase();
+    if (!q) return rows;
+    return rows.filter((row) =>
+      [
+        row.loadNumber,
+        row.customerName,
+        row.carrierNames,
+        row.invoiceNos,
+        row.billNos,
+        row.referenceNumber,
+        row.apSummary,
+        row.loadStatus
+      ]
+        .filter(Boolean)
+        .some((value) => String(value).toLowerCase().includes(q))
+    );
+  }, [rows, query]);
+
+  const columns: SortableColumn<AccountingSettledRow>[] = useMemo(
+    () => [
+      {
+        id: "load",
+        label: "Load #",
+        sortValue: (row) => row.loadNumber,
+        render: (row) => (
+          <>
+            <Link href={`/loads/${row.loadId}`} className="text-primary">
+              {row.loadNumber}
+            </Link>{" "}
+            <StatusBadge value={row.loadStatus} />
+          </>
+        )
+      },
+      {
+        id: "customer",
+        label: "Customer",
+        sortValue: (row) => row.customerName,
+        render: (row) => <span className="font-medium">{row.customerName}</span>
+      },
+      {
+        id: "delivery",
+        label: "Delivery",
+        sortValue: (row) => row.deliveryAt ?? "",
+        render: (row) => (row.deliveryAt ? formatDate(row.deliveryAt) : "—")
+      },
+      {
+        id: "invoices",
+        label: "Invoices",
+        sortValue: (row) => row.invoiceNos,
+        render: (row) => (
+          <span>
+            {row.invoiceNos || "—"}
+            {row.invoiceTotalCents > 0 ? (
+              <span className="text-muted-foreground"> · {formatMoney(row.invoiceTotalCents)}</span>
+            ) : null}
+          </span>
+        )
+      },
+      {
+        id: "carriers",
+        label: "Carriers",
+        sortValue: (row) => row.carrierNames,
+        render: (row) => row.carrierNames || "—"
+      },
+      {
+        id: "ap",
+        label: "AP Summary",
+        sortValue: (row) => row.apSummary,
+        render: (row) => row.apSummary
+      }
+    ],
+    []
+  );
+
+  const {
+    orderedColumns,
+    moveColumn,
+    resetLayout,
+    isLayoutCustomized,
+    columnWidths,
+    setColumnWidth
+  } = useOrderedColumns("accounting-settled", columns);
+  const { sortedData, sortState, handleSort } = useSortedRows(filtered, orderedColumns, {
+    columnId: "delivery",
+    direction: "desc"
+  });
+  const pagination = useClientPagination(sortedData, query);
+  const pageRows = pagination.pageRows;
+
+  return (
+    <div>
+      <div className="mb-3 flex flex-wrap items-center gap-3">
+        <input
+          className="input max-w-xl"
+          placeholder="Search load #, customer, carrier, invoice #, or bill #"
+          value={query}
+          onChange={(event) => setQuery(event.target.value)}
+        />
+        <ColumnLayoutControls
+          className="mb-0"
+          onReset={resetLayout}
+          isCustomized={isLayoutCustomized}
+        />
+      </div>
+
+      <div className="overflow-x-auto">
+        <table
+          className="table min-w-full text-left text-sm"
+          style={getResizableTableStyle(orderedColumns, columnWidths)}
+        >
+          <SortableTableHeader
+            columns={orderedColumns}
+            sortState={sortState}
+            onSort={handleSort}
+            columnReorder
+            onMoveColumn={moveColumn}
+            columnWidths={columnWidths}
+            onColumnResize={setColumnWidth}
+          />
+          <tbody>
+            {pageRows.map((row) => (
+              <tr key={row.loadId}>
+                {orderedColumns.map((column) => (
+                  <td key={column.id}>{column.render(row)}</td>
+                ))}
+              </tr>
+            ))}
+            {sortedData.length === 0 ? (
+              <tr>
+                <td colSpan={orderedColumns.length} className="p-8 text-center text-muted-foreground">
+                  No settled loads match this search.
+                </td>
+              </tr>
+            ) : null}
+          </tbody>
+        </table>
+      </div>
+      <TablePagination
+        page={pagination.page}
+        pageSize={pagination.pageSize}
+        total={pagination.total}
+        totalPages={pagination.totalPages}
+        start={pagination.start}
+        end={pagination.end}
+        onPageChange={pagination.setPage}
+        onPageSizeChange={pagination.setPageSize}
+      />
+    </div>
+  );
+}

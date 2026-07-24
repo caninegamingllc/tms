@@ -39,10 +39,17 @@ describe("coverage status transitions", () => {
     assert.equal(statusAfterCoverageAssigned("PICKED_UP"), "PICKED_UP");
   });
 
-  it("reverts COVERED/DISPATCHED to PENDING when uncovered", () => {
+  it("reverts uncovered non-terminal loads to PENDING", () => {
     assert.equal(statusAfterCoverageCleared("DISPATCHED"), "PENDING");
     assert.equal(statusAfterCoverageCleared("COVERED"), "PENDING");
-    assert.equal(statusAfterCoverageCleared("PICKED_UP"), "PICKED_UP");
+    assert.equal(statusAfterCoverageCleared("PICKED_UP"), "PENDING");
+    assert.equal(statusAfterCoverageCleared("DELIVERED"), "PENDING");
+    assert.equal(statusAfterCoverageCleared("AVAILABLE"), "PENDING");
+    assert.equal(statusAfterCoverageCleared("QUOTE"), "PENDING");
+    assert.equal(statusAfterCoverageCleared("PENDING"), "PENDING");
+    assert.equal(statusAfterCoverageCleared("INVOICED"), "INVOICED");
+    assert.equal(statusAfterCoverageCleared("PAID"), "PAID");
+    assert.equal(statusAfterCoverageCleared("CANCELED"), "CANCELED");
   });
 
   it("treats PENDING as a pending load status", () => {

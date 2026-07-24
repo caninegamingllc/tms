@@ -117,11 +117,14 @@ export function statusAfterCoverageAssigned(currentStatus: string): string {
     : currentStatus;
 }
 
-/** When last coverage is removed, revert COVERED/DISPATCHED to PENDING. */
+const terminalLoadStatuses = ["INVOICED", "PAID", "CANCELED"] as const;
+
+/** When last coverage is removed, uncovered non-terminal loads become PENDING. */
 export function statusAfterCoverageCleared(currentStatus: string): string {
-  return currentStatus === "COVERED" || currentStatus === "DISPATCHED"
-    ? "PENDING"
-    : currentStatus;
+  if ((terminalLoadStatuses as readonly string[]).includes(currentStatus)) {
+    return currentStatus;
+  }
+  return "PENDING";
 }
 
 /** Shared Prisma include for load detail / documents. */
